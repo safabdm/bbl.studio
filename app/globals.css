@@ -45,3 +45,4 @@ footer { display:grid;grid-template-columns:1fr 1fr auto;align-items:center;gap:
 @media(max-width:768px){.glass-nav{grid-template-columns:1fr auto}.nav-links{display:none}.top-row,.bottom-row{flex-direction:column}.bottom-row{align-items:stretch}.intro-copy{text-align:left}.contact-card{align-self:flex-end}.screen-section{gap:5rem}.service-list{margin-top:1rem}}
 @media(max-width:768px){.capability-bottom,.process-bottom,.final-bottom{align-items:stretch;flex-direction:column}.frost-panel,.step-panel{max-width:none}.price-grid{grid-template-columns:1fr}.price-panel{min-height:285px}.launch-disc{align-self:flex-end}.pricing-screen{height:auto;min-height:100vh}footer{grid-template-columns:1fr auto}footer p{display:none}}
 @media(prefers-reduced-motion:reduce){html{scroll-behavior:auto}}
+.pricing-note { max-width:58rem;margin:1rem 0 0;color:rgba(255,255,255,.55);font-size:.68rem;line-height:1.55; }
