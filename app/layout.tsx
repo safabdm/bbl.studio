@@ -13,8 +13,20 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
+  metadataBase: new URL('https://bbls-launch-studio.safa-bdm.chatgpt.site'),
   title: 'BBLS — Boutique Business Launch Studio',
   description: 'From idea to income in 14 days. Fully designed. Fully ready.',
+  openGraph: {
+    title: 'BBLS — Boutique Business Launch Studio',
+    description: 'From idea to income in 14 days. Fully designed. Fully ready.',
+    images: [{ url: '/og.png', width: 1200, height: 630, alt: 'BBLS — We build your business, not just your paperwork.' }],
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: 'BBLS — Boutique Business Launch Studio',
+    description: 'From idea to income in 14 days. Fully designed. Fully ready.',
+    images: ['/og.png'],
+  },
 };
 
 export default function RootLayout({
