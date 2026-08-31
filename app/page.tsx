@@ -103,7 +103,7 @@ export default function Home() {
 
       <section id="contact" className="screen-section final-screen">
         <div className="top-row"><div className="accent-badge" data-reveal>WHY BBLS</div><p className="intro-copy" data-reveal>Design-first. Done for you. Built in 14 days. Premium by default.</p></div>
-        <div className="final-bottom"><div><h2 data-reveal>We don’t shape bodies.<br />We build businesses.</h2><p data-reveal>Bring the idea. We’ll build the business around it.<br/><a className="phone-link" href="tel:+19495242324">+1 (949) 524-2324</a></p></div><button type="button" className="launch-disc" data-reveal onClick={() => setChatOpen(true)} aria-label="Ask BBLS AI about your launch"><span>ASK BBLS<br/>AI</span><MessageCircle size={24}/></button></div>
+        <div className="final-bottom"><div><h2 data-reveal>We don’t shape bodies.<br />We build businesses.</h2><p data-reveal>Bring the idea. We’ll build the business around it.</p></div><a href="tel:+19495242324" className="launch-disc" data-reveal aria-label="Call BBLS at 949 524 2324 to start"><span className="launch-copy"><small>CALL TO START</small><strong>(949) 524-2324</strong></span><ArrowUpRight size={22}/></a></div>
         <footer><a href="#top" className="footer-brand"><span className="footer-mark"><Orbit size={17} strokeWidth={2.3}/></span><strong>BBLS</strong></a><p>Business Launch Studio · Orange County</p><a href="tel:+19495242324" className="footer-phone">+1 (949) 524-2324</a></footer>
       </section>
     </div>
