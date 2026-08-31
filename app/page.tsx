@@ -1,9 +1,21 @@
 'use client';
 
-import { ArrowRight, ArrowUpRight, Check, ChevronRight, Orbit } from 'lucide-react';
+import { ArrowRight, ArrowUpRight, Check, ChevronRight, MessageCircle, Orbit, Send, X } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 
 const VIDEO = 'https://d8j0ntlcm91z4.cloudfront.net/user_38xzZboKViGWJOttwIXH07lWA1P/hf_20260729_102822_0e6c87e8-c141-4744-bf32-ad30db296371.mp4';
+
+const quickQuestions = ['What can BBLS build?', 'How does the 14-day launch work?', 'Which package fits me?'];
+
+function answerLaunchQuestion(question: string) {
+  const q = question.toLowerCase();
+  if (q.includes('price') || q.includes('cost') || q.includes('package') || q.includes('how much')) return 'Starter begins at $1,500, Growth at $3,500, and Premium at $6,500+. Ongoing support is $300–$750 per month. Final pricing depends on scope; filing fees and third-party costs are separate.';
+  if (q.includes('14') || q.includes('long') || q.includes('time') || q.includes('process')) return 'The launch follows four focused stages: Discover, Build, Launch, and Grow. The core launch is designed for 14 days once scope, content, and required approvals are ready.';
+  if (q.includes('llc') || q.includes('ein') || q.includes('legal') || q.includes('setup')) return 'BBLS supports LLC and EIN setup, core contracts, and essential business foundations. Legal and filing needs are confirmed during discovery, and government fees are billed separately.';
+  if (q.includes('website') || q.includes('brand') || q.includes('design')) return 'BBLS can create your brand direction, customer experience, conversion-focused website, launch copy, payment or booking setup, and the systems needed for day one.';
+  if (q.includes('orange') || q.includes('oc') || q.includes('location')) return 'BBLS is positioned as a Boutique Business Launch Studio serving Orange County founders, with a streamlined process that can also support remote collaboration.';
+  return 'BBLS helps founders move from idea to a launch-ready business through setup, brand and experience design, a premium website, and launch systems. Ask me about pricing, timing, LLC/EIN support, branding, or websites.';
+}
 
 function ScrollVideo() {
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -26,6 +38,15 @@ function ScrollVideo() {
 }
 
 export default function Home() {
+  const [chatOpen, setChatOpen] = useState(false);
+  const [question, setQuestion] = useState('');
+  const [messages, setMessages] = useState<{role:'assistant'|'user';text:string}[]>([{ role:'assistant', text:'Hi — I’m the BBLS Launch Guide. What would you like to know about launching your business?' }]);
+  const askQuestion = (text: string) => {
+    const clean = text.trim();
+    if (!clean) return;
+    setMessages((current) => [...current, { role:'user', text:clean }, { role:'assistant', text:answerLaunchQuestion(clean) }]);
+    setQuestion('');
+  };
   useEffect(() => {
     const elements = [...document.querySelectorAll<HTMLElement>('[data-reveal]')];
     const observer = new IntersectionObserver((entries) => entries.forEach((entry) => {
@@ -40,8 +61,9 @@ export default function Home() {
       <nav className="glass-nav">
         <a href="#top" className="brand" aria-label="BBLS — Business Launch Studio, Orange County"><span className="brand-mark"><Orbit size={22} strokeWidth={2.35} /></span><span className="brand-lockup"><strong>BBLS</strong><small>BUSINESS LAUNCH STUDIO · OC</small></span></a>
         <div className="nav-links"><a href="#services">Services</a><a href="#process">Process</a><a href="#pricing">Pricing</a><a href="#contact">Contact</a></div>
-        <a href="tel:+19495242324" className="nav-cta" aria-label="Call BBLS at 949 524 2324">Call (949) 524-2324</a>
+        <button type="button" className="nav-cta" onClick={() => setChatOpen(true)}><MessageCircle size={14}/> Ask BBLS AI</button>
       </nav>
+      {chatOpen && <div className="chat-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setChatOpen(false); }}><section className="chat-panel" role="dialog" aria-modal="true" aria-labelledby="chat-title"><header><div><small>BUSINESS LAUNCH STUDIO · OC</small><h2 id="chat-title">Ask BBLS AI</h2></div><button type="button" onClick={() => setChatOpen(false)} aria-label="Close BBLS AI"><X size={19}/></button></header><div className="chat-messages" aria-live="polite">{messages.map((message,index)=><p className={message.role} key={`${message.role}-${index}`}>{message.text}</p>)}</div><div className="quick-questions">{quickQuestions.map((item)=><button type="button" key={item} onClick={() => askQuestion(item)}>{item}</button>)}</div><form onSubmit={(event) => { event.preventDefault(); askQuestion(question); }}><label htmlFor="launch-question">Ask about your launch</label><div><input id="launch-question" value={question} onChange={(event) => setQuestion(event.target.value)} placeholder="Pricing, timing, LLC, website…" autoComplete="off"/><button type="submit" aria-label="Send question"><Send size={17}/></button></div></form><div className="chat-note">Answers use the current BBLS service and pricing information.</div></section></div>}
       <section id="top" className="screen-section hero-screen">
         <div className="top-row">
           <div className="service-list" data-reveal><span>/ BUSINESS SETUP</span><span>/ BRAND & EXPERIENCE</span><span>/ WEBSITE & LAUNCH SYSTEMS</span></div>
@@ -49,7 +71,7 @@ export default function Home() {
         </div>
         <div className="bottom-row">
           <div data-reveal><div className="accent-badge">LAUNCH-READY IN 14 DAYS</div><h1>Clear. Complete.<br />Ready to launch.</h1></div>
-          <div className="contact-card" data-reveal><div className="contact-orbit"><span /></div><div><strong>Boutique, not basic.</strong><small>BUSINESS LAUNCH STUDIO · OC</small><a href="tel:+19495242324">Call (949) 524-2324 <ArrowUpRight size={14} /></a></div></div>
+          <div className="contact-card" data-reveal><img className="ai-portrait" src="/bbls-ai-concierge.png" alt="Abstract BBLS AI concierge"/><div><strong>Meet your launch guide.</strong><small>BBLS AI · AVAILABLE NOW</small><button type="button" onClick={() => setChatOpen(true)}>Ask a question <ArrowUpRight size={14} /></button></div></div>
         </div>
       </section>
       <div className="scroll-space" aria-hidden="true" />
@@ -81,7 +103,7 @@ export default function Home() {
 
       <section id="contact" className="screen-section final-screen">
         <div className="top-row"><div className="accent-badge" data-reveal>WHY BBLS</div><p className="intro-copy" data-reveal>Design-first. Done for you. Built in 14 days. Premium by default.</p></div>
-        <div className="final-bottom"><div><h2 data-reveal>We don’t shape bodies.<br />We build businesses.</h2><p data-reveal>Bring the idea. We’ll build the business around it.<br/><a className="phone-link" href="tel:+19495242324">+1 (949) 524-2324</a></p></div><a href="tel:+19495242324" className="launch-disc" data-reveal aria-label="Call BBLS to book a launch call"><span>CALL TO<br/>START</span><ArrowUpRight size={24}/></a></div>
+        <div className="final-bottom"><div><h2 data-reveal>We don’t shape bodies.<br />We build businesses.</h2><p data-reveal>Bring the idea. We’ll build the business around it.<br/><a className="phone-link" href="tel:+19495242324">+1 (949) 524-2324</a></p></div><button type="button" className="launch-disc" data-reveal onClick={() => setChatOpen(true)} aria-label="Ask BBLS AI about your launch"><span>ASK BBLS<br/>AI</span><MessageCircle size={24}/></button></div>
         <footer><a href="#top" className="footer-brand"><span className="footer-mark"><Orbit size={17} strokeWidth={2.3}/></span><strong>BBLS</strong></a><p>Business Launch Studio · Orange County</p><a href="tel:+19495242324" className="footer-phone">+1 (949) 524-2324</a></footer>
       </section>
     </div>
