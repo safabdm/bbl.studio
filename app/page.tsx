@@ -1,6 +1,6 @@
 'use client';
 
-import { ArrowRight, ArrowUpRight, Check, ChevronRight, Hexagon } from 'lucide-react';
+import { ArrowRight, ArrowUpRight, Check, ChevronRight, Orbit } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 
 const VIDEO = 'https://d8j0ntlcm91z4.cloudfront.net/user_38xzZboKViGWJOttwIXH07lWA1P/hf_20260729_102822_0e6c87e8-c141-4744-bf32-ad30db296371.mp4';
@@ -38,7 +38,7 @@ export default function Home() {
     <ScrollVideo />
     <div className="site-layer">
       <nav className="glass-nav">
-        <a href="#top" className="brand"><Hexagon size={24} strokeWidth={1.5} /> bbls</a>
+        <a href="#top" className="brand" aria-label="BBLS — Business Launch Studio, Orange County"><span className="brand-mark"><Orbit size={22} strokeWidth={2.35} /></span><span className="brand-lockup"><strong>BBLS</strong><small>BUSINESS LAUNCH STUDIO · OC</small></span></a>
         <div className="nav-links"><a href="#services">Services</a><a href="#process">Process</a><a href="#pricing">Pricing</a><a href="#contact">Contact</a></div>
         <a href="tel:+19495242324" className="nav-cta" aria-label="Call BBLS at 949 524 2324">Call (949) 524-2324</a>
       </nav>
@@ -49,7 +49,7 @@ export default function Home() {
         </div>
         <div className="bottom-row">
           <div data-reveal><div className="accent-badge">LAUNCH-READY IN 14 DAYS</div><h1>Clear. Complete.<br />Ready to launch.</h1></div>
-          <div className="contact-card" data-reveal><div className="contact-orbit"><span /></div><div><strong>Boutique, not basic.</strong><small>BUSINESS LAUNCH STUDIO · LA</small><a href="tel:+19495242324">Call (949) 524-2324 <ArrowUpRight size={14} /></a></div></div>
+          <div className="contact-card" data-reveal><div className="contact-orbit"><span /></div><div><strong>Boutique, not basic.</strong><small>BUSINESS LAUNCH STUDIO · OC</small><a href="tel:+19495242324">Call (949) 524-2324 <ArrowUpRight size={14} /></a></div></div>
         </div>
       </section>
       <div className="scroll-space" aria-hidden="true" />
@@ -82,7 +82,7 @@ export default function Home() {
       <section id="contact" className="screen-section final-screen">
         <div className="top-row"><div className="accent-badge" data-reveal>WHY BBLS</div><p className="intro-copy" data-reveal>Design-first. Done for you. Built in 14 days. Premium by default.</p></div>
         <div className="final-bottom"><div><h2 data-reveal>We don’t shape bodies.<br />We build businesses.</h2><p data-reveal>Bring the idea. We’ll build the business around it.<br/><a className="phone-link" href="tel:+19495242324">+1 (949) 524-2324</a></p></div><a href="tel:+19495242324" className="launch-disc" data-reveal aria-label="Call BBLS to book a launch call"><span>CALL TO<br/>START</span><ArrowUpRight size={24}/></a></div>
-        <footer><a href="#top" className="footer-brand"><Hexagon size={18}/> bbls</a><p>Boutique Business Launch Studio · Los Angeles</p><a href="tel:+19495242324" className="footer-phone">+1 (949) 524-2324</a></footer>
+        <footer><a href="#top" className="footer-brand"><span className="footer-mark"><Orbit size={17} strokeWidth={2.3}/></span><strong>BBLS</strong></a><p>Business Launch Studio · Orange County</p><a href="tel:+19495242324" className="footer-phone">+1 (949) 524-2324</a></footer>
       </section>
     </div>
   </main>;
