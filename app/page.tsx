@@ -1,6 +1,6 @@
 'use client';
 
-import { ArrowRight, ArrowUpRight, Check, ChevronRight, MessageCircle, Orbit, Send, X } from 'lucide-react';
+import { ArrowRight, ArrowUpRight, Check, ChevronRight, MessageCircle, Orbit, Phone, Send, X } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 
 const VIDEO = 'https://d8j0ntlcm91z4.cloudfront.net/user_38xzZboKViGWJOttwIXH07lWA1P/hf_20260729_102822_0e6c87e8-c141-4744-bf32-ad30db296371.mp4';
@@ -61,7 +61,7 @@ export default function Home() {
       <nav className="glass-nav">
         <a href="#top" className="brand" aria-label="BBLS — Business Launch Studio, Orange County"><span className="brand-mark"><Orbit size={22} strokeWidth={2.35} /></span><span className="brand-lockup"><strong>BBLS</strong><small>BUSINESS LAUNCH STUDIO · OC</small></span></a>
         <div className="nav-links"><a href="#services">Services</a><a href="#process">Process</a><a href="#pricing">Pricing</a><a href="#contact">Contact</a></div>
-        <button type="button" className="nav-cta" onClick={() => setChatOpen(true)}><MessageCircle size={14}/> Ask BBLS AI</button>
+        <a href="tel:+19495242324" className="nav-cta" aria-label="Call BBLS at 949 524 2324"><Phone size={14}/> (949) 524-2324</a>
       </nav>
       {chatOpen && <div className="chat-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setChatOpen(false); }}><section className="chat-panel" role="dialog" aria-modal="true" aria-labelledby="chat-title"><header><div><small>BUSINESS LAUNCH STUDIO · OC</small><h2 id="chat-title">Ask BBLS AI</h2></div><button type="button" onClick={() => setChatOpen(false)} aria-label="Close BBLS AI"><X size={19}/></button></header><div className="chat-messages" aria-live="polite">{messages.map((message,index)=><p className={message.role} key={`${message.role}-${index}`}>{message.text}</p>)}</div><div className="quick-questions">{quickQuestions.map((item)=><button type="button" key={item} onClick={() => askQuestion(item)}>{item}</button>)}</div><form onSubmit={(event) => { event.preventDefault(); askQuestion(question); }}><label htmlFor="launch-question">Ask about your launch</label><div><input id="launch-question" value={question} onChange={(event) => setQuestion(event.target.value)} placeholder="Pricing, timing, LLC, website…" autoComplete="off"/><button type="submit" aria-label="Send question"><Send size={17}/></button></div></form><div className="chat-note">Answers use the current BBLS service and pricing information.</div></section></div>}
       <section id="top" className="screen-section hero-screen">
