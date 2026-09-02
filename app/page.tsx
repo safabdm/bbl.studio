@@ -9,10 +9,7 @@ import {
   POSITIONING,
   SERVICE_INTRO,
   SUBHEAD,
-  WHY_LINE,
-  WHY_POINTS,
 } from '@/lib/copy';
-import { HOME_FAQS } from '@/lib/site';
 import { ArrowUpRight, Check, ChevronRight } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 
@@ -149,11 +146,7 @@ export default function Home() {
 
         <section id="top" className="screen-section hero-screen">
           <div className="top-row">
-            <div className="service-list">
-              <span>/ SIMPLE LANDING PAGE</span>
-              <span>/ BUSINESS WEBSITE</span>
-              <span>/ COMMERCIAL WEBSITE</span>
-            </div>
+            <p className="accent-badge">WEBSITE DESIGN STUDIO</p>
             <p className="intro-copy">A boutique website design studio serving Orange County.</p>
           </div>
           <div className="bottom-row">
@@ -182,9 +175,9 @@ export default function Home() {
             </div>
             <div className="frost-panel">
               {[
-                ['01', 'Strategy & Structure', 'Clarify the offer, audience, page hierarchy, and the path from first impression to inquiry.', '#process'],
-                ['02', 'Design & Build', 'Create a distinctive responsive website with purposeful content, polished interactions, and a usable system.', '#work'],
-                ['03', 'Launch & Handoff', 'Connect forms and analytics, test key journeys, launch confidently, and leave the business in control.', '#process'],
+                ['01', 'Strategy & Structure', 'Offer, audience, pages, and customer journey.', '#process'],
+                ['02', 'Design & Build', 'Custom responsive design with purposeful content.', '#work'],
+                ['03', 'Launch & Handoff', 'Testing, analytics, launch, and handoff.', '#process'],
               ].map(([n, title, text, href], i) => (
                 <a className="frost-row" href={href} data-reveal style={{ transitionDelay: `${i * 110}ms` }} key={n} aria-label={`View ${title}`}>
                   <span>{n}</span>
@@ -194,30 +187,15 @@ export default function Home() {
                   </div>
                 </a>
               ))}
-              <p className="addon-note" data-reveal><strong>Website-first by design.</strong> Brand Identity is available only when the website needs a stronger visual foundation.</p>
+              <p className="addon-note" data-reveal>Optional Brand Identity is available when needed.</p>
             </div>
-          </div>
-        </section>
-
-        <section id="why" className="screen-section why-screen" aria-labelledby="why-heading">
-          <div className="top-row">
-            <p className="accent-badge" data-reveal>WHY BBLS</p>
-            <p className="intro-copy" data-reveal>{WHY_LINE}</p>
-          </div>
-          <div className="why-bottom">
-            <h2 id="why-heading" data-reveal>Boutique attention.<br />Commercial purpose.</h2>
-            <ul className="why-grid">
-              {WHY_POINTS.map((point, i) => (
-                <li key={point} data-reveal style={{ transitionDelay: `${i * 60}ms` }}>{point}</li>
-              ))}
-            </ul>
           </div>
         </section>
 
         <section id="work" className="screen-section work-screen" aria-labelledby="work-heading">
           <div className="top-row">
             <p className="accent-badge" data-reveal>SELECTED BRAND & WEBSITE WORK</p>
-            <p className="intro-copy" data-reveal>Live studio work. Open any site to review the brand and website as they exist today.</p>
+            <p className="intro-copy" data-reveal>Selected live websites.</p>
           </div>
           <div>
             <h2 id="work-heading" data-reveal>Work you<br />can visit.</h2>
@@ -261,22 +239,22 @@ export default function Home() {
         <section id="process" className="screen-section process-screen" aria-labelledby="process-heading">
           <div className="top-row">
             <p className="accent-badge" data-reveal>A FOCUSED LAUNCH PROCESS</p>
-            <p className="intro-copy" data-reveal>Four stages take a project from first conversation to a finished launch.</p>
+            <p className="intro-copy" data-reveal>From first conversation to launch.</p>
           </div>
           <div className="process-bottom">
             <div>
               <h2 id="process-heading" data-reveal>Discover. Define.<br />Design. Deliver.</h2>
               <div className="note-panel" data-reveal>
                 <p className="note-kicker">Timing depends on readiness</p>
-                <p>Focused launches may finish in 14 days when scope, content, and approvals are ready. Broader work typically takes 2 to 4 weeks.</p>
+                <p>Focused launches may finish in 14 days. Broader projects typically take 2 to 4 weeks.</p>
               </div>
             </div>
             <ol className="step-panel">
               {[
-                ['Discover', 'Clarify the offer, audience, goals, and materials needed to begin.'],
-                ['Define', 'Set the scope, structure, and creative direction before production starts.'],
-                ['Design', 'Shape the pages, visual system, and key customer flows.'],
-                ['Deliver', 'Launch the site, connect essential systems, and hand off the work.'],
+                ['Discover', 'Offer, audience, and goals.'],
+                ['Define', 'Scope, structure, and direction.'],
+                ['Design', 'Pages, visuals, and customer flow.'],
+                ['Deliver', 'Test, launch, and handoff.'],
               ].map(([title, text], i) => (
                 <li data-reveal style={{ transitionDelay: `${i * 90}ms` }} key={title}>
                   <span>0{i + 1}</span>
@@ -325,12 +303,12 @@ export default function Home() {
         <section id="contact" className="screen-section final-screen" aria-labelledby="contact-heading">
           <div className="top-row">
             <p className="accent-badge" data-reveal>START A PROJECT</p>
-            <p className="intro-copy" data-reveal>A focused conversation is enough to begin.</p>
+            <p className="intro-copy" data-reveal>Let’s begin.</p>
           </div>
           <div className="final-bottom">
             <div className="capability-copy">
               <h2 id="contact-heading" data-reveal>Ready to build a more distinctive business?</h2>
-              <p data-reveal>Share the offer, expected page count, launch goal, and any existing brand or content. BBLS will recommend the closest scope and next step.</p>
+              <p data-reveal>Share your offer, page count, and launch goal.</p>
               <div className="contact-lines" data-reveal>
                 <a href={EMAIL_HREF}>{EMAIL_LABEL}</a>
                 <a href={PHONE_HREF}>{PHONE_LABEL}</a>
@@ -339,17 +317,6 @@ export default function Home() {
                 <a href={EMAIL_HREF} className="solid-pill" aria-label={`Email BBLS at ${EMAIL_LABEL}`}>{CTA_PRIMARY}</a>
                 <a href={PHONE_HREF} className="glass-pill" aria-label={`Call BBLS at ${PHONE_LABEL}`}>Call BBLS</a>
               </div>
-            </div>
-            <div className="frost-panel">
-              {HOME_FAQS.map((item, i) => (
-                <article className="frost-row" data-reveal style={{ transitionDelay: `${i * 110}ms` }} key={item.q}>
-                  <span>0{i + 1}</span>
-                  <div>
-                    <h3>{item.q}</h3>
-                    <p>{item.a}</p>
-                  </div>
-                </article>
-              ))}
             </div>
           </div>
           <footer>
