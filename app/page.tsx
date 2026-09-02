@@ -1,7 +1,6 @@
 'use client';
 
 import { BblsMark } from '@/components/bbls-mark';
-import { StudioChat } from '@/components/studio-chat';
 import { BRAND_ADDON, PRICE_DISCLAIMER, PUBLIC_PROJECT_OFFERS } from '@/lib/offers';
 import {
   CTA_PRIMARY,
@@ -106,7 +105,6 @@ function ScrollVideo() {
 }
 
 export default function Home() {
-  const [chatOpen, setChatOpen] = useState(false);
   useEffect(() => {
     const elements = [...document.querySelectorAll<HTMLElement>('[data-reveal]')];
     if (prefersReducedMotion()) {
@@ -198,7 +196,7 @@ export default function Home() {
             <p className="intro-copy" data-reveal>Selected live websites.</p>
           </div>
           <div>
-            <h2 id="work-heading" data-reveal>Work you<br />can visit.</h2>
+            <h2 id="work-heading" className="work-heading" data-reveal>Work you can visit.</h2>
             <ul className="work-list">
               {projects.map((project, i) => (
                 <li key={project.name}>
@@ -328,7 +326,6 @@ export default function Home() {
           </footer>
         </section>
       </div>
-      <StudioChat open={chatOpen} onOpenChange={setChatOpen} />
     </main>
   );
 }
