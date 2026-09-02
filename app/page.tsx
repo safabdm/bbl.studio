@@ -9,12 +9,10 @@ import {
   SERVICE_INTRO,
   SUBHEAD,
 } from '@/lib/copy';
-import { ArrowUpRight, Check, ChevronRight } from 'lucide-react';
+import { ArrowUpRight, Check, ChevronRight, LockKeyhole } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 
 const VIDEO = 'https://d8j0ntlcm91z4.cloudfront.net/user_38xzZboKViGWJOttwIXH07lWA1P/hf_20260729_102822_0e6c87e8-c141-4744-bf32-ad30db296371.mp4';
-const EMAIL_HREF = 'mailto:hello@bbls.studio';
-const EMAIL_LABEL = 'hello@bbls.studio';
 const PHONE_HREF = 'tel:+19495242324';
 const PHONE_LABEL = '(949) 524-2324';
 const STUDIO_LINE = 'BBLS Boutique Brand & Launch Studio';
@@ -105,6 +103,31 @@ function ScrollVideo() {
 }
 
 export default function Home() {
+  const [selectedOffer, setSelectedOffer] = useState(PUBLIC_PROJECT_OFFERS[0].id);
+  const [formStatus, setFormStatus] = useState<'idle' | 'submitting' | 'error'>('idle');
+  const [formMessage, setFormMessage] = useState('');
+
+  const chooseOffer = (offerId: string) => {
+    setSelectedOffer(offerId);
+    window.setTimeout(() => document.getElementById('start-project')?.scrollIntoView({ behavior: 'smooth' }), 0);
+  };
+
+  const submitProject = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setFormStatus('submitting');
+    setFormMessage('');
+    const body = Object.fromEntries(new FormData(event.currentTarget).entries());
+    try {
+      const response = await fetch('/api/start-project/checkout', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+      const result = await response.json() as { url?: string; message?: string };
+      if (!response.ok || !result.url) throw new Error(result.message || 'Checkout could not be started.');
+      window.location.assign(result.url);
+    } catch (error) {
+      setFormStatus('error');
+      setFormMessage(error instanceof Error ? error.message : 'Checkout could not be started. Please call BBLS.');
+    }
+  };
+
   useEffect(() => {
     const elements = [...document.querySelectorAll<HTMLElement>('[data-reveal]')];
     if (prefersReducedMotion()) {
@@ -153,7 +176,7 @@ export default function Home() {
               <h1>Website design<br />in Orange County.</h1>
               <p className="hero-line">{SUBHEAD}</p>
               <div className="dual-cta">
-                <a href="#contact" className="solid-pill">{CTA_PRIMARY} <ChevronRight size={14} aria-hidden="true" /></a>
+                <a href="#start-project" className="solid-pill">{CTA_PRIMARY} <ChevronRight size={14} aria-hidden="true" /></a>
                 <a href="#work" className="glass-pill">{CTA_SECONDARY} <ChevronRight size={14} aria-hidden="true" /></a>
               </div>
             </div>
@@ -173,17 +196,17 @@ export default function Home() {
             </div>
             <div className="frost-panel">
               {[
-                ['01', 'Strategy & Structure', 'Offer, audience, pages, and customer journey.', '#process'],
-                ['02', 'Design & Build', 'Custom responsive design with purposeful content.', '#work'],
-                ['03', 'Launch & Handoff', 'Testing, analytics, launch, and handoff.', '#process'],
-              ].map(([n, title, text, href], i) => (
-                <a className="frost-row" href={href} data-reveal style={{ transitionDelay: `${i * 110}ms` }} key={n} aria-label={`View ${title}`}>
+                ['01', 'Strategy & Structure', 'Offer, audience, pages, and customer journey.'],
+                ['02', 'Design & Build', 'Custom responsive design with purposeful content.'],
+                ['03', 'Launch & Handoff', 'Testing, analytics, launch, and handoff.'],
+              ].map(([n, title, text], i) => (
+                <div className="frost-row" data-reveal style={{ transitionDelay: `${i * 110}ms` }} key={n}>
                   <span>{n}</span>
                   <div>
-                    <h3>{title}<ChevronRight size={16} aria-hidden="true" /></h3>
+                    <h3>{title}</h3>
                     <p>{text}</p>
                   </div>
-                </a>
+                </div>
               ))}
               <p className="addon-note" data-reveal>Optional Brand Identity is available when needed.</p>
             </div>
@@ -287,7 +310,7 @@ export default function Home() {
                       <li key={feature}><Check size={14} aria-hidden="true" />{feature}</li>
                     ))}
                   </ul>
-                  <a href="#contact" aria-label={`Start a ${item.name} project`}>{CTA_PRIMARY}<ChevronRight size={14} aria-hidden="true" /></a>
+                  <button type="button" onClick={() => chooseOffer(item.id)} aria-label={`Start a ${item.name} project`}>{CTA_PRIMARY}<ChevronRight size={14} aria-hidden="true" /></button>
                 </article>
               ))}
             </div>
@@ -303,15 +326,34 @@ export default function Home() {
             <p className="accent-badge" data-reveal>START A PROJECT</p>
             <p className="intro-copy" data-reveal>Let’s begin.</p>
           </div>
-          <div className="final-bottom">
+          <div id="start-project" className="final-bottom">
             <div className="capability-copy">
               <h2 id="contact-heading" data-reveal>Ready to build a more distinctive business?</h2>
-              <p data-reveal>Share your offer, page count, and launch goal.</p>
+              <p data-reveal>Tell us what you need, review your 20% project deposit, then continue to secure checkout.</p>
               <div className="dual-cta" data-reveal>
-                <a href={EMAIL_HREF} className="solid-pill" aria-label={`Email BBLS at ${EMAIL_LABEL}`}>{CTA_PRIMARY} <ChevronRight size={14} aria-hidden="true" /></a>
                 <a href={PHONE_HREF} className="glass-pill" aria-label={`Call BBLS at ${PHONE_LABEL}`}>Call BBLS <ChevronRight size={14} aria-hidden="true" /></a>
               </div>
             </div>
+            <form className="project-form" onSubmit={submitProject} data-reveal>
+              <div className="form-grid">
+                <label>Full name<input name="name" autoComplete="name" required /></label>
+                <label>Email<input name="email" type="email" autoComplete="email" required /></label>
+                <label>Phone<input name="phone" type="tel" autoComplete="tel" required /></label>
+                <label>Business name<input name="businessName" autoComplete="organization" required /></label>
+              </div>
+              <label>Website package<select name="offerId" value={selectedOffer} onChange={(event) => setSelectedOffer(event.target.value)} required>{PUBLIC_PROJECT_OFFERS.map((offer) => <option key={offer.id} value={offer.id}>{offer.name} · {offer.label}</option>)}</select></label>
+              <div className="form-grid">
+                <label>Estimated page count<input name="pageCount" inputMode="numeric" placeholder="Example: 5" required /></label>
+                <label>Target launch date<input name="launchDate" type="date" required /></label>
+              </div>
+              <label>Primary project goal<textarea name="goal" rows={4} placeholder="Tell us what the website needs to accomplish." required /></label>
+              <label className="consent-row"><input name="depositConsent" type="checkbox" value="accepted" required /><span>I understand the 20% deposit is based on the package starting price and will be applied to my final project total. Final scope and remaining balance will be confirmed in writing before work begins.</span></label>
+              <input className="form-honeypot" name="website" tabIndex={-1} autoComplete="off" aria-hidden="true" />
+              <div className="deposit-summary"><span>20% project deposit</span><strong>{new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format((PUBLIC_PROJECT_OFFERS.find((offer) => offer.id === selectedOffer)?.cents || 0) / 500)}</strong></div>
+              <button className="solid-pill form-submit" type="submit" disabled={formStatus === 'submitting'}><LockKeyhole size={15} aria-hidden="true" /> {formStatus === 'submitting' ? 'Opening secure checkout…' : 'Continue to Secure Checkout'} <ChevronRight size={14} aria-hidden="true" /></button>
+              <p className="form-help">Secure payment is processed by Stripe. No card information is stored by BBLS.</p>
+              {formMessage && <p className="form-error" role="alert">{formMessage} <a href={PHONE_HREF}>Call {PHONE_LABEL}</a></p>}
+            </form>
           </div>
           <footer>
             <a href="#top" className="footer-brand"><BblsMark size={20} /> bbls</a>
