@@ -307,10 +307,6 @@ export default function Home() {
             <div className="capability-copy">
               <h2 id="contact-heading" data-reveal>Ready to build a more distinctive business?</h2>
               <p data-reveal>Share your offer, page count, and launch goal.</p>
-              <div className="contact-lines" data-reveal>
-                <a href={EMAIL_HREF}>{EMAIL_LABEL}</a>
-                <a href={PHONE_HREF}>{PHONE_LABEL}</a>
-              </div>
               <div className="dual-cta" data-reveal>
                 <a href={EMAIL_HREF} className="solid-pill" aria-label={`Email BBLS at ${EMAIL_LABEL}`}>{CTA_PRIMARY}</a>
                 <a href={PHONE_HREF} className="glass-pill" aria-label={`Call BBLS at ${PHONE_LABEL}`}>Call BBLS</a>
@@ -319,7 +315,7 @@ export default function Home() {
           </div>
           <footer>
             <a href="#top" className="footer-brand"><BblsMark size={20} /> bbls</a>
-            <p>BBLS Boutique Brand & Launch Studio</p>
+            <p>BBLS Boutique Brand & Launch Studio, Orange County</p>
             <div className="footer-contacts">
               <a href={PHONE_HREF} className="footer-phone">{PHONE_LABEL}</a>
             </div>
