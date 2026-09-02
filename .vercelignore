@@ -1,0 +1,8 @@
+node_modules
+dist
+saved
+.verify
+.wrangler
+BBLs-*.zip
+data
+.env
