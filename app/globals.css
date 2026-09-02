@@ -152,7 +152,7 @@ footer { display:grid;grid-template-columns:1fr auto 1fr;align-items:center;gap:
 .pricing-note { max-width:var(--measure);margin:var(--stack-space) 0 0;color:var(--text-muted);font-size:var(--fs-card);line-height:var(--lh-body);text-wrap:pretty; }
 .addon-note { margin:0;padding:1.1rem 0 1.2rem;color:var(--text-muted);font-size:var(--fs-card);line-height:var(--lh-body);text-wrap:pretty;border-top:1px solid rgba(255,255,255,.15); }
 .addon-note strong { display:block;margin-bottom:.3rem;color:#fff;font-weight:500; }
-.addon-note.pricing-addon { max-width:42rem;margin-top:var(--stack-space);padding:1rem 1.2rem;border:1px solid rgba(255,255,255,.15);border-radius:16px;background:rgba(255,255,255,.08);backdrop-filter:blur(12px); }
+.addon-note.pricing-addon { width:100%;max-width:none;margin-top:var(--stack-space);padding:1rem 1.2rem;border:1px solid rgba(255,255,255,.15);border-radius:16px;background:rgba(255,255,255,.08);backdrop-filter:blur(12px); }
 .why-screen { height:auto;min-height:auto; }
 .why-bottom { display:flex;align-items:flex-end;justify-content:space-between;gap:clamp(2.5rem,6vw,4.5rem); }
 .why-grid { flex:1;max-width:32rem;margin:0;padding:0;list-style:none;display:grid;grid-template-columns:1fr 1fr;gap:.55rem; }
