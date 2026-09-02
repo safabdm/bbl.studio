@@ -104,22 +104,44 @@ footer { display:grid;grid-template-columns:1fr auto 1fr;align-items:center;gap:
 .work-link { margin-top:1.1rem;display:inline-flex;align-items:center;justify-content:center;gap:.45rem;width:fit-content;min-height:44px;border:1px solid rgba(255,255,255,.25);border-radius:99px;background:rgba(255,255,255,.1);padding:.55rem 1rem;font-size:var(--fs-btn);line-height:var(--lh-button);transition:background .3s,color .3s; }
 .work-link:hover,.work-link:focus-visible { background:rgba(255,255,255,.2);color:#fff; }
 .work-link:active { background:rgba(255,255,255,.28); }
+@media(max-width:1024px){
+  .nav-links{display:none}
+  .glass-nav{grid-template-columns:1fr auto}
+  .capability-bottom,.process-bottom,.final-bottom{flex-direction:column;align-items:stretch}
+  .frost-panel,.step-panel{align-self:stretch;max-width:100%}
+  .price-grid,.price-grid.cols-3{grid-template-columns:1fr}
+  .price-lede,.price-panel ul{max-width:100%}
+  .scroll-space{height:38svh}
+}
 @media(max-width:900px){.work-card{grid-template-columns:1fr}}
-@media(max-width:900px){.price-grid,.price-grid.cols-3{grid-template-columns:1fr}.price-lede,.price-panel ul{max-width:100%}}
 @media(max-width:768px){
+  :root{--nav-height:64px;--page-gutter:1.1rem;--section-space:3.75rem;--group-space:2rem;--card-pad:1.25rem}
   .glass-nav{grid-template-columns:1fr auto}
   .nav-links{display:none}
   .top-row,.bottom-row,.capability-bottom,.process-bottom,.final-bottom{flex-direction:column;align-items:stretch}
   .intro-copy{text-align:left;max-width:none}
   .frost-panel,.step-panel{align-self:stretch;max-width:100%}
   .screen-section{min-height:auto}
+  .hero-screen{min-height:100svh}
+  .scroll-space{height:18svh}
   .service-list{margin-top:.5rem}
   .price-grid,.price-grid.cols-3{grid-template-columns:1fr}
   h1,h2{max-width:none}
-  footer{grid-template-columns:1fr;justify-items:center;gap:.7rem;text-align:center}
+  .work-card{padding:.75rem;gap:1rem}
+  .work-copy{padding:.25rem}
+  footer{grid-template-columns:1fr;justify-items:center;gap:.7rem;text-align:center;padding-block:1.25rem}
   .footer-contacts{justify-self:center;justify-content:center}
   footer p{text-align:center}
   .work-heading{white-space:normal}
+}
+@media(max-width:520px){
+  .nav-cta{padding:.5rem .7rem;font-size:.8rem}
+  .brand{font-size:1rem}
+  .accent-badge{width:fit-content;max-width:100%;letter-spacing:.06em}
+  .dual-cta{display:grid;grid-template-columns:1fr;width:100%}
+  .solid-pill,.glass-pill{width:100%}
+  .price-panel{border-radius:14px}
+  .addon-note.pricing-addon{padding:1rem}
 }
 @media(prefers-reduced-motion:reduce){
   html{scroll-behavior:auto}
