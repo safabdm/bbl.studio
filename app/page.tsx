@@ -138,7 +138,7 @@ export default function Home() {
             <a href="#contact">Contact</a>
           </div>
           <div className="nav-actions">
-            <a href={PHONE_HREF} className="nav-cta" aria-label={`Call BBLS at ${PHONE_LABEL}`}>Call {PHONE_LABEL}</a>
+            <a href={PHONE_HREF} className="nav-cta" aria-label={`Call BBLS at ${PHONE_LABEL}`}>Call {PHONE_LABEL} <ChevronRight size={14} aria-hidden="true" /></a>
           </div>
         </nav>
 
@@ -154,7 +154,7 @@ export default function Home() {
               <p className="hero-line">{SUBHEAD}</p>
               <div className="dual-cta">
                 <a href="#contact" className="solid-pill">{CTA_PRIMARY} <ChevronRight size={14} aria-hidden="true" /></a>
-                <a href="#work" className="glass-pill">{CTA_SECONDARY}</a>
+                <a href="#work" className="glass-pill">{CTA_SECONDARY} <ChevronRight size={14} aria-hidden="true" /></a>
               </div>
             </div>
           </div>
@@ -287,7 +287,7 @@ export default function Home() {
                       <li key={feature}><Check size={14} aria-hidden="true" />{feature}</li>
                     ))}
                   </ul>
-                  <a href="#contact" aria-label={`Start a ${item.name} project`}>{CTA_PRIMARY}<ArrowUpRight size={14} aria-hidden="true" /></a>
+                  <a href="#contact" aria-label={`Start a ${item.name} project`}>{CTA_PRIMARY}<ChevronRight size={14} aria-hidden="true" /></a>
                 </article>
               ))}
             </div>
@@ -308,8 +308,8 @@ export default function Home() {
               <h2 id="contact-heading" data-reveal>Ready to build a more distinctive business?</h2>
               <p data-reveal>Share your offer, page count, and launch goal.</p>
               <div className="dual-cta" data-reveal>
-                <a href={EMAIL_HREF} className="solid-pill" aria-label={`Email BBLS at ${EMAIL_LABEL}`}>{CTA_PRIMARY}</a>
-                <a href={PHONE_HREF} className="glass-pill" aria-label={`Call BBLS at ${PHONE_LABEL}`}>Call BBLS</a>
+                <a href={EMAIL_HREF} className="solid-pill" aria-label={`Email BBLS at ${EMAIL_LABEL}`}>{CTA_PRIMARY} <ChevronRight size={14} aria-hidden="true" /></a>
+                <a href={PHONE_HREF} className="glass-pill" aria-label={`Call BBLS at ${PHONE_LABEL}`}>Call BBLS <ChevronRight size={14} aria-hidden="true" /></a>
               </div>
             </div>
           </div>
