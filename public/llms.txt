@@ -1,12 +1,12 @@
-# BBLS Boutique Brand & Launch Studio
+# BBL Boutique Brand & Launch Studio
 
 > BBLS is a boutique website design studio serving businesses in Orange County, California.
 
-- Site: https://bbls.studio
-- Email: hello@bbls.studio
+- Site: https://www.bbl.studio
+- Email: hello@bbl.studio
 - Phone: (949) 524-2324
 - Location: Orange County, California
-- Primary identity: BBLS Boutique Brand & Launch Studio
+- Primary identity: BBL Boutique Brand & Launch Studio
 - Brand statement: We don’t shape bodies. We build businesses.
 
 ## What is BBLS?
@@ -38,4 +38,4 @@ BBLS landing pages start at $3,000, business websites start at $5,500, and comme
 
 ## How to start
 
-Email hello@bbls.studio or call (949) 524-2324.
+Email hello@bbl.studio or call (949) 524-2324.

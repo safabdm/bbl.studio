@@ -13,7 +13,7 @@ type Template =
   | 'approval_received'
   | 'final_files_released';
 
-const contact = `BBLS Boutique Brand & Launch Studio\nhello@bbls.studio\n(949) 524-2324\nhttps://bbls.studio`;
+const contact = `BBL Boutique Brand & Launch Studio\nhello@bbl.studio\n(949) 524-2324\nhttps://www.bbl.studio`;
 
 export function logEmail(template: Template, to: string, subject: string, body: string) {
   run(

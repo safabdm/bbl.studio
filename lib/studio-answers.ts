@@ -1,6 +1,6 @@
 import { CUSTOM_SCOPE, PROJECT_OFFERS } from './offers';
 
-const EMAIL = 'hello@bbls.studio';
+const EMAIL = 'hello@bbl.studio';
 const PHONE = '(949) 524-2324';
 const START = `Email ${EMAIL} or call ${PHONE} to start a project.`;
 
@@ -31,6 +31,10 @@ export function answerStudioQuestion(question: string, history: string[] = []) {
 
   if (/what is bbls|who is bbls|who are you|about|studio/.test(q) && !/website|package|price|cost/.test(q)) {
     return 'BBLS is a boutique website design studio serving Orange County businesses. We plan, design, build, and launch custom websites around a clear offer and customer journey.';
+  }
+
+  if (/ai|artificial intelligence|faster design|design faster/.test(q)) {
+    return close(`Design Faster with AI pairs experienced designers with AI-powered workflows to move from idea to polished work more quickly. Email ${EMAIL} or call ${PHONE} to start.`);
   }
 
   if (/landing|one page|single page|campaign/.test(q)) {

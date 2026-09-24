@@ -1,16 +1,40 @@
 {
   "framework": "vite",
-  "buildCommand": "pnpm build",
-  "outputDirectory": "dist",
+  "buildCommand": "pnpm exec vite build --config vite.vercel.config.ts",
+  "outputDirectory": "out",
   "rewrites": [
     { "source": "/api/:path*", "destination": "/api/[...route]" },
-    { "source": "/((?!api/|assets/|work/|.*\\..*).*)", "destination": "/index.html" }
+    { "source": "/((?!api/|assets/|work/|brand/|.*\\..*).*)", "destination": "/index.html" }
   ],
   "headers": [
     {
       "source": "/(.*)",
       "headers": [
         { "key": "X-Robots-Tag", "value": "index, follow, max-image-preview:large, max-snippet:-1" }
+      ]
+    },
+    {
+      "source": "/assets/(.*)",
+      "headers": [
+        { "key": "Cache-Control", "value": "public, max-age=31536000, immutable" }
+      ]
+    },
+    {
+      "source": "/work/(.*)",
+      "headers": [
+        { "key": "Cache-Control", "value": "public, max-age=2592000, stale-while-revalidate=86400" }
+      ]
+    },
+    {
+      "source": "/brand/(.*)",
+      "headers": [
+        { "key": "Cache-Control", "value": "public, max-age=2592000, stale-while-revalidate=86400" }
+      ]
+    },
+    {
+      "source": "/(favicon.svg|favicon.png|apple-touch-icon.png|og.png)",
+      "headers": [
+        { "key": "Cache-Control", "value": "public, max-age=604800, stale-while-revalidate=86400" }
       ]
     },
     {

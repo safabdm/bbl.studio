@@ -1,4 +1,4 @@
-import { BRAND_ADDON, PUBLIC_PROJECT_OFFERS } from './offers';
+import { PUBLIC_PROJECT_OFFERS } from './offers';
 import { CORE_FAQS, EMAIL, ORG_ID, PHONE, PRIMARY_DESCRIPTION, SITE_URL, STUDIO_NAME, projects, type PageSeo } from './site';
 
 export function organizationNode() {
@@ -27,31 +27,28 @@ export function organizationNode() {
       'Landing page design',
       'Business website design',
       'Commercial website design',
+      'Brand identity',
     ],
     knowsAbout: [
       'Website design in Orange County',
       'Landing page design',
       'Commercial website design',
-      'Brand identity add on',
+      'Brand identity',
     ],
     hasOfferCatalog: {
       '@type': 'OfferCatalog',
       name: 'BBLS website engagements',
-      itemListElement: [
-        ...PUBLIC_PROJECT_OFFERS.map((offer) => ({
-          '@type': 'Offer',
-          priceCurrency: 'USD',
-          price: String(offer.cents / 100),
-          priceSpecification: { '@type': 'PriceSpecification', priceCurrency: 'USD', minPrice: String(offer.cents / 100), description: 'Starting price' },
-          itemOffered: { '@type': 'Service', name: offer.name, description: offer.description },
-        })),
-        {
-          '@type': 'Offer',
-          priceCurrency: 'USD',
-          price: String(BRAND_ADDON.cents / 100),
-          itemOffered: { '@type': 'Service', name: BRAND_ADDON.name, description: BRAND_ADDON.description },
-        },
-      ],
+      itemListElement: PUBLIC_PROJECT_OFFERS.map((offer) => ({
+        '@type': 'Offer',
+        priceCurrency: 'USD',
+        ...(offer.cents > 0
+          ? {
+              price: String(offer.cents / 100),
+              priceSpecification: { '@type': 'PriceSpecification', priceCurrency: 'USD', minPrice: String(offer.cents / 100), description: 'Starting price' },
+            }
+          : {}),
+        itemOffered: { '@type': 'Service', name: offer.name, description: offer.description },
+      })),
     },
   };
 }

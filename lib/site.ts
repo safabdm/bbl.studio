@@ -1,5 +1,5 @@
-export const SITE_URL = 'https://bbls.studio';
-export const STUDIO_NAME = 'BBLS Boutique Brand & Launch Studio';
+export const SITE_URL = 'https://www.bbl.studio';
+export const STUDIO_NAME = 'BBL Boutique Brand & Launch Studio';
 export const STUDIO_SHORT = 'BBLS';
 export const STUDIO_LINE = 'Premium Website Design Studio in Orange County';
 export const PRIMARY_DESCRIPTION =
@@ -7,8 +7,8 @@ export const PRIMARY_DESCRIPTION =
 export const SUPPORTING_MESSAGE =
   'Distinctive websites designed to build credibility, generate inquiries, and support business growth.';
 export const BRAND_STATEMENT = 'We don’t shape bodies. We build businesses.';
-export const EMAIL = 'hello@bbls.studio';
-export const EMAIL_HREF = 'mailto:hello@bbls.studio';
+export const EMAIL = 'hello@bbl.studio';
+export const EMAIL_HREF = 'mailto:hello@bbl.studio';
 export const PHONE = '(949) 524-2324';
 export const PHONE_HREF = 'tel:+19495242324';
 export const ORG_ID = `${SITE_URL}/#organization`;
@@ -65,13 +65,13 @@ export type PageSeo = {
 export const PUBLIC_PAGES: PageSeo[] = [
   {
     path: '/',
-    title: 'Website Design in Orange County | BBLS Studio',
+    title: 'Website Design in Orange County | BBL Studio',
     description: 'BBLS is a boutique website design studio serving Orange County businesses. Distinctive websites designed to build credibility, generate inquiries, and support business growth.',
     h1: 'Website design in Orange County.',
   },
   {
     path: '/orange-county-web-design',
-    title: 'Orange County Web Design | BBLS Studio',
+    title: 'Orange County Web Design | BBL Studio',
     description: 'Orange County web design by BBLS. Distinctive landing pages, business websites, and commercial sites planned to launch, convert, and grow.',
     h1: 'Orange County web design.',
   },
@@ -95,7 +95,7 @@ export const PUBLIC_PAGES: PageSeo[] = [
   },
   {
     path: '/work',
-    title: 'Selected Website Design Work | BBLS Studio',
+    title: 'Selected Website Design Work | BBL Studio',
     description: 'Live BBLS website work: Raysan IP, 7 Stud Farm, and IP Law Nerds. Visit each site as it exists today.',
     h1: 'Work you can visit.',
   },
@@ -126,7 +126,7 @@ export const PUBLIC_PAGES: PageSeo[] = [
   {
     path: '/contact',
     title: 'Contact BBLS | Website Design in Orange County',
-    description: 'Start a BBLS website project. Email hello@bbls.studio or call (949) 524-2324. Orange County website design studio.',
+    description: 'Start a BBLS website project. Email hello@bbl.studio or call (949) 524-2324. Orange County website design studio.',
     h1: 'Ready to build a more distinctive business?',
   },
   {

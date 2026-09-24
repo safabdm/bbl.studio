@@ -87,7 +87,7 @@ function readJson(req: IncomingMessage) {
 function requestPath(req: IncomingMessage) {
   const raw = req.url || '/';
   try {
-    return new URL(raw, 'https://bbls.studio').pathname;
+    return new URL(raw, 'https://www.bbl.studio').pathname;
   } catch {
     return raw.split('?')[0] || '/';
   }
@@ -117,9 +117,9 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
       if (!key.startsWith('sk_')) return send(res, 503, { ok: false, message: 'Secure deposit checkout is being connected. Please call BBLS to start your project.' });
       const stripe = new Stripe(key);
       const proto = String(req.headers['x-forwarded-proto'] || 'https').split(',')[0].trim();
-      const host = String(req.headers['x-forwarded-host'] || req.headers.host || 'bbls.studio').split(',')[0].trim();
-      const trustedHost = host === 'bbls.studio' || host.endsWith('.chatgpt.site') || host.startsWith('127.0.0.1:') || host.startsWith('localhost:');
-      const origin = trustedHost ? `${proto === 'http' ? 'http' : 'https'}://${host}` : 'https://bbls.studio';
+      const host = String(req.headers['x-forwarded-host'] || req.headers.host || 'www.bbl.studio').split(',')[0].trim();
+      const trustedHost = host === 'www.bbl.studio' || host === 'bbl.studio' || host === 'bbls.studio' || host.endsWith('.vercel.app') || host.endsWith('.chatgpt.site') || host.startsWith('127.0.0.1:') || host.startsWith('localhost:');
+      const origin = trustedHost ? `${proto === 'http' ? 'http' : 'https'}://${host}` : 'https://www.bbl.studio';
       const session = await stripe.checkout.sessions.create({
         mode: 'payment',
         customer_email: email,

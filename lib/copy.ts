@@ -1,16 +1,16 @@
-export const STUDIO_NAME = 'BBLS Boutique Brand & Launch Studio';
+export const STUDIO_NAME = 'BBL Boutique Brand & Launch Studio';
 export const STUDIO_LINE = 'Premium Website Design Studio in Orange County';
 export const BRAND_STATEMENT = 'We don’t shape bodies. We build businesses.';
 
 export const H1 = 'Website design in Orange County.';
 export const SUBHEAD =
-  'Custom websites with clear strategy, premium design, and a direct path to inquiry.';
+  'Custom websites with clear strategy, premium design, and a faster path from idea to launch.';
 
 export const CTA_PRIMARY = 'Start a Project';
 export const CTA_SECONDARY = 'View Selected Work';
 
 export const POSITIONING =
-  'Every BBLS website is shaped around the offer, the audience, and the action a visitor should take. Strategy, design, build, and launch stay connected from the first page plan to final handoff.';
+  'Every BBL website is shaped around the offer, the audience, and the action a visitor should take. Experienced designers lead the work. AI-assisted workflows help us explore and iterate faster—without losing judgment.';
 
 export const SERVICE_INTRO =
   'A focused website process for businesses that value clarity, credibility, and considered design.';
@@ -43,7 +43,7 @@ export const GEO_ANSWERS = [
   },
   {
     q: 'What website services does BBLS offer?',
-    a: 'BBLS offers Simple Landing Pages, Business Websites, Commercial Websites, and optional Brand Identity services.',
+    a: 'BBL offers Simple Landing Pages, Business Websites, Commercial Websites, Brand Identity, and AI-assisted design.',
   },
   {
     q: 'How much does a BBLS website cost?',

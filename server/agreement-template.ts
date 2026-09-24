@@ -3,7 +3,7 @@ export const AGREEMENT_NOTICE =
 
 export function agreementSections() {
   return [
-    { id: 'parties', title: 'Parties', body: 'This Service Agreement is between BBLS Boutique Brand & Launch Studio (“BBLS”), Orange County, California, and the named client identified in the proposal.' },
+    { id: 'parties', title: 'Parties', body: 'This Service Agreement is between BBL Boutique Brand & Launch Studio (“BBLS”), Orange County, California, and the named client identified in the proposal.' },
     { id: 'scope', title: 'Project scope', body: 'BBLS will provide the services described in the attached proposal, including the selected package, deliverables, page count, and any approved additions or custom line items.' },
     { id: 'deliverables', title: 'Deliverables', body: 'Deliverables are limited to the items listed in the proposal. Third-party accounts, licenses, stock assets, and platform subscriptions are billed separately unless expressly included.' },
     { id: 'timeline', title: 'Timeline', body: 'Streamlined launches may be completed in 14 days when scope, content, access, and approvals are ready. More customized engagements typically require 2 to 4 weeks. Timing is confirmed around readiness and is not an unconditional guarantee.' },

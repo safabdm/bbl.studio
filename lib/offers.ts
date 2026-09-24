@@ -21,6 +21,7 @@ export const PROJECT_OFFERS: StudioOffer[] = [
     label: 'Starting at $3,000',
     cents: 300000,
     monthly: false,
+    badge: 'LANDING',
     lede: 'A focused page for one clear offer.',
     features: [
       'One custom page',
@@ -37,6 +38,7 @@ export const PROJECT_OFFERS: StudioOffer[] = [
     label: 'Starting at $5,500',
     cents: 550000,
     monthly: false,
+    badge: 'BUSINESS',
     lede: 'A complete website built for credibility and inquiries.',
     features: [
       'Up to five custom pages',
@@ -65,13 +67,32 @@ export const PROJECT_OFFERS: StudioOffer[] = [
     description: 'Commercial Website starts at $8,500. It includes six to ten custom pages, custom UX and architecture, conversion focused layouts, advanced forms or integrations, CMS setup where appropriate, on page SEO, analytics and conversion tracking, launch support, and up to three revision rounds.',
   },
   {
-    id: 'pkg_brand',
+    id: 'pkg_ai_design',
     number: '04',
-    name: 'Brand Identity Add On',
+    name: 'Design Faster with AI',
+    label: 'Designer-led. AI-assisted.',
+    cents: 0,
+    monthly: false,
+    featured: true,
+    badge: 'AI',
+    lede: 'Combine experienced designers with AI-powered workflows to accelerate ideation, exploration, iteration, prototyping, and production—turning ideas into polished designs faster.',
+    features: [
+      'Experienced designers',
+      'AI-assisted ideation and exploration',
+      'Faster iteration and prototyping',
+      'Production-ready design',
+    ],
+    description: 'Combine experienced designers with AI-powered workflows to accelerate ideation, exploration, iteration, prototyping, and production—turning ideas into polished designs faster.',
+  },
+  {
+    id: 'pkg_brand',
+    number: '05',
+    name: 'Brand Identity',
     label: 'Starting at $3,500',
     cents: 350000,
     monthly: false,
-    addon: true,
+    featured: true,
+    badge: 'IDENTITY',
     lede: 'Logo, color, typography, and visual direction.',
     features: [
       'Logo system',
@@ -80,18 +101,18 @@ export const PROJECT_OFFERS: StudioOffer[] = [
       'Core visual direction',
       'Basic brand guidelines',
     ],
-    description: 'Brand Identity is an optional website add on starting at $3,500. It may include a logo system, color palette, typography system, core visual direction, and basic brand guidelines. It is not a separate primary package.',
+    description: 'Brand Identity starts at $3,500. It includes a logo system, color palette, typography system, core visual direction, and basic brand guidelines. It can stand on its own or pair with a website engagement.',
   },
 ];
 
-export const PUBLIC_PROJECT_OFFERS = PROJECT_OFFERS.filter((item) => !item.addon);
+export const PUBLIC_PROJECT_OFFERS = PROJECT_OFFERS;
 export const BRAND_ADDON = PROJECT_OFFERS.find((item) => item.id === 'pkg_brand')!;
 
 export const PRICE_DISCLAIMER =
   'Final pricing depends on scope, content, and functionality. Platform costs are separate.';
 
 export const PROJECT_OVERVIEW =
-  'Planning estimates: Simple Landing Page starting at $3,000. Business Website starting at $5,500. Commercial Website starting at $8,500. Optional Brand Identity add on starting at $3,500.';
+  'Planning estimates: Simple Landing Page starting at $3,000. Business Website starting at $5,500. Commercial Website starting at $8,500. Brand Identity starting at $3,500. Design Faster with AI pairs experienced designers with AI-assisted workflows.';
 
 export const CUSTOM_SCOPE =
   'Custom scope and pricing available after consultation for ecommerce, booking systems, memberships, multilingual websites, client portals, advanced integrations, or projects larger than ten pages.';
