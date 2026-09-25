@@ -43,6 +43,7 @@ function Shell({ title, children, back }: { title: string; children: ReactNode; 
           <span>bbls admin</span>
         </Link>
         <nav className="portal-actions" aria-label="Admin">
+          <Link className="glass-pill" to="/admin/leads">Leads</Link>
           {back ? <Link className="glass-pill" to={back}>Back</Link> : null}
           <button
             className="glass-pill"
@@ -160,7 +161,7 @@ export function AdminHome() {
     <Shell title="BBLS Admin">
       <p className="portal-kicker">Boutique Brand & Launch Studio</p>
       <h1>Projects</h1>
-      <p className="portal-lead">Create a client, set pricing, then generate a private link.</p>
+      <p className="portal-lead">Create a client, set pricing, then generate a private link. Or open <Link to="/admin/leads">Orange County leads</Link>.</p>
       <div className="portal-grid">
         <section className="portal-card">
           <h2>Open a project</h2>

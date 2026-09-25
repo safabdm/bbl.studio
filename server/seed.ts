@@ -4,6 +4,7 @@ import { AGREEMENT_NOTICE, agreementSections } from './agreement-template';
 import { encryptSecret, hashPassword, id, nowIso, randomToken, sha256 } from './crypto';
 import { db, migrate, paths, row, run } from './db';
 import { portalEmail } from './email';
+import { seedLeadsIfNeeded } from './leads';
 
 function insert(table: string, data: Record<string, unknown>) {
   const keys = Object.keys(data);
@@ -24,6 +25,7 @@ function syncAdminPassword() {
 
 export function seedIfNeeded() {
   migrate();
+  seedLeadsIfNeeded();
   if (row<{ c: number }>('SELECT COUNT(*) as c FROM admin_users')?.c) {
     syncAdminPassword();
     return loadLocalAccess();

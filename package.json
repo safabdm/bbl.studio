@@ -7,7 +7,9 @@
   },
   "scripts": {
     "dev": "vinext dev",
+    "dev:portal": "vite --config vite.vercel.config.ts",
     "build": "vinext build",
+    "build:portal": "vite build --config vite.vercel.config.ts",
     "start": "wrangler dev --config dist/server/wrangler.json",
     "seed": "tsx server/seed.ts",
     "lint": "oxlint",
