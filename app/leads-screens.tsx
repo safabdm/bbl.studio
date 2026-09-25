@@ -264,7 +264,7 @@ export function AdminLeads() {
               {leads.map((lead) => (
                 <tr key={lead.id}>
                   <td>
-                    <strong>{lead.business_name}</strong>
+                    <Link to={`/admin/leads/${lead.id}`}><strong>{lead.business_name}</strong></Link>
                     <div className="portal-muted">Score {lead.score}</div>
                   </td>
                   <td>{lead.category}</td>

@@ -541,20 +541,46 @@ const MIN_BOOKING_MS = 24 * 60 * 60 * 1000;
 
 export function availableSlots(fromIso?: string) {
   const start = fromIso ? new Date(fromIso) : new Date();
-  const earliest = new Date(Math.max(start.getTime(), Date.now() + MIN_BOOKING_MS));
-  // Align to next half hour in America/Los_Angeles business hours (approx via local system; document PT intent).
-  earliest.setMinutes(earliest.getMinutes() < 30 ? 30 : 60, 0, 0);
+  const earliestMs = Math.max(start.getTime(), Date.now() + MIN_BOOKING_MS);
   const slots: string[] = [];
-  const cursor = new Date(earliest);
-  while (slots.length < 24) {
-    const hour = cursor.getHours();
-    const day = cursor.getDay();
-    if (day !== 0 && day !== 6 && hour >= 10 && hour < 17) {
-      slots.push(cursor.toISOString());
+  // Walk calendar days in America/Los_Angeles and emit 10:00–16:30 PT half-hours.
+  const dayCursor = new Date(earliestMs);
+  for (let day = 0; day < 14 && slots.length < 24; day += 1) {
+    for (let minutes = 10 * 60; minutes <= 16 * 60 + 30; minutes += 30) {
+      const hour = Math.floor(minutes / 60);
+      const minute = minutes % 60;
+      const iso = zonedTimeToUtcIso(dayCursor, hour, minute, 'America/Los_Angeles');
+      if (!iso) continue;
+      const when = new Date(iso);
+      const weekday = new Intl.DateTimeFormat('en-US', { timeZone: 'America/Los_Angeles', weekday: 'short' }).format(when);
+      if (weekday === 'Sat' || weekday === 'Sun') continue;
+      if (when.getTime() < earliestMs) continue;
+      slots.push(iso);
+      if (slots.length >= 24) break;
     }
-    cursor.setMinutes(cursor.getMinutes() + 30);
+    dayCursor.setUTCDate(dayCursor.getUTCDate() + 1);
   }
   return slots;
+}
+
+/** Build a UTC ISO timestamp for a wall-clock time in the given IANA zone on the same local calendar day as `day`. */
+function zonedTimeToUtcIso(day: Date, hour: number, minute: number, timeZone: string) {
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).formatToParts(day);
+  const year = parts.find((part) => part.type === 'year')?.value;
+  const month = parts.find((part) => part.type === 'month')?.value;
+  const dayNum = parts.find((part) => part.type === 'day')?.value;
+  if (!year || !month || !dayNum) return null;
+  const guess = new Date(`${year}-${month}-${dayNum}T${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}:00.000Z`);
+  // Adjust from a UTC guess to the target zone offset for that local wall time.
+  const asZone = new Date(guess.toLocaleString('en-US', { timeZone }));
+  const asUtc = new Date(guess.toLocaleString('en-US', { timeZone: 'UTC' }));
+  const offset = asUtc.getTime() - asZone.getTime();
+  return new Date(guess.getTime() + offset).toISOString();
 }
 
 export async function bookAppointment(token: string, opts: { slotIso: string; name: string; email: string; notes?: string }) {
