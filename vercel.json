@@ -6,6 +6,7 @@
     { "source": "/api/:path*", "destination": "/api/[...route]" },
     { "source": "/", "destination": "/home.html" },
     { "source": "/book", "destination": "/book.html" },
+    { "source": "/booking", "destination": "/book.html" },
     { "source": "/((?!api/|assets/|work/|brand/|.*\\..*).*)", "destination": "/app.html" }
   ],
   "headers": [
