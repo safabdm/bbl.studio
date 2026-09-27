@@ -617,8 +617,8 @@ export async function sendConfirmation(slot: Slot, fields: { name: string; email
 }
 
 export async function sendDueReminders(store: CalendarStore, now = new Date(), config = bookingConfig(), env: NodeJS.ProcessEnv = process.env) {
-  const from = new Date(now.getTime() + 23 * 60 * 60 * 1000);
-  const to = new Date(now.getTime() + 25 * 60 * 60 * 1000);
+  const from = new Date(now.getTime() + 20 * 60 * 60 * 1000);
+  const to = new Date(now.getTime() + 44 * 60 * 60 * 1000);
   const due = await store.upcomingReminders(from, to);
   let sent = 0;
   for (const event of due) {

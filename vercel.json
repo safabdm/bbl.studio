@@ -65,6 +65,6 @@
     }
   ],
   "crons": [
-    { "path": "/api/book/reminders", "schedule": "0 * * * *" }
+    { "path": "/api/book/reminders", "schedule": "0 16 * * *" }
   ]
 }
