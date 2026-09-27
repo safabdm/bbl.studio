@@ -1,10 +1,11 @@
 {
   "framework": "vite",
-  "buildCommand": "pnpm exec vite build --config vite.vercel.config.ts",
+  "buildCommand": "pnpm exec vite build --config vite.vercel.config.ts && cp out/index.html out/app.html && cp out/home.html out/index.html",
   "outputDirectory": "out",
   "rewrites": [
     { "source": "/api/:path*", "destination": "/api/[...route]" },
-    { "source": "/((?!api/|assets/|work/|brand/|.*\\..*).*)", "destination": "/index.html" }
+    { "source": "/", "destination": "/home.html" },
+    { "source": "/((?!api/|assets/|work/|brand/|.*\\..*).*)", "destination": "/app.html" }
   ],
   "headers": [
     {

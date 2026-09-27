@@ -3,7 +3,7 @@ type MarkVariant = 'white' | 'black';
 export function BblsMark({ size = 24, variant = 'white' }: { size?: number; variant?: MarkVariant }) {
   return (
     <img
-      src={variant === 'black' ? '/brand/bbl-mark-black.png' : '/brand/bbl-mark-white.png'}
+      src={variant === 'black' ? '/brand/bbl-mark-black.png?v=bbl-logo-20260924' : '/brand/bbl-mark-white.png?v=bbl-logo-20260924'}
       alt=""
       width={size}
       height={size}
@@ -16,9 +16,9 @@ export function BblsMark({ size = 24, variant = 'white' }: { size?: number; vari
 export function BblWordmark({ height = 34, variant = 'white' }: { height?: number; variant?: MarkVariant }) {
   return (
     <img
-      src={variant === 'black' ? '/brand/bbl-wordmark-black.png' : '/brand/bbl-wordmark-white.png'}
+      src={variant === 'black' ? '/brand/bbl-wordmark-black.png?v=bbl-logo-20260924' : '/brand/bbl-wordmark-white.png?v=bbl-logo-20260924'}
       alt="BBL Studio"
-      width={Math.round(height * 3.2)}
+      width={Math.round(height * 3.33)}
       height={height}
       decoding="async"
       fetchPriority={height >= 40 ? 'high' : 'auto'}

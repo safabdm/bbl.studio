@@ -21,8 +21,13 @@ export const metadata: Metadata = {
   description,
   applicationName: 'BBLS',
   icons: {
-    icon: [{ url: '/favicon.svg', type: 'image/svg+xml' }],
-    apple: [{ url: '/apple-touch-icon.png', sizes: '180x180' }],
+    icon: [
+      { url: '/favicon.ico?v=bbl-logo-20260924c', sizes: 'any' },
+      { url: '/favicon.svg?v=bbl-logo-20260924c', type: 'image/svg+xml' },
+      { url: '/favicon.png?v=bbl-logo-20260924c', type: 'image/png', sizes: '32x32' },
+      { url: '/favicon-16x16.png?v=bbl-logo-20260924c', type: 'image/png', sizes: '16x16' },
+    ],
+    apple: [{ url: '/apple-touch-icon.png?v=bbl-logo-20260924c', sizes: '180x180' }],
   },
   openGraph: {
     title,
