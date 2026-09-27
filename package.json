@@ -12,7 +12,9 @@
     "seed": "tsx server/seed.ts",
     "lint": "oxlint",
     "format": "oxfmt",
-    "test:unsubscribe": "tsx --test server/unsubscribe.test.ts"
+    "test:unsubscribe": "tsx --test server/unsubscribe.test.ts",
+    "test:booking": "tsx --test api/booking.test.ts",
+    "calendar:auth": "node scripts/google-calendar-auth.mjs"
   },
   "dependencies": {
     "@base-ui/react": "1.7.0",

@@ -1,11 +1,25 @@
 import { createHmac, timingSafeEqual } from 'node:crypto';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import Stripe from 'stripe';
+import { createBooking, getAvailabilityPayload } from './booking-core.js';
 import {
   authorizeSuppressionList,
   processUnsubscribe,
   readSuppressions,
 } from './unsubscribe-core.js';
+
+const bookingRate = new Map<string, { count: number; start: number }>();
+
+function bookingLimited(key: string, max = 12) {
+  const now = Date.now();
+  const hit = bookingRate.get(key);
+  if (!hit || now - hit.start > 15 * 60 * 1000) {
+    bookingRate.set(key, { count: 1, start: now });
+    return true;
+  }
+  hit.count += 1;
+  return hit.count <= max;
+}
 
 export const config = { maxDuration: 30 };
 
@@ -147,6 +161,34 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
 
     if (matches(path, '/api/health') && method === 'GET') {
       return send(res, 200, { ok: true, stripeMode: process.env.STRIPE_SECRET_KEY ? 'test' : 'mock' });
+    }
+
+    if (matches(path, '/api/book/availability') && method === 'GET') {
+      const url = new URL(req.url || '/', 'https://www.bbl.studio');
+      const date = String(url.searchParams.get('date') || '').trim();
+      const payload = await getAvailabilityPayload(date || undefined);
+      return send(res, 200, payload);
+    }
+
+    if (matches(path, '/api/book') && method === 'POST') {
+      const ip = String(req.headers['x-forwarded-for'] || req.socket.remoteAddress || 'unknown')
+        .split(',')[0]
+        .trim();
+      if (!bookingLimited(`book:${ip}`)) {
+        return send(res, 429, { ok: false, message: 'Too many booking attempts. Please try again later.' });
+      }
+      const body = await readJson(req);
+      const result = await createBooking({
+        start: String(body.start || ''),
+        name: String(body.name || ''),
+        email: String(body.email || ''),
+        company: String(body.company || ''),
+        phone: String(body.phone || ''),
+        note: String(body.note || ''),
+        website: String(body.website || ''),
+      });
+      if (!result.ok) return send(res, result.status, { ok: false, message: result.message });
+      return send(res, 200, result);
     }
 
     if (matches(path, '/api/unsubscribe/suppressions') && method === 'GET') {

@@ -11,6 +11,7 @@ const AdminPricing = lazy(() => import('./app/portal-screens').then((module) => 
 const ClientPortal = lazy(() => import('./app/portal-screens').then((module) => ({ default: module.ClientPortal })));
 const RequireAdmin = lazy(() => import('./app/portal-screens').then((module) => ({ default: module.RequireAdmin })));
 const UnsubscribePage = lazy(() => import('./app/unsubscribe'));
+const BookPage = lazy(() => import('./app/book'));
 
 function PortalFallback() {
   return <div className="portal-boot" aria-hidden="true" />;
@@ -29,6 +30,7 @@ createRoot(document.getElementById('root')!).render(
     <BrowserRouter>
       <Routes>
         <Route path="/" element={<Home />} />
+        <Route path="/book" element={<Suspense fallback={<PortalFallback />}><BookPage /></Suspense>} />
         <Route path="/unsubscribe" element={<Suspense fallback={<PortalFallback />}><UnsubscribePage /></Suspense>} />
         <Route path="/admin/login" element={<Suspense fallback={<PortalFallback />}><AdminLogin /></Suspense>} />
         <Route path="/admin" element={<PortalGate><AdminHome /></PortalGate>} />

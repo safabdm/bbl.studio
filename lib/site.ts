@@ -130,6 +130,12 @@ export const PUBLIC_PAGES: PageSeo[] = [
     h1: 'Ready to build a more distinctive business?',
   },
   {
+    path: '/book',
+    title: 'Book a Free Consultation | BBL Studio',
+    description: 'Book a free BBL Studio consultation. Choose an available date and time. All times shown in Pacific Time with at least 48 hours notice.',
+    h1: 'Book a consultation',
+  },
+  {
     path: '/orange-county/irvine-web-design',
     title: 'Irvine Web Design | BBLS Orange County',
     description: 'Website design for Irvine businesses. BBLS plans landing pages and commercial sites for professional, medical, and growth-focused companies.',
