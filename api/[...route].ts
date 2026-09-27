@@ -130,17 +130,16 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
     }
 
     if (matches(path, '/api/book/slots') && method === 'GET') {
-      const meta = publicBookingMeta();
-      const store = getCalendar();
-      if (!store) {
-        return send(res, 200, { ok: true, slots: buildCandidateSlots(new Date()), ...meta });
-      }
+      const config = bookingConfig(process.env);
+      const meta = publicBookingMeta(config);
+      const open = buildCandidateSlots(new Date(), config);
       try {
-        const slots = await openSlots(store, new Date());
+        const store = getCalendar(process.env);
+        if (!store) return send(res, 200, { ok: true, slots: open, ...meta });
+        const slots = await openSlots(store, new Date(), config);
         return send(res, 200, { ok: true, slots, ...meta });
-      } catch (error) {
-        if (error instanceof BookingError) return send(res, error.status, { ok: false, code: error.code, message: 'Booking times are temporarily unavailable. Email hello@bbl.studio or call (949) 524-2324.' });
-        throw error;
+      } catch {
+        return send(res, 200, { ok: true, slots: open, ...meta });
       }
     }
 
