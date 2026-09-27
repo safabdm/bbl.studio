@@ -11,7 +11,8 @@
     "start": "wrangler dev --config dist/server/wrangler.json",
     "seed": "tsx server/seed.ts",
     "lint": "oxlint",
-    "format": "oxfmt"
+    "format": "oxfmt",
+    "test:unsubscribe": "tsx --test server/unsubscribe.test.ts"
   },
   "dependencies": {
     "@base-ui/react": "1.7.0",

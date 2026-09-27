@@ -12,6 +12,7 @@ import { writeTextPdf } from './pdf';
 import { seedIfNeeded } from './seed';
 import { stripeClient, stripeMode } from './stripe';
 import { activeLinks, clientFacingPayload, registerPricingRoutes } from './admin-pricing';
+import { authorizeSuppressionList, processUnsubscribe, readSuppressions } from './unsubscribe';
 
 try {
   seedIfNeeded();
@@ -175,6 +176,40 @@ app.use('/api/*', async (c, next) => {
 });
 
 app.get('/api/health', (c) => c.json({ ok: true, stripeMode: stripeMode() }));
+
+app.get('/api/unsubscribe', (c) => {
+  const result = processUnsubscribe({
+    email: c.req.query('email'),
+    lead_id: c.req.query('lead_id'),
+    token: c.req.query('token'),
+  });
+  if (!result.ok) {
+    const status = result.error === 'misconfigured' ? 503 : result.error === 'invalid_token' ? 403 : 400;
+    return c.json(result, status);
+  }
+  return c.json(result);
+});
+
+app.post('/api/unsubscribe', async (c) => {
+  const body = await c.req.json<{ email?: string; lead_id?: string | number; token?: string }>().catch(() => ({}));
+  const result = processUnsubscribe({
+    email: body.email ?? c.req.query('email'),
+    lead_id: body.lead_id ?? c.req.query('lead_id'),
+    token: body.token ?? c.req.query('token'),
+  });
+  if (!result.ok) {
+    const status = result.error === 'misconfigured' ? 503 : result.error === 'invalid_token' ? 403 : 400;
+    return c.json(result, status);
+  }
+  return c.json(result);
+});
+
+app.get('/api/unsubscribe/suppressions', (c) => {
+  if (!authorizeSuppressionList(c.req.header('authorization') || c.req.header('x-unsubscribe-secret'))) {
+    return c.json({ ok: false, message: 'Unauthorized.' }, 401);
+  }
+  return c.json({ ok: true, suppressions: readSuppressions() });
+});
 
 app.post('/api/portal/open', async (c) => {
   const ip = clientIp(c.req.header('x-forwarded-for') || c.req.header('x-real-ip'));

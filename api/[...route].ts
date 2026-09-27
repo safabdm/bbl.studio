@@ -1,6 +1,11 @@
 import { createHmac, timingSafeEqual } from 'node:crypto';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import Stripe from 'stripe';
+import {
+  authorizeSuppressionList,
+  processUnsubscribe,
+  readSuppressions,
+} from '../server/unsubscribe';
 
 export const config = { maxDuration: 30 };
 
@@ -142,6 +147,27 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
 
     if (matches(path, '/api/health') && method === 'GET') {
       return send(res, 200, { ok: true, stripeMode: process.env.STRIPE_SECRET_KEY ? 'test' : 'mock' });
+    }
+
+    if (matches(path, '/api/unsubscribe/suppressions') && method === 'GET') {
+      const auth = String(req.headers.authorization || req.headers['x-unsubscribe-secret'] || '');
+      if (!authorizeSuppressionList(auth)) return send(res, 401, { ok: false, message: 'Unauthorized.' });
+      return send(res, 200, { ok: true, suppressions: readSuppressions() });
+    }
+
+    if (matches(path, '/api/unsubscribe') && (method === 'GET' || method === 'POST')) {
+      const url = new URL(req.url || '/', 'https://bbl.studio');
+      const body = method === 'POST' ? await readJson(req) : {};
+      const result = processUnsubscribe({
+        email: String(body.email || url.searchParams.get('email') || ''),
+        lead_id: body.lead_id ?? url.searchParams.get('lead_id'),
+        token: String(body.token || url.searchParams.get('token') || ''),
+      });
+      if (!result.ok) {
+        const status = result.error === 'misconfigured' ? 503 : result.error === 'invalid_token' ? 403 : 400;
+        return send(res, status, result);
+      }
+      return send(res, 200, result);
     }
 
     if (matches(path, '/api/admin/login') && method === 'POST') {
