@@ -5,7 +5,7 @@ import {
   authorizeSuppressionList,
   processUnsubscribe,
   readSuppressions,
-} from '../server/unsubscribe';
+} from './unsubscribe-core.js';
 
 export const config = { maxDuration: 30 };
 
