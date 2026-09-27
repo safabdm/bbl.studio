@@ -6,6 +6,16 @@ import {
   processUnsubscribe,
   readSuppressions,
 } from './unsubscribe-core.js';
+import {
+  BookingError,
+  bookConsultation,
+  bookingConfig,
+  getCalendar,
+  openSlots,
+  publicBookingMeta,
+  sendConfirmation,
+  sendDueReminders,
+} from './booking-core.js';
 
 export const config = { maxDuration: 30 };
 
@@ -108,6 +118,68 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
     const path = requestPath(req);
     const method = (req.method || 'GET').toUpperCase();
     const admin = Boolean(readAdminToken(cookieValue(req.headers.cookie, ADMIN_COOKIE)));
+
+    if (matches(path, '/api/book/reminders') && method === 'GET') {
+      const secret = process.env.CRON_SECRET || '';
+      const auth = String(req.headers.authorization || '');
+      if (!secret || auth !== `Bearer ${secret}`) return send(res, 401, { ok: false, message: 'Unauthorized.' });
+      const store = getCalendar();
+      if (!store) return send(res, 200, { ok: true, sent: 0, checked: 0, emailConfigured: Boolean(process.env.RESEND_API_KEY) });
+      return send(res, 200, { ok: true, ...(await sendDueReminders(store)) });
+    }
+
+    if (matches(path, '/api/book/slots') && method === 'GET') {
+      const meta = publicBookingMeta();
+      const store = getCalendar();
+      if (!store) {
+        return send(res, 503, {
+          ok: false,
+          code: 'calendar_unconfigured',
+          message: 'Online booking is being connected. Email hello@bbl.studio or call (949) 524-2324.',
+          ...meta,
+        });
+      }
+      try {
+        const slots = await openSlots(store, new Date());
+        return send(res, 200, { ok: true, slots, ...meta });
+      } catch (error) {
+        if (error instanceof BookingError) return send(res, error.status, { ok: false, code: error.code, message: 'Booking times are temporarily unavailable. Email hello@bbl.studio or call (949) 524-2324.' });
+        throw error;
+      }
+    }
+
+    if (matches(path, '/api/book') && method === 'POST') {
+      const body = await readJson(req);
+      if (String(body.website || '').trim()) return send(res, 200, { ok: true, message: 'Request received.' });
+      const store = getCalendar();
+      if (!store) return send(res, 503, { ok: false, message: 'Online booking is being connected. Email hello@bbl.studio or call (949) 524-2324.' });
+      try {
+        const result = await bookConsultation(store, {
+          start: String(body.start || ''),
+          name: String(body.name || ''),
+          email: String(body.email || ''),
+          company: String(body.company || ''),
+          phone: String(body.phone || ''),
+          note: String(body.note || ''),
+        });
+        const emailed = await sendConfirmation(result.slot, result.fields, bookingConfig());
+        const message = result.canInvite
+          ? `A calendar invitation${emailed ? ' and confirmation email were' : ' was'} sent to ${result.fields.email}.`
+          : emailed
+            ? `A confirmation email with a calendar file was sent to ${result.fields.email}.`
+            : 'Your time is saved on the studio calendar.';
+        return send(res, 200, {
+          ok: true,
+          when: `${result.slot.dateLabel} at ${result.slot.label}`,
+          timezoneLabel: publicBookingMeta().timezoneLabel,
+          durationMinutes: bookingConfig().durationMinutes,
+          message,
+        });
+      } catch (error) {
+        if (error instanceof BookingError) return send(res, error.status, { ok: false, code: error.code, message: error.message });
+        throw error;
+      }
+    }
 
     if (matches(path, '/api/start-project/checkout') && method === 'POST') {
       const body = await readJson(req);
