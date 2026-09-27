@@ -12,7 +12,8 @@
     "seed": "tsx server/seed.ts",
     "lint": "oxlint",
     "format": "oxfmt",
-    "test:unsubscribe": "tsx --test server/unsubscribe.test.ts"
+    "test:unsubscribe": "tsx --test server/unsubscribe.test.ts",
+    "test:booking": "tsx --test server/booking.test.ts"
   },
   "dependencies": {
     "@base-ui/react": "1.7.0",

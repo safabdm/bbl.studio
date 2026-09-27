@@ -5,6 +5,7 @@
   "rewrites": [
     { "source": "/api/:path*", "destination": "/api/[...route]" },
     { "source": "/", "destination": "/home.html" },
+    { "source": "/book", "destination": "/book.html" },
     { "source": "/((?!api/|assets/|work/|brand/|.*\\..*).*)", "destination": "/app.html" }
   ],
   "headers": [
@@ -62,5 +63,8 @@
         { "key": "X-Robots-Tag", "value": "noindex, nofollow" }
       ]
     }
+  ],
+  "crons": [
+    { "path": "/api/book/reminders", "schedule": "0 * * * *" }
   ]
 }

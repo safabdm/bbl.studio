@@ -1,0 +1,418 @@
+<!doctype html>
+<html lang="en-US">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>Book a Consultation | BBL Studio</title>
+  <meta name="description" content="Book a free BBL Studio consultation. Choose a date and time at least 48 hours ahead. Pacific Time." />
+  <meta name="robots" content="index, follow" />
+  <link rel="canonical" href="https://www.bbl.studio/book" />
+  <meta name="theme-color" content="#0A0A0A" />
+  <link rel="icon" href="/favicon.ico?v=bbl-logo-20260924c" sizes="any" />
+  <link rel="icon" href="/favicon.svg?v=bbl-logo-20260924c" type="image/svg+xml" />
+  <link rel="apple-touch-icon" href="/apple-touch-icon.png?v=bbl-logo-20260924c" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <style>
+    * { box-sizing: border-box; }
+    [hidden] { display: none !important; }
+    html, body { margin: 0; background: #0A0A0A; color: #E6E1D7; }
+    body { min-height: 100svh; font-family: Manrope, Poppins, Arial, sans-serif; -webkit-font-smoothing: antialiased; }
+    a { color: inherit; }
+    button, input, textarea { font: inherit; color: inherit; }
+    button { cursor: pointer; }
+    :focus-visible { outline: 2px solid #FF5A36; outline-offset: 3px; }
+    .skip { position: absolute; left: 16px; top: -40px; background: #141414; padding: 8px 12px; }
+    .skip:focus { top: 12px; }
+    header, main { width: min(980px, calc(100% - 32px)); margin: 0 auto; }
+    header { display: flex; align-items: center; justify-content: space-between; min-height: 88px; }
+    header img { height: 32px; width: auto; display: block; }
+    header a.home { font-size: 14px; color: rgba(230,225,215,.72); text-decoration: none; min-height: 44px; display: inline-flex; align-items: center; }
+    h1 { margin: 12px 0 8px; font-size: clamp(32px, 6vw, 48px); font-weight: 500; letter-spacing: -1.4px; line-height: 1.1; }
+    .lede, .zone, .status { color: rgba(230,225,215,.72); font-size: 15px; line-height: 1.6; }
+    .zone { margin-top: 0; }
+    form { display: grid; gap: 14px; margin-top: 8px; }
+    label { display: grid; gap: 6px; font-size: 13px; color: rgba(230,225,215,.78); }
+    input, textarea { width: 100%; min-height: 48px; border: 1px solid rgba(230,225,215,.22); border-radius: 12px; background: #101010; padding: 12px 14px; font-size: 16px; }
+    textarea { min-height: 120px; resize: vertical; }
+    .submit { min-height: 52px; border: 0; border-radius: 14px; background: #FF5A36; color: #141414; font-weight: 700; font-size: 15px; }
+    .submit:disabled { opacity: .6; cursor: wait; }
+    .error { min-height: 1.4em; color: #ffb4a8; font-size: 14px; }
+    .hp { position: absolute; left: -9999px; width: 1px; height: 1px; opacity: 0; }
+    .confirm { border: 1px solid rgba(230,225,215,.18); border-radius: 18px; background: #141414; padding: 28px 22px; margin-top: 24px; }
+    .confirm strong { display: block; margin: 8px 0; font-size: 22px; font-weight: 600; letter-spacing: -.4px; }
+    footer { width: 100%; max-width: none; margin: 48px 0 0; padding: 28px 22px 40px; border-top: 1px solid rgba(230,225,215,.12); color: rgba(230,225,215,.72); font-size: 13px; display: flex; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
+    footer a { color: inherit; }
+
+    .cal-card { display: flex; margin-top: 22px; background: #E6E1D7; color: #141414; border-radius: 8px; overflow: hidden; box-shadow: 0 12px 40px rgba(0,0,0,.35); }
+    .cal-meta { width: 260px; flex: none; padding: 28px 24px; border-right: 1px solid rgba(20,20,20,.12); }
+    .cal-kicker { margin: 0; font-size: 14px; color: #6b6b6b; }
+    .cal-meta h2 { margin: 8px 0 16px; font-size: 22px; font-weight: 700; letter-spacing: -.4px; text-transform: none; color: #141414; line-height: 1.25; }
+    .cal-facts { margin: 0; padding: 0; list-style: none; display: grid; gap: 10px; color: #3d3d3d; font-size: 14px; }
+    .cal-facts li { display: flex; align-items: center; gap: 10px; }
+    .cal-facts svg { flex: none; }
+    .cal-body { display: flex; flex: 1; min-width: 0; }
+    .month { flex: 1; padding: 22px 18px 26px; min-width: 300px; }
+    .month-bar { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
+    .month-bar strong { font-size: 16px; font-weight: 700; }
+    .nav { width: 40px; height: 40px; border: 0; border-radius: 50%; background: transparent; color: #1a1a1a; display: grid; place-items: center; }
+    .nav:hover { background: rgba(20,20,20,.06); }
+    .nav:disabled { color: #c8c8c8; cursor: default; background: transparent; }
+    .dow, .grid { display: grid; grid-template-columns: repeat(7, 1fr); }
+    .dow { margin-bottom: 6px; }
+    .dow span { text-align: center; font-size: 12px; font-weight: 600; color: #8a8a8a; letter-spacing: .04em; }
+    .day { width: 44px; height: 44px; margin: 2px auto; border: 0; border-radius: 50%; background: transparent; color: #b7b1a6; font-weight: 600; font-size: 15px; }
+    .day.open { color: #141414; }
+    .day.open:hover { background: rgba(20,20,20,.06); }
+    .day[aria-pressed="true"] { background: #FF5A36; color: #141414; }
+    .day[aria-pressed="true"]:hover { background: #ff6a48; }
+    .day:disabled { cursor: default; }
+    .pad { width: 44px; height: 44px; }
+    .times-col { width: 250px; flex: none; border-left: 1px solid rgba(20,20,20,.12); padding: 22px 16px; max-height: 460px; overflow: auto; }
+    .times-col h3 { margin: 4px 0 14px; font-size: 16px; font-weight: 700; }
+    .slot-row { display: flex; gap: 8px; margin-bottom: 8px; }
+    .slot, .next {
+      min-height: 48px; border-radius: 4px; font-weight: 700; font-size: 15px;
+    }
+    .slot { flex: 1; border: 1px solid #E24A28; background: #F7F3EC; color: #C2410C; }
+    .slot:hover, .slot[aria-pressed="true"] { border-width: 2px; }
+    .next { width: 42%; border: 0; background: #FF5A36; color: #141414; }
+    .next:hover { background: #ff6a48; }
+    .empty-times { margin: 0; color: #6b6b6b; font-size: 14px; }
+    .back { min-height: 44px; padding: 0; border: 0; background: transparent; color: #C2410C; font-weight: 700; font-size: 14px; }
+    .picked { margin: 4px 0 18px; color: #3d3d3d; font-size: 15px; }
+    .cal-card label { color: #3d3d3d; }
+    .cal-card input, .cal-card textarea { background: #F7F3EC; color: #141414; border-color: rgba(20,20,20,.16); border-radius: 6px; }
+    .cal-card .error { color: #b42318; }
+    .details { padding: 28px 28px 32px; width: 100%; max-width: 520px; }
+    .details h2 { margin: 12px 0 8px; font-size: 22px; font-weight: 700; letter-spacing: -.4px; text-transform: none; color: #141414; }
+    @media (max-width: 800px) {
+      .cal-card, .cal-body { flex-direction: column; }
+      .cal-meta { width: auto; border-right: 0; border-bottom: 1px solid rgba(20,20,20,.12); }
+      .month { min-width: 0; }
+      .times-col { width: auto; max-height: none; border-left: 0; border-top: 1px solid rgba(20,20,20,.12); }
+      .details { padding: 22px 18px 28px; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      * { scroll-behavior: auto; }
+    }
+  </style>
+</head>
+<body>
+  <a class="skip" href="#booking">Skip to booking</a>
+  <header>
+    <a href="/" aria-label="BBL Studio home"><img src="/brand/bbl-wordmark-white.png?v=bbl-logo-20260924c" alt="BBL Studio" /></a>
+    <a class="home" href="/">Back to site</a>
+  </header>
+  <main id="booking">
+    <p class="lede">Free consultation</p>
+    <h1>Book a time to talk.</h1>
+    <p class="zone" id="zone">Times are shown in Pacific Time. Appointments need at least 48 hours' notice.</p>
+    <div id="opt2">
+      <div class="cal-card" id="cal-card">
+        <aside class="cal-meta">
+          <p class="cal-kicker">BBL Studio</p>
+          <h2>Consultation</h2>
+          <ul class="cal-facts">
+            <li>
+              <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="#1a1a1a" stroke-width="1.8"><circle cx="12" cy="12" r="8.25"/><path d="M12 8v4.5l3 1.5"/></svg>
+              <span id="duration-label">30 min</span>
+            </li>
+            <li>
+              <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="#1a1a1a" stroke-width="1.8"><circle cx="12" cy="12" r="8.25"/><path d="M3.75 12h16.5M12 3.75c2.2 2.4 3.3 5.2 3.3 8.25S14.2 17.85 12 20.25C9.8 17.85 8.7 15.05 8.7 12S9.8 6.15 12 3.75z"/></svg>
+              <span id="tz-label">Pacific Time</span>
+            </li>
+          </ul>
+        </aside>
+        <div class="cal-body" id="cal-pick">
+          <div class="month">
+            <div class="month-bar">
+              <button class="nav" type="button" id="prev-month" aria-label="Previous month">
+                <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M14.5 6.5 9 12l5.5 5.5"/></svg>
+              </button>
+              <strong id="month-label"></strong>
+              <button class="nav" type="button" id="next-month" aria-label="Next month">
+                <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M9.5 6.5 15 12l-5.5 5.5"/></svg>
+              </button>
+            </div>
+            <div class="dow" aria-hidden="true"><span>SUN</span><span>MON</span><span>TUE</span><span>WED</span><span>THU</span><span>FRI</span><span>SAT</span></div>
+            <div class="grid" id="month-grid" role="group" aria-label="Available dates"></div>
+          </div>
+          <div class="times-col" id="times-col" hidden>
+            <h3 id="day-heading"></h3>
+            <div id="cal-times" role="group" aria-label="Available times"></div>
+          </div>
+        </div>
+        <div class="details" id="cal-details" hidden>
+          <button class="back" type="button" id="back-time">← Change time</button>
+          <h2>Enter your details</h2>
+          <p class="picked" id="picked"></p>
+          <form class="book-form">
+            <label>Full name<input name="name" autocomplete="name" required maxlength="120" /></label>
+            <label>Email<input name="email" type="email" autocomplete="email" required maxlength="160" /></label>
+            <label>Company / business name<input name="company" autocomplete="organization" required maxlength="120" /></label>
+            <label>Phone<input name="phone" type="tel" autocomplete="tel" required maxlength="40" /></label>
+            <label>What do you need?<textarea name="note" required maxlength="1000"></textarea></label>
+            <label class="hp">Website<input name="website" tabindex="-1" autocomplete="off" /></label>
+            <p class="error" role="alert"></p>
+            <button class="submit" type="submit">Book Consultation</button>
+          </form>
+        </div>
+      </div>
+    </div>
+
+    <div class="confirm" id="confirm" hidden>
+      <p>You're booked.</p>
+      <strong id="when"></strong>
+      <p class="status" id="status"></p>
+      <p><a href="/">Return to BBL Studio</a></p>
+    </div>
+  </main>
+  <footer>
+    <span>BBL Boutique Brand &amp; Launch Studio</span>
+    <a href="mailto:hello@bbl.studio">hello@bbl.studio</a>
+  </footer>
+  <script>
+    const zoneEl = document.querySelector('#zone');
+    const opt2 = document.querySelector('#opt2');
+    const confirmEl = document.querySelector('#confirm');
+    const monthGrid = document.querySelector('#month-grid');
+    const monthLabel = document.querySelector('#month-label');
+    const timesCol = document.querySelector('#times-col');
+    const calTimes = document.querySelector('#cal-times');
+    const dayHeading = document.querySelector('#day-heading');
+    const calPick = document.querySelector('#cal-pick');
+    const calDetails = document.querySelector('#cal-details');
+    const prevMonth = document.querySelector('#prev-month');
+    const nextMonth = document.querySelector('#next-month');
+    let slots = [];
+    let selectedDate = '';
+    let selectedStart = '';
+    let view = null;
+
+    function showError(form, message) {
+      const error = form.querySelector('.error');
+      if (error) error.textContent = message || '';
+    }
+
+    function groups() {
+      const list = [];
+      for (const slot of slots) {
+        if (!list.some((group) => group.date === slot.date)) list.push(slot);
+      }
+      return list;
+    }
+
+    function pad(value) {
+      return String(value).padStart(2, '0');
+    }
+
+    function parseKey(key) {
+      const [year, month, day] = key.split('-').map(Number);
+      return { year, month, day };
+    }
+
+    function utcDate(key) {
+      const { year, month, day } = parseKey(key);
+      return new Date(Date.UTC(year, month - 1, day));
+    }
+
+    function formatKey(key, options) {
+      return new Intl.DateTimeFormat('en-US', { timeZone: 'UTC', ...options }).format(utcDate(key));
+    }
+
+    function monthKey(year, month) {
+      return year * 12 + month;
+    }
+
+    function bounds() {
+      const dates = groups().map((group) => group.date);
+      const first = parseKey(dates[0]);
+      const last = parseKey(dates[dates.length - 1]);
+      return {
+        min: monthKey(first.year, first.month),
+        max: monthKey(last.year, last.month),
+      };
+    }
+
+    function renderCalTimes() {
+      const times = slots.filter((slot) => slot.date === selectedDate);
+      dayHeading.textContent = selectedDate ? formatKey(selectedDate, { weekday: 'long', month: 'long', day: 'numeric' }) : '';
+      calTimes.replaceChildren();
+      timesCol.hidden = !selectedDate;
+      for (const slot of times) {
+        const row = document.createElement('div');
+        row.className = 'slot-row';
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.className = 'slot';
+        button.textContent = slot.label;
+        const chosen = slot.start === selectedStart;
+        button.setAttribute('aria-pressed', String(chosen));
+        button.addEventListener('click', () => {
+          selectedStart = slot.start;
+          renderCalTimes();
+        });
+        row.append(button);
+        if (chosen) {
+          const next = document.createElement('button');
+          next.type = 'button';
+          next.className = 'next';
+          next.textContent = 'Next';
+          next.addEventListener('click', showDetails);
+          row.append(next);
+        }
+        calTimes.append(row);
+      }
+      if (selectedDate && !times.length) {
+        const empty = document.createElement('p');
+        empty.className = 'empty-times';
+        empty.textContent = 'No open times on this day.';
+        calTimes.append(empty);
+      }
+    }
+
+    function renderMonth() {
+      if (!view) return;
+      const { year, month } = view;
+      monthLabel.textContent = new Intl.DateTimeFormat('en-US', { month: 'long', year: 'numeric', timeZone: 'UTC' }).format(new Date(Date.UTC(year, month - 1, 1)));
+      const range = bounds();
+      const index = monthKey(year, month);
+      prevMonth.disabled = index <= range.min;
+      nextMonth.disabled = index >= range.max;
+      const startWeekday = new Date(Date.UTC(year, month - 1, 1)).getUTCDay();
+      const daysInMonth = new Date(Date.UTC(year, month, 0)).getUTCDate();
+      const open = new Map(groups().map((group) => [group.date, group]));
+      monthGrid.replaceChildren();
+      for (let i = 0; i < startWeekday; i += 1) {
+        const padCell = document.createElement('span');
+        padCell.className = 'pad';
+        monthGrid.append(padCell);
+      }
+      for (let day = 1; day <= daysInMonth; day += 1) {
+        const key = `${year}-${pad(month)}-${pad(day)}`;
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.className = 'day';
+        button.textContent = String(day);
+        const available = open.get(key);
+        if (!available) {
+          button.disabled = true;
+          button.setAttribute('aria-label', formatKey(key, { weekday: 'long', month: 'long', day: 'numeric' }));
+        } else {
+          button.classList.add('open');
+          button.setAttribute('aria-pressed', String(key === selectedDate));
+          button.setAttribute('aria-label', `${formatKey(key, { weekday: 'long', month: 'long', day: 'numeric' })}, available`);
+          button.addEventListener('click', () => {
+            selectedDate = key;
+            selectedStart = '';
+            calPick.hidden = false;
+            calDetails.hidden = true;
+            renderMonth();
+          });
+        }
+        monthGrid.append(button);
+      }
+      renderCalTimes();
+    }
+
+    function showDetails() {
+      const slot = slots.find((item) => item.start === selectedStart);
+      if (!slot) return;
+      document.querySelector('#picked').textContent = `${formatKey(slot.date, { weekday: 'long', month: 'long', day: 'numeric' })} at ${slot.label}`;
+      calPick.hidden = true;
+      calDetails.hidden = false;
+    }
+
+    async function book(form) {
+      showError(form, '');
+      if (!selectedStart) {
+        showError(form, 'Choose a date and time.');
+        return;
+      }
+      const submit = form.querySelector('.submit');
+      submit.disabled = true;
+      const body = Object.fromEntries(new FormData(form).entries());
+      body.start = selectedStart;
+      try {
+        const response = await fetch('/api/book', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body),
+        });
+        const data = await response.json();
+        if (!response.ok || !data.ok) {
+          showError(form, data.message || 'That time could not be booked.');
+          if (response.status === 409 || response.status === 400) await loadSlots();
+          submit.disabled = false;
+          return;
+        }
+        opt2.hidden = true;
+        confirmEl.hidden = false;
+        document.querySelector('#when').textContent = `${data.when} · ${data.timezoneLabel}`;
+        document.querySelector('#status').textContent = data.message;
+      } catch {
+        showError(form, 'The booking could not be sent. Please try again.');
+        submit.disabled = false;
+      }
+    }
+
+    async function loadSlots() {
+      const response = await fetch('/api/book/slots');
+      const data = await response.json();
+      if (!data.ok) {
+        opt2.hidden = true;
+        zoneEl.textContent = data.message || 'Online booking is not available right now. Email hello@bbl.studio.';
+        return;
+      }
+      slots = data.slots || [];
+      document.querySelector('#duration-label').textContent = `${data.durationMinutes} min`;
+      document.querySelector('#tz-label').textContent = data.timezoneLabel;
+      zoneEl.textContent = `${data.timezoneLabel}. ${data.durationMinutes} minutes. At least ${data.leadHours} hours' notice. Today and tomorrow are not available.`;
+      const list = groups();
+      if (!list.length) {
+        opt2.hidden = true;
+        zoneEl.textContent = 'No consultation times are open in the next few weeks. Email hello@bbl.studio or call (949) 524-2324.';
+        return;
+      }
+      if (!list.some((group) => group.date === selectedDate)) {
+        selectedDate = '';
+        selectedStart = '';
+      } else if (selectedStart && !slots.some((slot) => slot.start === selectedStart)) {
+        selectedStart = '';
+      }
+      if (!view) {
+        const first = parseKey(list[0].date);
+        view = { year: first.year, month: first.month };
+      }
+      renderMonth();
+    }
+
+    prevMonth.addEventListener('click', () => {
+      const date = new Date(Date.UTC(view.year, view.month - 2, 1));
+      view = { year: date.getUTCFullYear(), month: date.getUTCMonth() + 1 };
+      renderMonth();
+    });
+    nextMonth.addEventListener('click', () => {
+      const date = new Date(Date.UTC(view.year, view.month, 1));
+      view = { year: date.getUTCFullYear(), month: date.getUTCMonth() + 1 };
+      renderMonth();
+    });
+    document.querySelector('#back-time').addEventListener('click', () => {
+      calPick.hidden = false;
+      calDetails.hidden = true;
+    });
+    document.querySelectorAll('.book-form').forEach((form) => {
+      form.addEventListener('submit', (event) => {
+        event.preventDefault();
+        book(form);
+      });
+    });
+
+    loadSlots().catch(() => {
+      zoneEl.textContent = 'Booking times could not be loaded. Email hello@bbl.studio or call (949) 524-2324.';
+    });
+  </script>
+</body>
+</html>
