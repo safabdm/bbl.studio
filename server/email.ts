@@ -11,7 +11,9 @@ type Template =
   | 'preview_ready'
   | 'revision_request_received'
   | 'approval_received'
-  | 'final_files_released';
+  | 'final_files_released'
+  | 'lead_outreach_draft'
+  | 'owner_booking_alert';
 
 const contact = `BBL Boutique Brand & Launch Studio\nhello@bbl.studio\n(949) 524-2324\nhttps://www.bbl.studio`;
 

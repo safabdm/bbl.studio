@@ -10,6 +10,9 @@ const AdminProject = lazy(() => import('./app/portal-screens').then((module) => 
 const AdminPricing = lazy(() => import('./app/portal-screens').then((module) => ({ default: module.AdminPricing })));
 const ClientPortal = lazy(() => import('./app/portal-screens').then((module) => ({ default: module.ClientPortal })));
 const RequireAdmin = lazy(() => import('./app/portal-screens').then((module) => ({ default: module.RequireAdmin })));
+const AdminLeads = lazy(() => import('./app/leads-screens').then((module) => ({ default: module.AdminLeads })));
+const AdminLeadDetail = lazy(() => import('./app/leads-screens').then((module) => ({ default: module.AdminLeadDetail })));
+const PublicBook = lazy(() => import('./app/leads-screens').then((module) => ({ default: module.PublicBook })));
 
 function PortalFallback() {
   return <div className="portal-boot" aria-hidden="true" />;
@@ -30,10 +33,13 @@ createRoot(document.getElementById('root')!).render(
         <Route path="/" element={<Home />} />
         <Route path="/admin/login" element={<Suspense fallback={<PortalFallback />}><AdminLogin /></Suspense>} />
         <Route path="/admin" element={<PortalGate><AdminHome /></PortalGate>} />
+        <Route path="/admin/leads" element={<PortalGate><AdminLeads /></PortalGate>} />
+        <Route path="/admin/leads/:leadId" element={<PortalGate><AdminLeadDetail /></PortalGate>} />
         <Route path="/admin/projects/:projectId" element={<PortalGate><AdminProject /></PortalGate>} />
         <Route path="/admin/projects/:projectId/pricing" element={<PortalGate><AdminPricing /></PortalGate>} />
         <Route path="/admin/projects/:projectId/preview" element={<PortalGate><ClientPortal preview /></PortalGate>} />
         <Route path="/client/:token" element={<Suspense fallback={<PortalFallback />}><ClientPortal /></Suspense>} />
+        <Route path="/book/:token" element={<Suspense fallback={<PortalFallback />}><PublicBook /></Suspense>} />
       </Routes>
     </BrowserRouter>
   </StrictMode>,

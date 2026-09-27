@@ -12,9 +12,12 @@ import { writeTextPdf } from './pdf';
 import { seedIfNeeded } from './seed';
 import { stripeClient, stripeMode } from './stripe';
 import { activeLinks, clientFacingPayload, registerPricingRoutes } from './admin-pricing';
+import { registerLeadRoutes } from './lead-routes';
+import { seedLeadsIfNeeded } from './leads';
 
 try {
   seedIfNeeded();
+  seedLeadsIfNeeded();
 } catch (error) {
   console.error('BBLS seed skipped', error);
 }
@@ -723,5 +726,6 @@ app.get('/api/admin/projects/:id/export', (c) => {
 });
 
 registerPricingRoutes(app);
+registerLeadRoutes(app, requireAdmin);
 
 export default app;

@@ -24,4 +24,18 @@
 .portal-table th,.portal-table td{text-align:left;padding:.75rem .4rem;border-bottom:1px solid rgba(255,255,255,.1)}
 .portal-table th{color:rgba(255,255,255,.55);font-size:.68rem;letter-spacing:.12em;text-transform:uppercase;font-weight:500}
 .portal-login{width:min(28rem,calc(100% - 2rem));margin:18vh auto 0}
-@media(max-width:860px){.portal-grid{grid-template-columns:1fr}}
+.lead-stats{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:1rem;margin-top:1.75rem}
+.lead-stat{margin:.4rem 0 0;font-size:clamp(1.8rem,4vw,2.6rem);letter-spacing:-.05em}
+.lead-filters{display:grid;grid-template-columns:minmax(0,1.4fr) repeat(2,minmax(10rem,.7fr));gap:1rem;align-items:end;margin-top:1.5rem}
+.lead-filters .portal-actions{margin-top:0}
+.lead-table-wrap{margin-top:1.5rem}
+.lead-scroll{overflow:auto;margin-top:.5rem}
+.lead-table{min-width:72rem}
+.lead-why{max-width:16rem;color:rgba(255,255,255,.72);line-height:1.45}
+.lead-link{color:#fff;text-decoration:underline;text-underline-offset:3px}
+.lead-alert{border-color:rgba(200,240,210,.35);background:rgba(80,140,100,.18)}
+.lead-draft{margin-top:1rem;padding-top:1rem;border-top:1px solid rgba(255,255,255,.12)}
+.lead-draft pre{white-space:pre-wrap;font:inherit;color:rgba(255,255,255,.82);line-height:1.55;margin:.75rem 0 1rem}
+.portal-boot{min-height:100svh;background:#0a0a0a}
+@media(max-width:860px){.portal-grid{grid-template-columns:1fr}.lead-stats,.lead-filters{grid-template-columns:1fr}}
+.portal-nav .brand{display:inline-flex;align-items:center;gap:.65rem;color:#fff;text-decoration:none;letter-spacing:.08em;text-transform:lowercase;font-size:.92rem}

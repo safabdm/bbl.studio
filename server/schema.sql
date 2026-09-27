@@ -255,3 +255,59 @@ CREATE TABLE IF NOT EXISTS change_orders (
   accepted_at TEXT,
   FOREIGN KEY (project_id) REFERENCES projects(id)
 );
+
+CREATE TABLE IF NOT EXISTS leads (
+  id TEXT PRIMARY KEY,
+  business_name TEXT NOT NULL,
+  category TEXT NOT NULL,
+  city TEXT NOT NULL,
+  region TEXT NOT NULL DEFAULT 'Orange County, CA',
+  website TEXT,
+  yelp_url TEXT,
+  instagram_url TEXT,
+  google_maps_url TEXT,
+  public_email TEXT,
+  public_phone TEXT,
+  online_presence TEXT NOT NULL,
+  lead_status TEXT NOT NULL DEFAULT 'new',
+  score INTEGER NOT NULL DEFAULT 0,
+  why_need_website TEXT NOT NULL,
+  notes TEXT,
+  booking_token TEXT UNIQUE,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS lead_email_drafts (
+  id TEXT PRIMARY KEY,
+  lead_id TEXT NOT NULL,
+  to_email TEXT NOT NULL,
+  subject TEXT NOT NULL,
+  body TEXT NOT NULL,
+  created_at TEXT NOT NULL,
+  sent_at TEXT,
+  FOREIGN KEY (lead_id) REFERENCES leads(id)
+);
+
+CREATE TABLE IF NOT EXISTS lead_appointments (
+  id TEXT PRIMARY KEY,
+  lead_id TEXT NOT NULL,
+  scheduled_at TEXT NOT NULL,
+  contact_name TEXT NOT NULL,
+  contact_email TEXT NOT NULL,
+  notes TEXT,
+  status TEXT NOT NULL DEFAULT 'booked',
+  created_at TEXT NOT NULL,
+  FOREIGN KEY (lead_id) REFERENCES leads(id)
+);
+
+CREATE TABLE IF NOT EXISTS owner_notifications (
+  id TEXT PRIMARY KEY,
+  kind TEXT NOT NULL,
+  title TEXT NOT NULL,
+  body TEXT NOT NULL,
+  lead_id TEXT,
+  appointment_id TEXT,
+  read_at TEXT,
+  created_at TEXT NOT NULL
+);
