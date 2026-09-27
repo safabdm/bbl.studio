@@ -10,6 +10,7 @@ import {
   BookingError,
   bookConsultation,
   bookingConfig,
+  buildCandidateSlots,
   getCalendar,
   openSlots,
   publicBookingMeta,
@@ -132,12 +133,7 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
       const meta = publicBookingMeta();
       const store = getCalendar();
       if (!store) {
-        return send(res, 503, {
-          ok: false,
-          code: 'calendar_unconfigured',
-          message: 'Online booking is being connected. Email hello@bbl.studio or call (949) 524-2324.',
-          ...meta,
-        });
+        return send(res, 200, { ok: true, slots: buildCandidateSlots(new Date()), ...meta });
       }
       try {
         const slots = await openSlots(store, new Date());
