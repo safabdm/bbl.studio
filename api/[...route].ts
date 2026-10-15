@@ -25,7 +25,7 @@ import {
   matchAdmin,
   readAdminToken,
   signAdminToken,
-} from '../server/admin-auth.js';
+} from './admin-auth.js';
 
 export const config = { maxDuration: 30 };
 
