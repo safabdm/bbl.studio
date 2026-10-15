@@ -715,8 +715,10 @@ function SettingsPage() {
           <li>Last synced: {asText(data?.last_synced_at, '(never)')}</li>
           <li>Stale: {String(data?.stale)}</li>
           <li>CRM_SYNC_SECRET set: {String(data?.sync_secret_configured)}</li>
+          <li>Durable DB configured: {String(data?.durable_db_configured)}</li>
           <li>Resend webhook secret set: {String(data?.resend_webhook_secret)}</li>
           <li>Optional forward URL: {asText(data?.lead_agent_resend_webhook_url, '(not set)')}</li>
+          <li>Store backend: {asText(persistence.backend, '—')}</li>
           <li>Store: {asText(persistence.store, '—')}</li>
         </ul>
       </div>

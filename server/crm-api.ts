@@ -35,7 +35,7 @@ export async function handleCrmOverview(isAdmin: boolean, env = process.env): Pr
   const denied = adminOk(isAdmin);
   if (denied) return denied;
   const result = await fetchOverview(env);
-  const conn = connectionStatus(env);
+  const conn = await connectionStatus(env);
   return {
     status: 200,
     body: {
@@ -234,10 +234,10 @@ export async function handleCrmSendCampaign(
   };
 }
 
-export function handleCrmSettings(isAdmin: boolean, env = process.env): CrmJsonResult {
+export async function handleCrmSettings(isAdmin: boolean, env = process.env): Promise<CrmJsonResult> {
   const denied = adminOk(isAdmin);
   if (denied) return denied;
-  return { status: 200, body: { ok: true, ...crmConfigStatus(env) } };
+  return { status: 200, body: { ok: true, ...(await crmConfigStatus(env)) } };
 }
 
 export function handleCrmSelectionMeta(
@@ -258,15 +258,15 @@ export function handleCrmSelectionMeta(
 }
 
 /** Machine sync ingest — Bearer secret, not admin cookie. */
-export function handleCrmSyncIngest(
+export async function handleCrmSyncIngest(
   headers: { authorization?: string | null; 'x-bbl-crm-sync-key'?: string | null; 'x-bbl-crm-key'?: string | null },
   body: unknown,
   opts: { rawBytes?: number; env?: NodeJS.ProcessEnv } = {},
-): CrmJsonResult {
+): Promise<CrmJsonResult> {
   const env = opts.env || process.env;
   const auth = authorizeCrmSync(headers, env);
   if (!auth.ok) return { status: auth.status, body: { ok: false, message: auth.message } };
-  const result = ingestCrmSync(body, { rawBytes: opts.rawBytes, env });
+  const result = await ingestCrmSync(body, { rawBytes: opts.rawBytes, env });
   if (!result.ok) return { status: result.status, body: { ok: false, message: result.message } };
   return {
     status: 200,
@@ -281,13 +281,13 @@ export function handleCrmSyncIngest(
 }
 
 /** Lightweight sync health for Mac (Bearer). */
-export function handleCrmSyncStatus(
+export async function handleCrmSyncStatus(
   headers: { authorization?: string | null; 'x-bbl-crm-sync-key'?: string | null; 'x-bbl-crm-key'?: string | null },
   env = process.env,
-): CrmJsonResult {
+): Promise<CrmJsonResult> {
   const auth = authorizeCrmSync(headers, env);
   if (!auth.ok) return { status: auth.status, body: { ok: false, message: auth.message } };
-  const conn = connectionStatus(env);
+  const conn = await connectionStatus(env);
   return {
     status: 200,
     body: {

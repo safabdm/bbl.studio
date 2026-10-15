@@ -14,12 +14,13 @@
     "format": "oxfmt",
     "test:unsubscribe": "tsx --test server/unsubscribe.test.ts",
     "test:booking": "tsx --test server/booking.test.ts",
-    "test:crm": "tsx --test server/crm-safety.test.ts server/crm-campaigns.test.ts server/resend-webhook.test.ts server/crm-sync.test.ts",
+    "test:crm": "tsx --test server/crm-safety.test.ts server/crm-campaigns.test.ts server/resend-webhook.test.ts server/crm-freshness.test.ts server/crm-sync.test.ts",
     "test:crm-all": "pnpm test:unsubscribe && pnpm test:booking && pnpm test:crm"
   },
   "dependencies": {
     "@base-ui/react": "1.7.0",
     "@hono/node-server": "^2.1.1",
+    "@neondatabase/serverless": "^1.2.0",
     "@shadcn/react": "0.3.0",
     "class-variance-authority": "0.7.1",
     "clsx": "2.1.1",

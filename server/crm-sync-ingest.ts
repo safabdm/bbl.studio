@@ -23,6 +23,13 @@ import {
   writeSnapshot,
   type CrmSyncStoreEnv,
 } from './crm-sync-store';
+import { isDurableDbConfigured, requiresDurableDb } from './crm-db';
+import {
+  mergeMacEmailHistory,
+  mergeMacLeadsIntoExisting,
+  type CrmEmailHistoryWithMeta,
+  type CrmLeadWithMeta,
+} from './crm-freshness';
 
 function safeEqual(left: string, right: string) {
   const a = Buffer.from(left);
@@ -252,13 +259,20 @@ export function parseSyncPayload(body: unknown, rawBytes = 0): { ok: true; paylo
   };
 }
 
-export function ingestCrmSync(
+export async function ingestCrmSync(
   body: unknown,
   opts: { rawBytes?: number; env?: CrmSyncStoreEnv } = {},
-): CrmSyncIngestResult {
+): Promise<CrmSyncIngestResult> {
   const env = opts.env || process.env;
   if (!syncSecretConfigured(env)) {
     return { ok: false, status: 503, message: 'CRM_SYNC_SECRET is not configured on this host.' };
+  }
+  if (requiresDurableDb(env) && !isDurableDbConfigured(env)) {
+    return {
+      ok: false,
+      status: 503,
+      message: 'CRM_DATABASE_URL is required on Vercel for durable CRM storage (/tmp disabled).',
+    };
   }
   const parsed = parseSyncPayload(body, opts.rawBytes || 0);
   if (!parsed.ok) {
@@ -266,58 +280,65 @@ export function ingestCrmSync(
   }
 
   const now = new Date().toISOString().replace(/\.\d{3}Z$/, 'Z');
-  const existing = readSnapshot(env) || emptySnapshot();
+  const existing = (await readSnapshot(env)) || emptySnapshot();
   const payload = parsed.payload;
   const mode = payload.mode || 'replace';
+  const syncedAt = payload.synced_at || now;
 
-  let next: CrmSyncSnapshot;
+  // Always freshness-merge tracking so older Mac payloads cannot clobber webhooks.
+  const leads = mergeMacLeadsIntoExisting(
+    existing.leads as CrmLeadWithMeta[],
+    payload.leads as CrmLeadWithMeta[],
+    syncedAt,
+  );
+  const email_history = mergeMacEmailHistory(
+    existing.email_history as CrmEmailHistoryWithMeta[],
+    (payload.email_history || []) as CrmEmailHistoryWithMeta[],
+    syncedAt,
+  );
+
+  let campaigns = payload.campaigns || [];
+  let inbox = payload.inbox || [];
+  let bookings = payload.bookings || [];
+  let suppressions = payload.suppressions || [];
+
   if (mode === 'merge' && existing.last_synced_at) {
-    const leads = mergeById(existing.leads, payload.leads, (l) => String(l.id));
-    const email_history = mergeById(
-      existing.email_history,
-      payload.email_history || [],
-      (e) => e.provider_message_id || `${e.lead_id}:${e.email}:${e.sent_at || ''}`,
-    );
-    const campaigns = mergeById(existing.campaigns, payload.campaigns || [], (c) => String(c.id));
-    const inbox = mergeById(existing.inbox, payload.inbox || [], (i) => String(i.id));
-    const bookings = mergeById(existing.bookings, payload.bookings || [], (b) => String(b.id));
-    const suppressions = mergeById(
-      existing.suppressions,
-      payload.suppressions || [],
-      (s) => s.email,
-    );
-    next = {
-      schema_version: 1,
-      last_synced_at: payload.synced_at || now,
-      source_host: payload.source_host || existing.source_host,
-      leads,
-      email_history,
-      campaigns,
-      inbox,
-      bookings,
-      suppressions,
-      overview: payload.overview || computeOverviewFromLeads(leads, email_history),
-    };
+    campaigns = mergeById(existing.campaigns, campaigns, (c) => String(c.id));
+    inbox = mergeById(existing.inbox, inbox, (i) => String(i.id));
+    bookings = mergeById(existing.bookings, bookings, (b) => String(b.id));
+    suppressions = mergeById(existing.suppressions, suppressions, (s) => s.email);
   } else {
-    next = {
-      schema_version: 1,
-      last_synced_at: payload.synced_at || now,
-      source_host: payload.source_host || null,
-      leads: payload.leads,
-      email_history: payload.email_history || [],
-      campaigns: payload.campaigns || [],
-      inbox: payload.inbox || [],
-      bookings: payload.bookings || [],
-      suppressions: payload.suppressions || [],
-      overview: payload.overview || computeOverviewFromLeads(payload.leads, payload.email_history || []),
-    };
+    // replace membership for campaigns/bookings/suppressions from Mac,
+    // but keep website inbox replies that Mac didn't push.
+    inbox = mergeById(existing.inbox.filter((i) => i.source === 'resend_inbound'), inbox, (i) => String(i.id));
   }
 
-  writeSnapshot(next, env);
+  const next: CrmSyncSnapshot = {
+    schema_version: 1,
+    last_synced_at: syncedAt,
+    source_host: payload.source_host || existing.source_host || null,
+    leads,
+    email_history,
+    campaigns,
+    inbox,
+    bookings,
+    suppressions,
+    overview: payload.overview || computeOverviewFromLeads(leads, email_history),
+  };
+
+  try {
+    await writeSnapshot(next, env);
+  } catch (error) {
+    return {
+      ok: false,
+      status: 503,
+      message: error instanceof Error ? error.message : 'Failed to persist CRM snapshot.',
+    };
+  }
   return {
     ok: true,
     status: 200,
-    message: `CRM sync stored (${mode}).`,
+    message: `CRM sync stored (${mode}) with webhook-preserving freshness merge.`,
     last_synced_at: next.last_synced_at,
     counts: {
       leads: next.leads.length,

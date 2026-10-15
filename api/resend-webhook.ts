@@ -9,6 +9,11 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { applyResendEventToSnapshot } from '../server/crm-webhook-apply';
+import {
+  dbHasWebhookEvent,
+  dbRememberWebhookEvent,
+  isDurableDbConfigured,
+} from '../server/crm-db';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 
@@ -17,6 +22,9 @@ export type ResendWebhookEnv = {
   LEAD_AGENT_RESEND_WEBHOOK_URL?: string;
   RESEND_WEBHOOK_IDEMPOTENCY_PATH?: string;
   CRM_SYNC_STORE_PATH?: string;
+  CRM_DATABASE_URL?: string;
+  DATABASE_URL?: string;
+  CRM_DATABASE_MEMORY?: string;
   VERCEL?: string;
 };
 
@@ -164,21 +172,44 @@ export async function processResendWebhook(opts: {
 
   const parsed = parseResendEvent(opts.body);
   const eventId = svixId || parsed.event_id;
-  if (eventId && readSeenEventIds(env).includes(eventId)) {
-    return {
-      ok: true,
-      status: 200,
-      duplicate: true,
-      event_id: eventId,
-      type: parsed.type,
-      message: 'Duplicate event ignored.',
-    };
+  const useDurableEvents = isDurableDbConfigured(env);
+
+  if (eventId) {
+    const seen = useDurableEvents
+      ? await dbHasWebhookEvent(eventId, env)
+      : readSeenEventIds(env).includes(eventId);
+    if (seen) {
+      return {
+        ok: true,
+        status: 200,
+        duplicate: true,
+        event_id: eventId,
+        type: parsed.type,
+        message: 'Duplicate event ignored.',
+      };
+    }
   }
 
-  if (eventId) rememberEventId(eventId, env);
+  if (eventId) {
+    if (useDurableEvents) {
+      const inserted = await dbRememberWebhookEvent(eventId, parsed.type, parsed, env);
+      if (!inserted) {
+        return {
+          ok: true,
+          status: 200,
+          duplicate: true,
+          event_id: eventId,
+          type: parsed.type,
+          message: 'Duplicate event ignored.',
+        };
+      }
+    } else {
+      rememberEventId(eventId, env);
+    }
+  }
 
   // Primary path: update website CRM snapshot (Mac is outbound-only / often offline).
-  const applied = applyResendEventToSnapshot(opts.body, env);
+  const applied = await applyResendEventToSnapshot(opts.body, env);
 
   const forwardUrl = (env.LEAD_AGENT_RESEND_WEBHOOK_URL || '').trim();
   let forwarded = false;

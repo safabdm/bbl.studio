@@ -1,17 +1,22 @@
 /**
- * Apply verified Resend webhook events onto the CRM sync snapshot.
+ * Apply verified Resend webhook events onto the durable CRM snapshot.
  * No auto-replies. Delivery truth only from signed events.
+ * Uses freshness merge so webhook state outranks older Mac sync fields.
  */
 import type { CrmEmailHistoryItem, CrmInboxItem, TrackingTriState } from './crm-types';
 import {
-  applyTrackingToLead,
   computeOverviewFromLeads,
   emptySnapshot,
   readSnapshot,
-  upsertEmailHistory,
   writeSnapshot,
   type CrmSyncStoreEnv,
 } from './crm-sync-store';
+import {
+  mergeEmailHistoryFreshness,
+  mergeLeadFreshness,
+  type CrmEmailHistoryWithMeta,
+  type CrmLeadWithMeta,
+} from './crm-freshness';
 
 export type ResendEventMap = {
   email_accepted?: TrackingTriState;
@@ -63,16 +68,15 @@ export function extractResendRecipients(data: Record<string, unknown> | undefine
   }
   const from = data.from;
   if (typeof from === 'string' && from.includes('@')) {
-    // For inbound replies, From is the lead.
     out.push(from.trim().toLowerCase());
   }
   return [...new Set(out)];
 }
 
-export function applyResendEventToSnapshot(
+export async function applyResendEventToSnapshot(
   body: string,
   env: CrmSyncStoreEnv = process.env,
-): { applied: boolean; matched_leads: number; type: string | null } {
+): Promise<{ applied: boolean; matched_leads: number; type: string | null }> {
   let json: { type?: string; data?: Record<string, unknown>; created_at?: string };
   try {
     json = JSON.parse(body) as typeof json;
@@ -87,29 +91,34 @@ export function applyResendEventToSnapshot(
   const data = json.data || {};
   const emailId = String(data.email_id || data.id || '').trim() || null;
   const recipients = extractResendRecipients(data);
-  const now = new Date().toISOString().replace(/\.\d{3}Z$/, 'Z');
+  const now =
+    typeof json.created_at === 'string' && json.created_at
+      ? json.created_at
+      : new Date().toISOString().replace(/\.\d{3}Z$/, 'Z');
 
-  const snapshot = readSnapshot(env) || emptySnapshot();
-  // Only mutate when we already have a sync (or create a minimal shell if webhook arrives first).
+  const snapshot = (await readSnapshot(env)) || emptySnapshot();
   let matched = 0;
-  const leads = snapshot.leads.map((lead) => {
+  const leads = (snapshot.leads as CrmLeadWithMeta[]).map((lead) => {
     const byId = emailId && lead.provider_message_ids?.includes(emailId);
     const byEmail = recipients.includes(lead.email);
-    // Inbound: match From email; outbound: prefer message id then recipient.
     if (!byId && !byEmail) return lead;
     matched += 1;
-    return applyTrackingToLead(lead, {
-      email_accepted: mapped.email_accepted,
-      delivered: mapped.delivered,
-      bounced: mapped.bounced,
-      replied: mapped.replied,
-      email_status: mapped.email_status,
+    const patch: CrmLeadWithMeta = {
+      ...lead,
+      email_accepted: mapped.email_accepted || lead.email_accepted,
+      delivered: mapped.delivered || lead.delivered,
+      bounced: mapped.bounced || lead.bounced,
+      replied: mapped.replied || lead.replied,
+      email_status: mapped.email_status || lead.email_status,
       last_activity_at: now,
-      provider_message_id: emailId || undefined,
-    });
+      provider_message_ids: emailId
+        ? [...new Set([...(lead.provider_message_ids || []), emailId])]
+        : lead.provider_message_ids,
+    };
+    return mergeLeadFreshness(lead, patch, 'webhook', now, type);
   });
 
-  let email_history = snapshot.email_history;
+  let email_history = snapshot.email_history as CrmEmailHistoryWithMeta[];
   if (emailId || recipients[0]) {
     const existing = email_history.find(
       (row) =>
@@ -133,7 +142,15 @@ export function applyResendEventToSnapshot(
       sent_at: existing?.sent_at ?? null,
     };
     if (item.email.includes('@')) {
-      email_history = upsertEmailHistory(email_history, item);
+      const merged = mergeEmailHistoryFreshness(existing, item, 'webhook', now, type);
+      const key = merged.provider_message_id || `${merged.lead_id}:${merged.email}:${merged.sent_at || ''}`;
+      email_history = [
+        merged,
+        ...email_history.filter((row) => {
+          const rowKey = row.provider_message_id || `${row.lead_id}:${row.email}:${row.sent_at || ''}`;
+          return rowKey !== key;
+        }),
+      ].slice(0, 5000);
     }
   }
 
@@ -150,7 +167,7 @@ export function applyResendEventToSnapshot(
         lead_id: leads.find((l) => l.email === from)?.id ?? null,
         subject: typeof data.subject === 'string' ? data.subject : null,
         snippet: typeof data.text === 'string' ? data.text.slice(0, 280) : null,
-        received_at: typeof json.created_at === 'string' ? json.created_at : now,
+        received_at: now,
         source: 'resend_inbound',
       };
       if (!inbox.some((item) => item.id === entry.id)) {
@@ -159,7 +176,6 @@ export function applyResendEventToSnapshot(
     }
   }
 
-  // Mark suppressions for bounce/complaint when we know the email.
   let suppressions = snapshot.suppressions;
   if (mapped.email_status === 'BOUNCED' || mapped.email_status === 'COMPLAINED') {
     for (const email of recipients) {
@@ -169,16 +185,16 @@ export function applyResendEventToSnapshot(
           ...suppressions,
         ];
       }
-      const lead = leads.find((l) => l.email === email);
-      if (lead) lead.suppressed = true;
+      const idx = leads.findIndex((l) => l.email === email);
+      if (idx >= 0) leads[idx] = { ...leads[idx], suppressed: true };
     }
   }
 
-  writeSnapshot(
+  await writeSnapshot(
     {
       ...snapshot,
       schema_version: 1,
-      // Preserve last_synced_at; webhook updates do not count as Mac sync.
+      // Webhook updates do not count as Mac sync connectivity.
       last_synced_at: snapshot.last_synced_at,
       leads,
       email_history,

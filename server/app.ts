@@ -784,7 +784,7 @@ app.post('/api/crm/sync', async (c) => {
   } catch {
     return c.json({ ok: false, message: 'Invalid JSON body.' }, 400);
   }
-  const result = handleCrmSyncIngest(
+  const result = await handleCrmSyncIngest(
     {
       authorization: c.req.header('authorization'),
       'x-bbl-crm-sync-key': c.req.header('x-bbl-crm-sync-key'),
@@ -796,8 +796,8 @@ app.post('/api/crm/sync', async (c) => {
   return c.json(result.body, result.status);
 });
 
-app.get('/api/crm/sync/status', (c) => {
-  const result = handleCrmSyncStatus({
+app.get('/api/crm/sync/status', async (c) => {
+  const result = await handleCrmSyncStatus({
     authorization: c.req.header('authorization'),
     'x-bbl-crm-sync-key': c.req.header('x-bbl-crm-sync-key'),
     'x-bbl-crm-key': c.req.header('x-bbl-crm-key'),
@@ -831,8 +831,8 @@ app.get('/api/admin/crm/campaigns', async (c) => {
   return c.json(result.body, result.status);
 });
 
-app.get('/api/admin/crm/settings', (c) => {
-  const result = handleCrmSettings(Boolean(requireAdmin(c)));
+app.get('/api/admin/crm/settings', async (c) => {
+  const result = await handleCrmSettings(Boolean(requireAdmin(c)));
   return c.json(result.body, result.status);
 });
 

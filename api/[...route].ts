@@ -337,7 +337,7 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
       } catch {
         return send(res, 400, { ok: false, message: 'Invalid JSON body.' });
       }
-      const result = handleCrmSyncIngest(
+      const result = await handleCrmSyncIngest(
         {
           authorization: Array.isArray(req.headers.authorization)
             ? req.headers.authorization[0]
@@ -356,7 +356,7 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
     }
 
     if (matches(path, '/api/crm/sync/status') && method === 'GET') {
-      const result = handleCrmSyncStatus({
+      const result = await handleCrmSyncStatus({
         authorization: Array.isArray(req.headers.authorization)
           ? req.headers.authorization[0]
           : req.headers.authorization,
@@ -392,7 +392,7 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
       return send(res, result.status, result.body);
     }
     if (matches(path, '/api/admin/crm/settings') && method === 'GET') {
-      const result = handleCrmSettings(admin);
+      const result = await handleCrmSettings(admin);
       return send(res, result.status, result.body);
     }
     if (matches(path, '/api/admin/crm/selection') && method === 'POST') {

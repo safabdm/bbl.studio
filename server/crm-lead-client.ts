@@ -19,18 +19,20 @@ import {
   emptyOverview,
   filterLeads,
   hasSuccessfulSync,
+  persistenceInfo,
   readSnapshot,
   syncSecretConfigured,
   type CrmSyncStoreEnv,
 } from './crm-sync-store';
+import { isDurableDbConfigured } from './crm-db';
 
 export { CRM_PUSH_SYNC_CONTRACT, LEAD_AGENT_CRM_CONTRACT };
 
-function envelopeForConnection<T>(
+async function envelopeForConnection<T>(
   data: T,
   env: CrmSyncStoreEnv,
-): CrmEnvelope<T> {
-  const conn = connectionStatus(env);
+): Promise<CrmEnvelope<T>> {
+  const conn = await connectionStatus(env);
   const trusted = conn.status === 'synced' || (conn.status === 'sync_pending' && Boolean(conn.last_synced_at));
   const source =
     conn.status === 'synced'
@@ -45,13 +47,13 @@ function envelopeForConnection<T>(
     last_synced_at: conn.last_synced_at,
     message: conn.message,
     data,
-    metrics_trusted: trusted && hasSuccessfulSync(env),
+    metrics_trusted: trusted && (await hasSuccessfulSync(env)),
   };
 }
 
 export async function fetchOverview(env: CrmSyncStoreEnv = process.env): Promise<CrmEnvelope<CrmOverviewMetrics | null>> {
-  const snapshot = readSnapshot(env);
-  const conn = connectionStatus(env);
+  const snapshot = await readSnapshot(env);
+  const conn = await connectionStatus(env);
   if (!snapshot?.last_synced_at) {
     return {
       ok: true,
@@ -75,7 +77,7 @@ export async function fetchOverview(env: CrmSyncStoreEnv = process.env): Promise
 }
 
 export async function fetchLeads(query = '', env: CrmSyncStoreEnv = process.env): Promise<CrmEnvelope<CrmLead[]>> {
-  const snapshot = readSnapshot(env);
+  const snapshot = await readSnapshot(env);
   if (!snapshot?.last_synced_at) {
     return envelopeForConnection<CrmLead[]>([], env);
   }
@@ -83,45 +85,47 @@ export async function fetchLeads(query = '', env: CrmSyncStoreEnv = process.env)
 }
 
 export async function fetchInbox(env: CrmSyncStoreEnv = process.env): Promise<CrmEnvelope<CrmInboxItem[]>> {
-  const snapshot = readSnapshot(env);
+  const snapshot = await readSnapshot(env);
+  const conn = await connectionStatus(env);
   if (!snapshot?.last_synced_at) {
     return {
-      ...envelopeForConnection<CrmInboxItem[]>([], env),
+      ...(await envelopeForConnection<CrmInboxItem[]>([], env)),
       message:
-        connectionStatus(env).message +
+        conn.message +
         ' Reply inbox is populated from Mac sync and/or Resend inbound webhooks — never auto-replies.',
     };
   }
   return {
-    ...envelopeForConnection(snapshot.inbox || [], env),
+    ...(await envelopeForConnection(snapshot.inbox || [], env)),
     message:
       snapshot.inbox?.length
-        ? connectionStatus(env).message
+        ? conn.message
         : 'No replies in the sync cache. Reply detection needs Resend inbound or Gmail readonly on Mac (no auto-replies).',
   };
 }
 
 export async function fetchBookings(env: CrmSyncStoreEnv = process.env): Promise<CrmEnvelope<CrmBookingItem[]>> {
-  const snapshot = readSnapshot(env);
+  const snapshot = await readSnapshot(env);
+  const conn = await connectionStatus(env);
   if (!snapshot?.last_synced_at) {
     return {
-      ...envelopeForConnection<CrmBookingItem[]>([], env),
+      ...(await envelopeForConnection<CrmBookingItem[]>([], env)),
       message:
-        connectionStatus(env).message +
+        conn.message +
         ' Booking rows appear after Mac sync. Site→Mac reverse booking notify remains deferred (local_only).',
     };
   }
   return {
-    ...envelopeForConnection(snapshot.bookings || [], env),
+    ...(await envelopeForConnection(snapshot.bookings || [], env)),
     message:
       snapshot.bookings?.length
-        ? connectionStatus(env).message
+        ? conn.message
         : 'No confirmed CRM bookings in the sync cache. Site booking works; reverse sync to Mac remains deferred until a durable host is approved.',
   };
 }
 
 export async function fetchCampaigns(env: CrmSyncStoreEnv = process.env): Promise<CrmEnvelope<CrmCampaignSummary[]>> {
-  const snapshot = readSnapshot(env);
+  const snapshot = await readSnapshot(env);
   if (!snapshot?.last_synced_at) {
     return envelopeForConnection<CrmCampaignSummary[]>([], env);
   }
@@ -129,20 +133,22 @@ export async function fetchCampaigns(env: CrmSyncStoreEnv = process.env): Promis
 }
 
 export async function fetchEmailHistory(env: CrmSyncStoreEnv = process.env): Promise<CrmEnvelope<CrmEmailHistoryItem[]>> {
-  const snapshot = readSnapshot(env);
+  const snapshot = await readSnapshot(env);
   if (!snapshot?.last_synced_at) {
     return envelopeForConnection<CrmEmailHistoryItem[]>([], env);
   }
   return envelopeForConnection(snapshot.email_history || [], env);
 }
 
-export function crmConfigStatus(env: NodeJS.ProcessEnv = process.env) {
-  const conn = connectionStatus(env);
+export async function crmConfigStatus(env: NodeJS.ProcessEnv = process.env) {
+  const conn = await connectionStatus(env);
+  const persistence = persistenceInfo(env);
   return {
     connection: conn.status,
     last_synced_at: conn.last_synced_at,
     stale: conn.stale,
     sync_secret_configured: syncSecretConfigured(env),
+    durable_db_configured: isDurableDbConfigured(env),
     /** @deprecated pull model retired */
     lead_agent_configured: syncSecretConfigured(env),
     lead_agent_base_url: null,
@@ -153,11 +159,9 @@ export function crmConfigStatus(env: NodeJS.ProcessEnv = process.env) {
       ...safetySnapshot(env),
       FOLLOWUPS_LIVE: false,
     },
-    persistence: {
-      store: env.VERCEL ? '/tmp/bbls-crm-sync-snapshot.json (ephemeral)' : './data/crm-sync-snapshot.json',
-      note: 'On Vercel, /tmp is not durable across instances — Mac should push on a schedule (e.g. every 15–60 min).',
-    },
+    persistence,
     mac_side_required: [
+      'Set CRM_DATABASE_URL (Neon/Vercel Postgres) on Vercel — required for durable CRM',
       'Run scripts/crm-mac-sync/push_crm_sync.py against local leads.db (readonly)',
       'Set CRM_SYNC_SECRET on Vercel and Mac (.env) — same value',
       'POST snapshots to POST /api/crm/sync (Mac → website only)',

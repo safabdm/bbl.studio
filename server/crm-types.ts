@@ -38,6 +38,16 @@ export type CrmLead = {
   booking_status?: string | null;
   /** Resend / provider message ids for webhook matching. */
   provider_message_ids?: string[];
+  /**
+   * Per-field provenance for freshness merge (webhook vs Mac).
+   * Server-only metadata; safe in snapshot JSON, never required by UI.
+   */
+  tracking?: Partial<
+    Record<
+      'email_accepted' | 'delivered' | 'bounced' | 'replied' | 'email_status',
+      { source: 'mac' | 'webhook'; rank: number; at: string; event_type?: string | null }
+    >
+  >;
 };
 
 export type CrmOverviewMetrics = {
@@ -84,6 +94,7 @@ export type CrmEmailHistoryItem = {
   bounced: TrackingTriState;
   replied: TrackingTriState;
   sent_at?: string | null;
+  tracking?: CrmLead['tracking'];
 };
 
 export type CrmInboxItem = {

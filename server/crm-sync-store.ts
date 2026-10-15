@@ -5,11 +5,11 @@
  * the dashboard reads from this cache. SQLite / the Mac are never exposed.
  *
  * Persistence:
- * - Local/dev: ./data/crm-sync-snapshot.json (durable on disk)
- * - Vercel: /tmp/bbls-crm-sync-snapshot.json (ephemeral per instance —
- *   Mac must re-push after cold starts; see docs/crm-admin-integration.md)
+ * - Production (Vercel): Neon/Vercel Postgres via CRM_DATABASE_URL (required)
+ * - Local/dev without DB URL: ./data/crm-sync-snapshot.json
+ * - /tmp is NOT used on Vercel anymore
  *
- * Limits: JSON file, soft max ~4MB payload; keep email history + leads lean.
+ * Soft max ~4MB Mac push payload.
  */
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
@@ -25,14 +25,24 @@ import type {
   CrmSyncSnapshot,
   TrackingTriState,
 } from './crm-types';
+import {
+  crmDatabaseUrl,
+  dbReadSnapshot,
+  dbWriteSnapshot,
+  isDurableDbConfigured,
+  requiresDurableDb,
+  type CrmDbEnv,
+} from './crm-db';
+import { emptyOverview, emptySnapshot } from './crm-sync-store-empty';
+
+export { emptyOverview, emptySnapshot };
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 
 /** Soft payload budget (bytes) for ingest validation. */
 export const CRM_SYNC_MAX_BYTES = 4 * 1024 * 1024;
 
-export type CrmSyncStoreEnv = {
-  VERCEL?: string;
+export type CrmSyncStoreEnv = CrmDbEnv & {
   CRM_SYNC_STORE_PATH?: string;
   CRM_SYNC_SECRET?: string;
   LEAD_AGENT_CRM_SECRET?: string;
@@ -43,37 +53,34 @@ let memorySnapshot: CrmSyncSnapshot | null = null;
 
 export function crmSyncStorePath(env: CrmSyncStoreEnv = process.env): string {
   if (env.CRM_SYNC_STORE_PATH) return resolve(env.CRM_SYNC_STORE_PATH);
-  if (env.VERCEL) return '/tmp/bbls-crm-sync-snapshot.json';
+  // Never default to /tmp on Vercel — durable DB is required there.
   return resolve(root, 'data/crm-sync-snapshot.json');
 }
 
-export function emptyOverview(): CrmOverviewMetrics {
+export function persistenceInfo(env: CrmSyncStoreEnv = process.env) {
+  if (isDurableDbConfigured(env)) {
+    const url = crmDatabaseUrl(env);
+    const kind = url === 'memory://crm' || env.CRM_DATABASE_MEMORY === '1' ? 'memory' : 'neon_postgres';
+    return {
+      backend: kind,
+      store: kind === 'neon_postgres' ? 'CRM_DATABASE_URL (Neon/Vercel Postgres)' : 'memory://crm (tests)',
+      durable: true,
+      note: 'Webhook events and sync snapshots survive deploys and cold starts. Mac sync merges must not clobber fresher webhook tracking.',
+    };
+  }
+  if (requiresDurableDb(env)) {
+    return {
+      backend: 'unconfigured',
+      store: '(missing CRM_DATABASE_URL)',
+      durable: false,
+      note: 'Vercel requires CRM_DATABASE_URL. /tmp is disabled for CRM — sync ingest returns 503 until Postgres is configured.',
+    };
+  }
   return {
-    total_leads: 0,
-    new_leads: 0,
-    contacted_leads: 0,
-    emails_sent: 0,
-    emails_delivered: 0,
-    emails_bounced: 0,
-    replies: 0,
-    booked: 0,
-    conversion_rate: null,
-    last_activity_at: null,
-  };
-}
-
-export function emptySnapshot(): CrmSyncSnapshot {
-  return {
-    schema_version: 1,
-    last_synced_at: null,
-    source_host: null,
-    leads: [],
-    overview: emptyOverview(),
-    campaigns: [],
-    email_history: [],
-    inbox: [],
-    bookings: [],
-    suppressions: [],
+    backend: 'json_file',
+    store: crmSyncStorePath(env),
+    durable: true,
+    note: 'Local JSON file store. Set CRM_DATABASE_URL to exercise the production Postgres path.',
   };
 }
 
@@ -99,17 +106,41 @@ function readJsonFile(path: string): CrmSyncSnapshot | null {
   }
 }
 
-export function readSnapshot(env: CrmSyncStoreEnv = process.env): CrmSyncSnapshot | null {
+export async function readSnapshot(env: CrmSyncStoreEnv = process.env): Promise<CrmSyncSnapshot | null> {
+  if (isDurableDbConfigured(env)) {
+    const fromDb = await dbReadSnapshot(env);
+    if (fromDb?.last_synced_at) {
+      memorySnapshot = fromDb;
+      return fromDb;
+    }
+    // Allow webhook-only shells (last_synced_at null) to round-trip.
+    if (fromDb) {
+      memorySnapshot = fromDb;
+      return fromDb;
+    }
+    return null;
+  }
+  if (requiresDurableDb(env)) {
+    return null;
+  }
   if (memorySnapshot?.last_synced_at) return memorySnapshot;
   const fromDisk = readJsonFile(crmSyncStorePath(env));
-  if (fromDisk?.last_synced_at) {
+  if (fromDisk) {
     memorySnapshot = fromDisk;
     return fromDisk;
   }
   return null;
 }
 
-export function writeSnapshot(snapshot: CrmSyncSnapshot, env: CrmSyncStoreEnv = process.env): void {
+export async function writeSnapshot(snapshot: CrmSyncSnapshot, env: CrmSyncStoreEnv = process.env): Promise<void> {
+  if (isDurableDbConfigured(env)) {
+    await dbWriteSnapshot(snapshot, env);
+    memorySnapshot = snapshot;
+    return;
+  }
+  if (requiresDurableDb(env)) {
+    throw new Error('CRM_DATABASE_URL is required on Vercel. Ephemeral /tmp CRM storage is disabled.');
+  }
   memorySnapshot = snapshot;
   const path = crmSyncStorePath(env);
   mkdirSync(dirname(path), { recursive: true });
@@ -121,8 +152,9 @@ export function resetSnapshotCache(): void {
   memorySnapshot = null;
 }
 
-export function hasSuccessfulSync(env: CrmSyncStoreEnv = process.env): boolean {
-  return Boolean(readSnapshot(env)?.last_synced_at);
+export async function hasSuccessfulSync(env: CrmSyncStoreEnv = process.env): Promise<boolean> {
+  const snap = await readSnapshot(env);
+  return Boolean(snap?.last_synced_at);
 }
 
 export function syncSecretConfigured(env: CrmSyncStoreEnv = process.env): boolean {
@@ -141,19 +173,22 @@ export function isSnapshotStale(snapshot: CrmSyncSnapshot | null, env: CrmSyncSt
   return Date.now() - ts > staleHours(env) * 3600 * 1000;
 }
 
-/**
- * Connection semantics for the dashboard:
- * - not_connected: never synced (and no waiting secret) — show Not connected
- * - sync_pending: secret ready / waiting for first push, or sync is stale
- * - synced: fresh successful sync — real zeros allowed
- */
-export function connectionStatus(env: CrmSyncStoreEnv = process.env): {
+export async function connectionStatus(env: CrmSyncStoreEnv = process.env): Promise<{
   status: CrmConnectionStatus;
   last_synced_at: string | null;
   stale: boolean;
   message: string;
-} {
-  const snapshot = readSnapshot(env);
+}> {
+  if (requiresDurableDb(env) && !isDurableDbConfigured(env)) {
+    return {
+      status: 'not_connected',
+      last_synced_at: null,
+      stale: true,
+      message:
+        'Not connected — CRM_DATABASE_URL is required on Vercel for durable CRM storage. Configure Neon/Vercel Postgres before syncing.',
+    };
+  }
+  const snapshot = await readSnapshot(env);
   const last = snapshot?.last_synced_at || null;
   if (!last) {
     if (syncSecretConfigured(env)) {

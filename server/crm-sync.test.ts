@@ -13,10 +13,14 @@ import {
 import { fetchLeads, fetchOverview } from './crm-lead-client.ts';
 import { applyResendEventToSnapshot, mapResendEventType } from './crm-webhook-apply.ts';
 import { handleCrmOverview, handleCrmSyncIngest } from './crm-api.ts';
+import { resetCrmDbClient, resetMemoryCrmDb } from './crm-db.ts';
+import { processResendWebhook, webhookSecretBytes } from '../api/resend-webhook.ts';
+import { createHmac } from 'node:crypto';
 
 const dir = mkdtempSync(join(tmpdir(), 'bbls-crm-sync-'));
 const storePath = join(dir, 'snapshot.json');
 const secret = 'test-crm-sync-secret-value';
+const whsec = `whsec_${Buffer.from('test-resend-webhook-secret').toString('base64')}`;
 
 function env(extra: Record<string, string> = {}) {
   return {
@@ -30,8 +34,18 @@ function env(extra: Record<string, string> = {}) {
   };
 }
 
+function durableEnv(extra: Record<string, string> = {}) {
+  return env({
+    CRM_DATABASE_URL: 'memory://crm',
+    CRM_DATABASE_MEMORY: '1',
+    ...extra,
+  });
+}
+
 beforeEach(() => {
   resetSnapshotCache();
+  resetCrmDbClient();
+  resetMemoryCrmDb(durableEnv());
   try {
     rmSync(storePath, { force: true });
   } catch {
@@ -65,7 +79,7 @@ describe('CRM sync auth', () => {
 describe('CRM connection empty states', () => {
   it('reports not_connected without secret or snapshot', async () => {
     const e = { CRM_SYNC_STORE_PATH: storePath };
-    const conn = connectionStatus(e);
+    const conn = await connectionStatus(e);
     assert.equal(conn.status, 'not_connected');
     const overview = await fetchOverview(e);
     assert.equal(overview.metrics_trusted, false);
@@ -76,7 +90,7 @@ describe('CRM connection empty states', () => {
   });
 
   it('reports sync_pending when secret set but no push yet', async () => {
-    const conn = connectionStatus(env());
+    const conn = await connectionStatus(env());
     assert.equal(conn.status, 'sync_pending');
     const overview = await handleCrmOverview(true, env());
     assert.equal(overview.status, 200);
@@ -86,7 +100,7 @@ describe('CRM connection empty states', () => {
   });
 
   it('shows real zeros only after successful sync', async () => {
-    const result = ingestCrmSync(
+    const result = await ingestCrmSync(
       {
         schema_version: 1,
         leads: [],
@@ -96,11 +110,23 @@ describe('CRM connection empty states', () => {
       { env: env() },
     );
     assert.equal(result.ok, true);
-    assert.equal(hasSuccessfulSync(env()), true);
+    assert.equal(await hasSuccessfulSync(env()), true);
     const overview = await fetchOverview(env());
     assert.equal(overview.metrics_trusted, true);
     assert.equal(overview.data?.total_leads, 0);
     assert.equal(overview.connection, 'synced');
+  });
+
+  it('requires durable DB on Vercel (no /tmp fallback)', async () => {
+    const result = await ingestCrmSync(
+      { leads: [] },
+      { env: env({ VERCEL: '1' }) },
+    );
+    assert.equal(result.ok, false);
+    if (!result.ok) {
+      assert.equal(result.status, 503);
+      assert.match(result.message, /CRM_DATABASE_URL/);
+    }
   });
 });
 
@@ -110,7 +136,7 @@ describe('CRM sync ingest', () => {
     assert.equal(parsed.ok, false);
   });
 
-  it('stores leads + 9 email history rows with Resend ids', () => {
+  it('stores leads + 9 email history rows with Resend ids', async () => {
     const history = Array.from({ length: 9 }, (_, i) => ({
       lead_id: i + 1,
       email: `salon${i}@example.com`,
@@ -134,7 +160,7 @@ describe('CRM sync ingest', () => {
       replied: 'UNKNOWN',
       booked: 'UNKNOWN',
     }));
-    const result = ingestCrmSync(
+    const result = await ingestCrmSync(
       { schema_version: 1, leads, email_history: history, source_host: 'test-mac' },
       { env: env() },
     );
@@ -142,16 +168,16 @@ describe('CRM sync ingest', () => {
     if (!result.ok) return;
     assert.equal(result.counts.leads, 9);
     assert.equal(result.counts.email_history, 9);
-    const snap = readSnapshot(env());
+    const snap = await readSnapshot(env());
     assert.equal(snap?.leads[0]?.email_accepted, 'YES');
     assert.equal(snap?.leads[0]?.provider_message_ids?.includes('re_0'), true);
     assert.equal(snap?.leads[0]?.delivered, 'UNKNOWN');
   });
 
-  it('handleCrmSyncIngest enforces auth', () => {
-    const denied = handleCrmSyncIngest({ authorization: 'Bearer nope' }, { leads: [] }, { env: env() });
+  it('handleCrmSyncIngest enforces auth', async () => {
+    const denied = await handleCrmSyncIngest({ authorization: 'Bearer nope' }, { leads: [] }, { env: env() });
     assert.equal(denied.status, 401);
-    const ok = handleCrmSyncIngest(
+    const ok = await handleCrmSyncIngest(
       { authorization: `Bearer ${secret}` },
       {
         leads: [
@@ -174,6 +200,134 @@ describe('CRM sync ingest', () => {
   });
 });
 
+describe('Durable memory/Postgres path', () => {
+  it('persists snapshot across cache reset', async () => {
+    const e = durableEnv();
+    const result = await ingestCrmSync(
+      {
+        leads: [
+          {
+            id: 7,
+            business_name: 'Durable Salon',
+            email: 'durable@example.com',
+            email_accepted: 'YES',
+            delivered: 'UNKNOWN',
+            bounced: 'UNKNOWN',
+            replied: 'UNKNOWN',
+            booked: 'NO',
+            provider_message_ids: ['msg_d7'],
+          },
+        ],
+        email_history: [
+          {
+            lead_id: 7,
+            email: 'durable@example.com',
+            provider_message_id: 'msg_d7',
+            status: 'SENT',
+            accepted: 'YES',
+            delivered: 'UNKNOWN',
+            bounced: 'UNKNOWN',
+            replied: 'UNKNOWN',
+          },
+        ],
+      },
+      { env: e },
+    );
+    assert.equal(result.ok, true);
+    resetSnapshotCache();
+    const snap = await readSnapshot(e);
+    assert.equal(snap?.leads.length, 1);
+    assert.equal(snap?.leads[0]?.business_name, 'Durable Salon');
+    assert.equal(snap?.email_history[0]?.provider_message_id, 'msg_d7');
+  });
+
+  it('keeps webhook delivery after older Mac sync overwrite attempt', async () => {
+    const e = durableEnv();
+    await ingestCrmSync(
+      {
+        leads: [
+          {
+            id: 42,
+            business_name: 'Hair NB',
+            email: 'sandra@hairnewportbeach.com',
+            email_accepted: 'YES',
+            delivered: 'UNKNOWN',
+            bounced: 'UNKNOWN',
+            replied: 'UNKNOWN',
+            booked: 'NO',
+            provider_message_ids: ['msg_cohort_42'],
+          },
+        ],
+        email_history: [
+          {
+            lead_id: 42,
+            email: 'sandra@hairnewportbeach.com',
+            provider_message_id: 'msg_cohort_42',
+            status: 'SENT',
+            accepted: 'YES',
+            delivered: 'UNKNOWN',
+            bounced: 'UNKNOWN',
+            replied: 'UNKNOWN',
+          },
+        ],
+      },
+      { env: e },
+    );
+
+    await applyResendEventToSnapshot(
+      JSON.stringify({
+        type: 'email.delivered',
+        data: { email_id: 'msg_cohort_42', to: ['sandra@hairnewportbeach.com'] },
+        created_at: '2026-10-15T01:00:00Z',
+      }),
+      e,
+    );
+
+    let snap = await readSnapshot(e);
+    assert.equal(snap?.leads[0]?.delivered, 'YES');
+
+    // Older Mac payload tries to reset delivery to UNKNOWN.
+    await ingestCrmSync(
+      {
+        mode: 'replace',
+        synced_at: '2026-09-01T00:00:00Z',
+        leads: [
+          {
+            id: 42,
+            business_name: 'Hair Newport Beach',
+            email: 'sandra@hairnewportbeach.com',
+            email_accepted: 'YES',
+            delivered: 'UNKNOWN',
+            bounced: 'UNKNOWN',
+            replied: 'UNKNOWN',
+            booked: 'NO',
+            email_status: 'SENT',
+            provider_message_ids: ['msg_cohort_42'],
+          },
+        ],
+        email_history: [
+          {
+            lead_id: 42,
+            email: 'sandra@hairnewportbeach.com',
+            provider_message_id: 'msg_cohort_42',
+            status: 'SENT',
+            accepted: 'YES',
+            delivered: 'UNKNOWN',
+            bounced: 'UNKNOWN',
+            replied: 'UNKNOWN',
+          },
+        ],
+      },
+      { env: e },
+    );
+
+    snap = await readSnapshot(e);
+    assert.equal(snap?.leads[0]?.delivered, 'YES');
+    assert.equal(snap?.leads[0]?.business_name, 'Hair Newport Beach');
+    assert.equal(snap?.email_history[0]?.delivered, 'YES');
+  });
+});
+
 describe('Resend webhook → CRM snapshot', () => {
   it('maps event types', () => {
     assert.equal(mapResendEventType('email.delivered')?.delivered, 'YES');
@@ -182,8 +336,8 @@ describe('Resend webhook → CRM snapshot', () => {
     assert.equal(mapResendEventType('email.complained')?.email_status, 'COMPLAINED');
   });
 
-  it('updates matched lead by provider id without inventing sync', () => {
-    ingestCrmSync(
+  it('updates matched lead by provider id', async () => {
+    await ingestCrmSync(
       {
         leads: [
           {
@@ -214,7 +368,7 @@ describe('Resend webhook → CRM snapshot', () => {
       { env: env() },
     );
 
-    const applied = applyResendEventToSnapshot(
+    const applied = await applyResendEventToSnapshot(
       JSON.stringify({
         type: 'email.delivered',
         data: { email_id: 'msg_cohort_42', to: ['sandra@hairnewportbeach.com'] },
@@ -224,13 +378,13 @@ describe('Resend webhook → CRM snapshot', () => {
     );
     assert.equal(applied.applied, true);
     assert.equal(applied.matched_leads, 1);
-    const snap = readSnapshot(env());
+    const snap = await readSnapshot(env());
     assert.equal(snap?.leads[0]?.delivered, 'YES');
     assert.equal(snap?.email_history[0]?.delivered, 'YES');
   });
 
-  it('records inbound reply without auto-reply side effects', () => {
-    ingestCrmSync(
+  it('records inbound reply without auto-reply side effects', async () => {
+    await ingestCrmSync(
       {
         leads: [
           {
@@ -247,7 +401,7 @@ describe('Resend webhook → CRM snapshot', () => {
       },
       { env: env() },
     );
-    applyResendEventToSnapshot(
+    await applyResendEventToSnapshot(
       JSON.stringify({
         type: 'email.received',
         data: {
@@ -259,10 +413,57 @@ describe('Resend webhook → CRM snapshot', () => {
       }),
       env(),
     );
-    const snap = readSnapshot(env());
+    const snap = await readSnapshot(env());
     assert.equal(snap?.leads[0]?.replied, 'YES');
     assert.equal(snap?.inbox.length, 1);
     assert.equal(snap?.inbox[0]?.source, 'resend_inbound');
+  });
+
+  it('dedupes webhook events on durable store', async () => {
+    const e = {
+      ...durableEnv(),
+      RESEND_WEBHOOK_SECRET: whsec,
+    };
+    await ingestCrmSync(
+      {
+        leads: [
+          {
+            id: 1,
+            business_name: 'X',
+            email: 'x@example.com',
+            email_accepted: 'YES',
+            delivered: 'UNKNOWN',
+            bounced: 'UNKNOWN',
+            replied: 'UNKNOWN',
+            booked: 'NO',
+            provider_message_ids: ['msg_dup'],
+          },
+        ],
+      },
+      { env: e },
+    );
+
+    const body = JSON.stringify({
+      type: 'email.delivered',
+      data: { email_id: 'msg_dup', to: ['x@example.com'] },
+      created_at: '2026-10-15T02:00:00Z',
+    });
+    const id = 'svix_durable_dup';
+    const timestamp = String(Math.floor(Date.now() / 1000));
+    const signature = `v1,${createHmac('sha256', webhookSecretBytes(whsec))
+      .update(`${id}.${timestamp}.${body}`)
+      .digest('base64')}`;
+    const headers = {
+      'svix-id': id,
+      'svix-timestamp': timestamp,
+      'svix-signature': signature,
+    };
+    const first = await processResendWebhook({ body, headers, env: e });
+    assert.equal(first.ok, true);
+    assert.equal(first.duplicate, false);
+    const second = await processResendWebhook({ body, headers, env: e });
+    assert.equal(second.ok, true);
+    assert.equal(second.duplicate, true);
   });
 });
 
