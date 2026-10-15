@@ -31,22 +31,54 @@ type OverviewResponse = {
     booked: number;
     conversion_rate: number | null;
     last_activity_at?: string | null;
-  };
+  } | null;
   source: string;
+  connection?: 'not_connected' | 'sync_pending' | 'synced';
+  last_synced_at?: string | null;
+  metrics_trusted?: boolean;
   message?: string;
   safety: {
     EMAIL_OUTREACH_ENABLED?: boolean;
     EMAIL_DRY_RUN?: boolean;
     MANUAL_SEND_LIVE_ENABLED?: boolean;
+    FOLLOWUPS_LIVE?: boolean;
   };
 };
 
 type LeadsResponse = {
   leads: CrmLead[];
   source: string;
+  connection?: 'not_connected' | 'sync_pending' | 'synced';
+  last_synced_at?: string | null;
   message?: string;
   empty?: boolean;
+  metrics_trusted?: boolean;
 };
+
+function connectionBanner(connection?: string, message?: string) {
+  if (!connection && !message) return null;
+  if (connection === 'synced' && !message) return null;
+  const label =
+    connection === 'not_connected'
+      ? 'Not connected'
+      : connection === 'sync_pending'
+        ? 'Sync pending'
+        : connection === 'synced'
+          ? 'Connected'
+          : null;
+  const cls = connection === 'synced' ? 'crm-banner' : 'crm-banner warn';
+  return (
+    <div className={cls}>
+      {label ? <strong>{label}. </strong> : null}
+      {message || ''}
+    </div>
+  );
+}
+
+function metricDisplay(trusted: boolean | undefined, value: number | string | null | undefined, suffix = '') {
+  if (!trusted || value == null || value === '') return '—';
+  return `${value}${suffix}`;
+}
 
 function StatusPill({ value }: { value: string | null | undefined }) {
   const v = (value || 'UNKNOWN').toUpperCase();
@@ -97,24 +129,25 @@ function OverviewPage() {
       .catch((err) => setError(err instanceof Error ? err.message : 'Could not load overview.'));
   }, []);
   const m = data?.metrics;
+  const trusted = Boolean(data?.metrics_trusted);
   return (
     <>
       <p className="crm-kicker">Owner dashboard</p>
       <h1>Overview</h1>
-      <p className="crm-lead">Manual email marketing only. Automated outreach stays off. Delivery truth comes from signed Resend webhooks when configured.</p>
-      {data?.message ? <div className="crm-banner warn">{data.message}</div> : null}
+      <p className="crm-lead">Manual email marketing only. Automated outreach stays off. Mac pushes CRM snapshots outbound; delivery truth comes from signed Resend webhooks.</p>
+      {connectionBanner(data?.connection, data?.message)}
       {error ? <p className="crm-error">{error}</p> : null}
       <div className="crm-metrics">
         {[
-          ['Total leads', m?.total_leads ?? '—'],
-          ['New', m?.new_leads ?? '—'],
-          ['Contacted', m?.contacted_leads ?? '—'],
-          ['Emails sent', m?.emails_sent ?? '—'],
-          ['Delivered', m?.emails_delivered ?? '—'],
-          ['Bounced', m?.emails_bounced ?? '—'],
-          ['Replies', m?.replies ?? '—'],
-          ['Booked', m?.booked ?? '—'],
-          ['Conversion', m?.conversion_rate == null ? '—' : `${m.conversion_rate}%`],
+          ['Total leads', metricDisplay(trusted, m?.total_leads)],
+          ['New', metricDisplay(trusted, m?.new_leads)],
+          ['Contacted', metricDisplay(trusted, m?.contacted_leads)],
+          ['Emails sent', metricDisplay(trusted, m?.emails_sent)],
+          ['Delivered', metricDisplay(trusted, m?.emails_delivered)],
+          ['Bounced', metricDisplay(trusted, m?.emails_bounced)],
+          ['Replies', metricDisplay(trusted, m?.replies)],
+          ['Booked', metricDisplay(trusted, m?.booked)],
+          ['Conversion', metricDisplay(trusted, m?.conversion_rate, '%')],
         ].map(([label, value]) => (
           <div className="crm-metric" key={String(label)}>
             <span>{label}</span>
@@ -122,10 +155,15 @@ function OverviewPage() {
           </div>
         ))}
       </div>
+      {!trusted ? (
+        <p className="crm-muted" style={{ marginTop: '0.85rem' }}>
+          Counts show as em dashes until a successful Mac sync. Zeros appear only after real synced data.
+        </p>
+      ) : null}
       <div className="crm-panel">
         <h2>Safety</h2>
         <p className="crm-muted" style={{ marginTop: '.75rem' }}>
-          EMAIL_OUTREACH_ENABLED={asText(data?.safety?.EMAIL_OUTREACH_ENABLED, 'false')} · EMAIL_DRY_RUN={asText(data?.safety?.EMAIL_DRY_RUN, 'true')} · MANUAL_SEND_LIVE_ENABLED={asText(data?.safety?.MANUAL_SEND_LIVE_ENABLED, 'false')}
+          EMAIL_OUTREACH_ENABLED={asText(data?.safety?.EMAIL_OUTREACH_ENABLED, 'false')} · EMAIL_DRY_RUN={asText(data?.safety?.EMAIL_DRY_RUN, 'true')} · MANUAL_SEND_LIVE_ENABLED={asText(data?.safety?.MANUAL_SEND_LIVE_ENABLED, 'false')} · FOLLOWUPS_LIVE={asText(data?.safety?.FOLLOWUPS_LIVE, 'false')}
         </p>
         <div className="crm-actions">
           <Link className="crm-btn" to="/admin/leads">Go to Leads</Link>
@@ -139,7 +177,7 @@ function OverviewPage() {
 function LeadsPage() {
   const navigate = useNavigate();
   const [leads, setLeads] = useState<CrmLead[]>([]);
-  const [source, setSource] = useState('');
+  const [connection, setConnection] = useState('');
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
   const [q, setQ] = useState('');
@@ -152,7 +190,7 @@ function LeadsPage() {
     void api<LeadsResponse>(`/api/admin/crm/leads?${params.toString()}`)
       .then((data) => {
         setLeads(data.leads || []);
-        setSource(data.source);
+        setConnection(data.connection || data.source || '');
         setMessage(data.message || '');
       })
       .catch((err) => setError(err instanceof Error ? err.message : 'Could not load leads.'));
@@ -185,7 +223,7 @@ function LeadsPage() {
       <p className="crm-kicker">Lead management</p>
       <h1>Leads</h1>
       <p className="crm-lead">Select contacts, then compose. Unverified delivery fields show UNKNOWN. No fabricated lead rows.</p>
-      {message ? <div className="crm-banner warn">{message} {source ? `(source: ${source})` : ''}</div> : null}
+      {connectionBanner(connection, message)}
       {error ? <p className="crm-error">{error}</p> : null}
       <div className="crm-toolbar">
         <div className="crm-filters">
@@ -211,7 +249,11 @@ function LeadsPage() {
       </div>
       {!filtered.length ? (
         <div className="crm-empty">
-          No leads available from this host. Connect LEAD_AGENT_CRM_BASE_URL to the Mac lead agent (leads.db) or open the Streamlit CRM on the machine that owns the database. Empty state is intentional — production rows are never invented here.
+          {connection === 'not_connected'
+            ? 'Not connected — Mac has not pushed a CRM snapshot yet. This is not a zero-lead database; run scripts/crm-mac-sync/push_crm_sync.py when the Mac worker is online.'
+            : connection === 'sync_pending'
+              ? 'Sync pending — waiting for a successful Mac push (or last sync is stale). Leads will appear here after POST /api/crm/sync succeeds.'
+              : 'No leads match this filter. Synced CRM data is present; try clearing filters.'}
         </div>
       ) : (
         <div className="crm-table-wrap">
@@ -492,23 +534,29 @@ function CampaignsPage() {
 
 function InboxPage() {
   const [items, setItems] = useState<CrmInboxItem[]>([]);
+  const [connection, setConnection] = useState('');
   const [message, setMessage] = useState('');
   useEffect(() => {
-    void api<{ items: CrmInboxItem[]; message?: string }>('/api/admin/crm/inbox')
+    void api<{ items: CrmInboxItem[]; message?: string; connection?: string }>('/api/admin/crm/inbox')
       .then((data) => {
         setItems(data.items || []);
+        setConnection(data.connection || '');
         setMessage(data.message || '');
       })
-      .catch(() => setMessage('Inbox unavailable until lead agent reply path is configured.'));
+      .catch(() => setMessage('Inbox unavailable until CRM sync / reply path is configured.'));
   }, []);
   return (
     <>
       <p className="crm-kicker">Replies</p>
       <h1>Inbox / Replies</h1>
-      <p className="crm-lead">No auto-replies. Resend inbound or Gmail OAuth readonly must be configured on the lead agent.</p>
-      {message ? <div className="crm-banner warn">{message}</div> : null}
+      <p className="crm-lead">No auto-replies. Replies arrive via Mac sync and/or Resend inbound webhooks (tracking only).</p>
+      {connectionBanner(connection, message)}
       {!items.length ? (
-        <div className="crm-empty">No replies available. Reply detection is scaffold-only until inbound email or Gmail OAuth is wired on the Mac lead agent.</div>
+        <div className="crm-empty">
+          {connection === 'not_connected' || connection === 'sync_pending'
+            ? 'Not connected / sync pending — reply inbox stays empty until CRM sync (and optional inbound webhooks) are live.'
+            : 'No replies in the sync cache yet. Reply detection needs Resend inbound or Gmail OAuth readonly on Mac — never auto-replies.'}
+        </div>
       ) : (
         <div className="crm-table-wrap">
           <table className="crm-table">
@@ -534,23 +582,29 @@ function InboxPage() {
 
 function BookingsPage() {
   const [bookings, setBookings] = useState<CrmBookingItem[]>([]);
+  const [connection, setConnection] = useState('');
   const [message, setMessage] = useState('');
   useEffect(() => {
-    void api<{ bookings: CrmBookingItem[]; message?: string }>('/api/admin/crm/bookings')
+    void api<{ bookings: CrmBookingItem[]; message?: string; connection?: string }>('/api/admin/crm/bookings')
       .then((data) => {
         setBookings(data.bookings || []);
+        setConnection(data.connection || '');
         setMessage(data.message || '');
       })
-      .catch(() => setMessage('Bookings unavailable from lead agent.'));
+      .catch(() => setMessage('Bookings unavailable until CRM sync.'));
   }, []);
   return (
     <>
       <p className="crm-kicker">Consultations</p>
       <h1>Bookings</h1>
-      <p className="crm-lead">Confirmed bookings only. Site booking remains available; CRM sync stays local_only until the lead host is public.</p>
-      {message ? <div className="crm-banner warn">{message}</div> : null}
+      <p className="crm-lead">Confirmed bookings only. Site booking stays live; site→Mac reverse notify remains deferred. Mac may push BOOKED rows in the sync snapshot.</p>
+      {connectionBanner(connection, message)}
       {!bookings.length ? (
-        <div className="crm-empty">No confirmed CRM bookings to show. Production booking sync host is still deferred.</div>
+        <div className="crm-empty">
+          {connection === 'not_connected' || connection === 'sync_pending'
+            ? 'Not connected / sync pending — booking rows are not shown as zero until Mac sync succeeds.'
+            : 'No confirmed CRM bookings in the sync cache. Site booking works; reverse sync host is still deferred.'}
+        </div>
       ) : (
         <div className="crm-table-wrap">
           <table className="crm-table">
@@ -577,23 +631,41 @@ function BookingsPage() {
 
 function AnalyticsPage() {
   const [campaigns, setCampaigns] = useState<CrmCampaignSummary[]>([]);
+  const [connection, setConnection] = useState('');
   const [message, setMessage] = useState('');
+  const [historyCount, setHistoryCount] = useState(0);
   useEffect(() => {
-    void api<{ campaigns: CrmCampaignSummary[]; message?: string }>('/api/admin/crm/campaigns')
+    void api<{
+      campaigns: CrmCampaignSummary[];
+      message?: string;
+      connection?: string;
+      email_history?: unknown[];
+    }>('/api/admin/crm/campaigns')
       .then((data) => {
         setCampaigns(data.campaigns || []);
+        setConnection(data.connection || '');
         setMessage(data.message || '');
+        setHistoryCount(data.email_history?.length || 0);
       })
-      .catch(() => setMessage('Campaign analytics unavailable until lead agent is connected.'));
+      .catch(() => setMessage('Campaign analytics unavailable until CRM sync.'));
   }, []);
   return (
     <>
       <p className="crm-kicker">Performance</p>
       <h1>Analytics</h1>
-      <p className="crm-lead">Per-campaign accepted / delivered / bounced / replied / booked. Historical delivery stays UNKNOWN without webhook events.</p>
-      {message ? <div className="crm-banner warn">{message}</div> : null}
+      <p className="crm-lead">Per-campaign accepted / delivered / bounced / replied / booked. Historical delivery stays UNKNOWN without webhook events. Synced email history (incl. the 9 cohort sends) appears after Mac push.</p>
+      {connectionBanner(connection, message)}
+      {historyCount ? (
+        <p className="crm-muted" style={{ marginTop: '0.85rem' }}>
+          Email history rows in sync cache: <strong style={{ color: '#fff' }}>{historyCount}</strong>
+        </p>
+      ) : null}
       {!campaigns.length ? (
-        <div className="crm-empty">No remote campaign metrics yet. Local dry-run sends are logged under data/crm-send-log.json on the website host.</div>
+        <div className="crm-empty">
+          {connection === 'not_connected' || connection === 'sync_pending'
+            ? 'Not connected / sync pending — campaign metrics stay blank until Mac sync.'
+            : 'No campaign metrics in the sync cache yet. Local dry-run sends are logged under data/crm-send-log.json on this host.'}
+        </div>
       ) : (
         <div className="crm-table-wrap">
           <table className="crm-table">
@@ -630,30 +702,41 @@ function SettingsPage() {
   }, []);
   const safety = (data?.safety || {}) as Record<string, unknown>;
   const mac = (data?.mac_side_required || []) as string[];
+  const persistence = (data?.persistence || {}) as Record<string, unknown>;
   return (
     <>
       <p className="crm-kicker">Configuration</p>
       <h1>Settings</h1>
-      <p className="crm-lead">Owner-only admin auth reuses the existing BBLS admin session. CRM data requires the Mac lead agent.</p>
+      <p className="crm-lead">Owner-only admin auth. CRM data arrives via authenticated Mac→website push sync — the Mac is never exposed publicly.</p>
+      <div className="crm-panel">
+        <h2>Connection</h2>
+        <ul className="crm-muted" style={{ marginTop: '.75rem' }}>
+          <li>Status: {asText(data?.connection, 'not_connected')}</li>
+          <li>Last synced: {asText(data?.last_synced_at, '(never)')}</li>
+          <li>Stale: {String(data?.stale)}</li>
+          <li>CRM_SYNC_SECRET set: {String(data?.sync_secret_configured)}</li>
+          <li>Resend webhook secret set: {String(data?.resend_webhook_secret)}</li>
+          <li>Optional forward URL: {asText(data?.lead_agent_resend_webhook_url, '(not set)')}</li>
+          <li>Store: {asText(persistence.store, '—')}</li>
+        </ul>
+      </div>
       <div className="crm-panel">
         <h2>Safety flags</h2>
         <ul className="crm-muted" style={{ marginTop: '.75rem' }}>
           <li>EMAIL_OUTREACH_ENABLED: {String(safety.EMAIL_OUTREACH_ENABLED)}</li>
           <li>EMAIL_DRY_RUN: {String(safety.EMAIL_DRY_RUN)}</li>
           <li>MANUAL_SEND_LIVE_ENABLED: {String(safety.MANUAL_SEND_LIVE_ENABLED)}</li>
-          <li>Lead agent configured: {String(data?.lead_agent_configured)}</li>
-          <li>Resend webhook secret set: {String(data?.resend_webhook_secret)}</li>
-          <li>Forward URL: {asText(data?.lead_agent_resend_webhook_url, '(not set)')}</li>
+          <li>FOLLOWUPS_LIVE: {String(safety.FOLLOWUPS_LIVE ?? false)}</li>
         </ul>
       </div>
       <div className="crm-panel">
-        <h2>Mac / lead-agent remaining</h2>
+        <h2>Mac sync remaining</h2>
         <ul className="crm-muted" style={{ marginTop: '.75rem' }}>
           {mac.map((item) => <li key={item}>{item}</li>)}
         </ul>
       </div>
       <div className="crm-panel">
-        <h2>API contract for lead agent</h2>
+        <h2>Push-sync contract (Mac → website)</h2>
         <pre className="crm-preview" style={{ marginTop: '.75rem' }}>{JSON.stringify(data?.contract || {}, null, 2)}</pre>
       </div>
     </>

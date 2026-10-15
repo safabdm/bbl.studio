@@ -25,6 +25,8 @@ import {
   handleCrmSendCampaign,
   handleCrmSendTest,
   handleCrmSettings,
+  handleCrmSyncIngest,
+  handleCrmSyncStatus,
 } from './crm-api';
 import { processResendWebhook } from '../api/resend-webhook';
 
@@ -773,6 +775,36 @@ app.get('/api/admin/projects/:id/export', (c) => {
 
 registerPricingRoutes(app);
 
+/** Mac → website push sync (Bearer CRM_SYNC_SECRET). No admin cookie. */
+app.post('/api/crm/sync', async (c) => {
+  const raw = await c.req.text();
+  let body: unknown = {};
+  try {
+    body = raw ? JSON.parse(raw) : {};
+  } catch {
+    return c.json({ ok: false, message: 'Invalid JSON body.' }, 400);
+  }
+  const result = handleCrmSyncIngest(
+    {
+      authorization: c.req.header('authorization'),
+      'x-bbl-crm-sync-key': c.req.header('x-bbl-crm-sync-key'),
+      'x-bbl-crm-key': c.req.header('x-bbl-crm-key'),
+    },
+    body,
+    { rawBytes: Buffer.byteLength(raw, 'utf8') },
+  );
+  return c.json(result.body, result.status);
+});
+
+app.get('/api/crm/sync/status', (c) => {
+  const result = handleCrmSyncStatus({
+    authorization: c.req.header('authorization'),
+    'x-bbl-crm-sync-key': c.req.header('x-bbl-crm-sync-key'),
+    'x-bbl-crm-key': c.req.header('x-bbl-crm-key'),
+  });
+  return c.json(result.body, result.status);
+});
+
 app.get('/api/admin/crm/overview', async (c) => {
   const result = await handleCrmOverview(Boolean(requireAdmin(c)));
   return c.json(result.body, result.status);
@@ -850,6 +882,8 @@ app.post('/api/resend-webhook', async (c) => {
       duplicate: result.duplicate,
       forwarded: result.forwarded,
       stored: result.stored,
+      applied_to_crm: result.applied_to_crm,
+      matched_leads: result.matched_leads,
       event_id: result.event_id,
       type: result.type,
       message: result.message,

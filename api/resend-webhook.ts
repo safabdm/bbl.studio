@@ -1,12 +1,14 @@
 /**
  * Public Resend webhook ingress for Vercel.
- * Verifies Svix signatures, enforces idempotency, forwards raw body to the
- * lead agent when LEAD_AGENT_RESEND_WEBHOOK_URL is set.
+ * Verifies Svix signatures, enforces idempotency, applies delivery/bounce/
+ * complaint/reply status onto the CRM sync snapshot, and optionally forwards
+ * the raw body when LEAD_AGENT_RESEND_WEBHOOK_URL is set (Mac is usually offline).
  */
 import { createHmac, timingSafeEqual } from 'node:crypto';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { applyResendEventToSnapshot } from '../server/crm-webhook-apply';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 
@@ -14,6 +16,8 @@ export type ResendWebhookEnv = {
   RESEND_WEBHOOK_SECRET?: string;
   LEAD_AGENT_RESEND_WEBHOOK_URL?: string;
   RESEND_WEBHOOK_IDEMPOTENCY_PATH?: string;
+  CRM_SYNC_STORE_PATH?: string;
+  VERCEL?: string;
 };
 
 export type WebhookProcessResult = {
@@ -22,6 +26,8 @@ export type WebhookProcessResult = {
   duplicate?: boolean;
   forwarded?: boolean;
   stored?: boolean;
+  applied_to_crm?: boolean;
+  matched_leads?: number;
   event_id?: string | null;
   type?: string | null;
   message?: string;
@@ -171,6 +177,9 @@ export async function processResendWebhook(opts: {
 
   if (eventId) rememberEventId(eventId, env);
 
+  // Primary path: update website CRM snapshot (Mac is outbound-only / often offline).
+  const applied = applyResendEventToSnapshot(opts.body, env);
+
   const forwardUrl = (env.LEAD_AGENT_RESEND_WEBHOOK_URL || '').trim();
   let forwarded = false;
   if (forwardUrl) {
@@ -187,26 +196,33 @@ export async function processResendWebhook(opts: {
         body: opts.body,
       });
       forwarded = response.ok;
+      // Forward failure is non-fatal once the website snapshot is updated.
       if (!response.ok) {
         return {
-          ok: false,
-          status: 502,
+          ok: true,
+          status: 200,
           stored: Boolean(eventId),
           forwarded: false,
+          applied_to_crm: applied.applied,
+          matched_leads: applied.matched_leads,
           event_id: eventId,
           type: parsed.type,
-          message: `Lead agent webhook forward failed (${response.status}).`,
+          message: `Webhook applied to CRM snapshot; optional forward failed (${response.status}).`,
         };
       }
     } catch (error) {
       return {
-        ok: false,
-        status: 502,
+        ok: true,
+        status: 200,
         stored: Boolean(eventId),
         forwarded: false,
+        applied_to_crm: applied.applied,
+        matched_leads: applied.matched_leads,
         event_id: eventId,
         type: parsed.type,
-        message: error instanceof Error ? error.message : 'Forward failed.',
+        message: `Webhook applied to CRM snapshot; optional forward error: ${
+          error instanceof Error ? error.message : 'Forward failed.'
+        }`,
       };
     }
   }
@@ -217,10 +233,12 @@ export async function processResendWebhook(opts: {
     duplicate: false,
     forwarded,
     stored: Boolean(eventId),
+    applied_to_crm: applied.applied,
+    matched_leads: applied.matched_leads,
     event_id: eventId,
     type: parsed.type,
     message: forwarded
-      ? 'Webhook verified and forwarded to lead agent.'
-      : 'Webhook verified and recorded. Set LEAD_AGENT_RESEND_WEBHOOK_URL to forward.',
+      ? 'Webhook verified, applied to CRM snapshot, and forwarded.'
+      : 'Webhook verified and applied to CRM snapshot. Optional LEAD_AGENT_RESEND_WEBHOOK_URL not set (Mac outbound-only).',
   };
 }

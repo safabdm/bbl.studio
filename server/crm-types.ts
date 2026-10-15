@@ -1,15 +1,17 @@
 /**
- * CRM + email marketing API contract (website ↔ lead agent).
+ * CRM + email marketing types and push-sync contract (Mac → website).
  *
- * Lead agent (Mac / colocated with leads.db) should expose these under
- * LEAD_AGENT_CRM_BASE_URL (e.g. https://leads.bbl.studio) with the same
- * HMAC / shared-secret auth as booking sync when public.
+ * Architecture: Mac worker is outbound-only. It pushes snapshots to authenticated
+ * website endpoints. SQLite / the Mac are never exposed to the public internet.
+ * Website dashboard reads the server-side sync cache.
  *
- * Website never invents production lead rows. When the lead agent is
- * unreachable, responses use source: "unavailable" and empty arrays.
+ * When no successful sync exists, UI must show Not connected / Sync pending —
+ * never misleading zeros for unsynced data.
  */
 
 export type TrackingTriState = 'YES' | 'NO' | 'UNKNOWN';
+
+export type CrmConnectionStatus = 'not_connected' | 'sync_pending' | 'synced';
 
 export type CrmLead = {
   id: number | string;
@@ -27,13 +29,15 @@ export type CrmLead = {
   notes?: string | null;
   suppressed?: boolean;
   unsubscribed?: boolean;
-  /** Provider accepted the message (email.sent). Not delivery. */
+  /** Provider accepted the message (email.sent / local SENT). Not delivery. */
   email_accepted: TrackingTriState;
   delivered: TrackingTriState;
   bounced: TrackingTriState;
   replied: TrackingTriState;
   booked: TrackingTriState;
   booking_status?: string | null;
+  /** Resend / provider message ids for webhook matching. */
+  provider_message_ids?: string[];
 };
 
 export type CrmOverviewMetrics = {
@@ -64,6 +68,24 @@ export type CrmCampaignSummary = {
   sent_at?: string | null;
 };
 
+export type CrmEmailHistoryItem = {
+  id?: string;
+  lead_id?: number | string | null;
+  email: string;
+  business_name?: string | null;
+  subject?: string | null;
+  campaign_name?: string | null;
+  /** Resend email id / provider message id */
+  provider_message_id?: string | null;
+  status?: string | null;
+  dry_run?: boolean;
+  accepted: TrackingTriState;
+  delivered: TrackingTriState;
+  bounced: TrackingTriState;
+  replied: TrackingTriState;
+  sent_at?: string | null;
+};
+
 export type CrmInboxItem = {
   id: string;
   from_email: string;
@@ -84,26 +106,116 @@ export type CrmBookingItem = {
   status: 'confirmed' | 'unknown';
 };
 
-export type CrmDataSource = 'lead_agent' | 'unavailable' | 'local_draft';
+export type CrmSuppressionItem = {
+  email: string;
+  lead_id?: number | string | null;
+  reason?: string | null;
+  created_at?: string | null;
+};
+
+export type CrmSyncSnapshot = {
+  schema_version: 1;
+  last_synced_at: string | null;
+  source_host?: string | null;
+  leads: CrmLead[];
+  overview: CrmOverviewMetrics;
+  campaigns: CrmCampaignSummary[];
+  email_history: CrmEmailHistoryItem[];
+  inbox: CrmInboxItem[];
+  bookings: CrmBookingItem[];
+  suppressions: CrmSuppressionItem[];
+};
+
+export type CrmSyncPayload = {
+  schema_version?: 1;
+  synced_at?: string;
+  source_host?: string;
+  mode?: 'replace' | 'merge';
+  leads: CrmLead[];
+  overview?: CrmOverviewMetrics;
+  campaigns?: CrmCampaignSummary[];
+  email_history?: CrmEmailHistoryItem[];
+  inbox?: CrmInboxItem[];
+  bookings?: CrmBookingItem[];
+  suppressions?: CrmSuppressionItem[];
+};
+
+export type CrmSyncIngestResult =
+  | {
+      ok: true;
+      status: number;
+      message: string;
+      last_synced_at: string | null;
+      counts: {
+        leads: number;
+        email_history: number;
+        campaigns: number;
+        inbox: number;
+        bookings: number;
+        suppressions: number;
+      };
+    }
+  | { ok: false; status: number; message: string };
+
+/** Data provenance for admin CRM reads. */
+export type CrmDataSource =
+  | 'sync_snapshot'
+  | 'not_connected'
+  | 'sync_pending'
+  | 'local_draft'
+  /** @deprecated pull model retired — kept for older clients */
+  | 'lead_agent'
+  | 'unavailable';
 
 export type CrmEnvelope<T> = {
   ok: boolean;
   source: CrmDataSource;
+  connection: CrmConnectionStatus;
+  last_synced_at?: string | null;
   message?: string;
   data: T;
+  /** When false, UI must not render metric zeros as real counts. */
+  metrics_trusted?: boolean;
 };
 
-/** Lead-agent HTTP contract (document for Mac agent). */
+/**
+ * Push-sync contract (Mac → Vercel). Documented for the offline Mac worker.
+ * Mac never accepts inbound public traffic for CRM.
+ */
+export const CRM_PUSH_SYNC_CONTRACT = {
+  ingest: 'POST /api/crm/sync',
+  status: 'GET /api/crm/sync/status (Bearer; optional health)',
+  authHeader: 'Authorization: Bearer <CRM_SYNC_SECRET> or X-BBL-CRM-Sync-Key',
+  payload: {
+    schema_version: 1,
+    mode: 'replace | merge',
+    source_host: 'optional hostname label',
+    leads: 'CrmLead[] (required array; may be empty)',
+    email_history: 'CrmEmailHistoryItem[] incl. Resend message ids for the 9 cohort sends',
+    campaigns: 'CrmCampaignSummary[]',
+    inbox: 'CrmInboxItem[] (replies only; no auto-reply)',
+    bookings: 'CrmBookingItem[]',
+    suppressions: 'unsubscribe/suppression rows',
+    overview: 'optional; server recomputes if omitted',
+  },
+  notes: [
+    'Mac reads leads.db readonly and pushes JSON — never expose SQLite publicly',
+    'Website persists snapshot cache; Vercel /tmp is ephemeral — re-push after cold start',
+    'Resend webhooks land on website and update the snapshot in place',
+    'Booking site→Mac reverse notify remains deferred (preferences)',
+  ],
+} as const;
+
+/** @deprecated Use CRM_PUSH_SYNC_CONTRACT. Pull model is retired. */
 export const LEAD_AGENT_CRM_CONTRACT = {
-  overview: 'GET /integrations/crm/overview',
-  leads: 'GET /integrations/crm/leads?status=&category=&location=&email_status=&booked=',
-  leadPatch: 'PATCH /integrations/crm/leads/:id',
-  inbox: 'GET /integrations/crm/inbox',
-  bookings: 'GET /integrations/crm/bookings',
-  campaigns: 'GET /integrations/crm/campaigns',
-  campaignMetrics: 'GET /integrations/crm/campaigns/:id/metrics',
-  resendWebhook: 'POST /integrations/resend-webhook',
-  authHeader: 'X-BBL-CRM-Key or Authorization: Bearer <LEAD_AGENT_CRM_SECRET>',
+  ...CRM_PUSH_SYNC_CONTRACT,
+  overview: 'GET /api/admin/crm/overview (admin cookie; reads sync cache)',
+  leads: 'GET /api/admin/crm/leads?... (admin cookie; reads sync cache)',
+  inbox: 'GET /api/admin/crm/inbox',
+  bookings: 'GET /api/admin/crm/bookings',
+  campaigns: 'GET /api/admin/crm/campaigns',
+  resendWebhook: 'POST /api/resend-webhook',
+  authHeader: CRM_PUSH_SYNC_CONTRACT.authHeader,
 } as const;
 
 export type EmailTemplate = {

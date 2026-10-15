@@ -14,10 +14,13 @@ import {
   crmConfigStatus,
   fetchBookings,
   fetchCampaigns,
+  fetchEmailHistory,
   fetchInbox,
   fetchLeads,
   fetchOverview,
 } from './crm-lead-client';
+import { authorizeCrmSync, ingestCrmSync } from './crm-sync-ingest';
+import { connectionStatus } from './crm-sync-store';
 import type { CrmLead, ManualSendRequest } from './crm-types';
 import { safetySnapshot, selectedCount } from './crm-safety';
 
@@ -32,14 +35,26 @@ export async function handleCrmOverview(isAdmin: boolean, env = process.env): Pr
   const denied = adminOk(isAdmin);
   if (denied) return denied;
   const result = await fetchOverview(env);
+  const conn = connectionStatus(env);
   return {
-    status: result.ok ? 200 : 503,
+    status: 200,
     body: {
-      ok: result.ok,
+      ok: true,
       source: result.source,
+      connection: result.connection,
+      last_synced_at: result.last_synced_at,
       message: result.message,
-      metrics: result.data,
-      safety: safetySnapshot(env),
+      metrics: result.metrics_trusted ? result.data : null,
+      metrics_trusted: Boolean(result.metrics_trusted),
+      safety: {
+        ...safetySnapshot(env),
+        FOLLOWUPS_LIVE: false,
+      },
+      sync: {
+        status: conn.status,
+        stale: conn.stale,
+        last_synced_at: conn.last_synced_at,
+      },
     },
   };
 }
@@ -53,13 +68,16 @@ export async function handleCrmLeads(
   if (denied) return denied;
   const result = await fetchLeads(query, env);
   return {
-    status: result.ok || result.source === 'unavailable' ? 200 : 503,
+    status: 200,
     body: {
       ok: true,
       source: result.source,
+      connection: result.connection,
+      last_synced_at: result.last_synced_at,
       message: result.message,
       leads: result.data,
       empty: !result.data?.length,
+      metrics_trusted: Boolean(result.metrics_trusted),
     },
   };
 }
@@ -73,7 +91,9 @@ export async function handleCrmInbox(isAdmin: boolean, env = process.env): Promi
     body: {
       ok: true,
       source: result.source,
-      message: result.message || 'Reply detection is not live until inbound/Gmail is configured on the lead agent.',
+      connection: result.connection,
+      last_synced_at: result.last_synced_at,
+      message: result.message,
       items: result.data,
     },
   };
@@ -88,9 +108,9 @@ export async function handleCrmBookings(isAdmin: boolean, env = process.env): Pr
     body: {
       ok: true,
       source: result.source,
-      message:
-        result.message ||
-        'Booking sync remains local_only until a public lead-agent host is available. Confirmed bookings only — none fabricated here.',
+      connection: result.connection,
+      last_synced_at: result.last_synced_at,
+      message: result.message,
       bookings: result.data,
     },
   };
@@ -100,14 +120,18 @@ export async function handleCrmCampaigns(isAdmin: boolean, env = process.env): P
   const denied = adminOk(isAdmin);
   if (denied) return denied;
   const remote = await fetchCampaigns(env);
+  const history = await fetchEmailHistory(env);
   const localDrafts = listDrafts(env);
   return {
     status: 200,
     body: {
       ok: true,
       source: remote.source,
+      connection: remote.connection,
+      last_synced_at: remote.last_synced_at,
       message: remote.message,
       campaigns: remote.data,
+      email_history: history.data,
       drafts: localDrafts,
       templates: listTemplates(),
     },
@@ -229,6 +253,49 @@ export function handleCrmSelectionMeta(
       ok: true,
       selected_ids: selected_ids.map(String),
       selected_count: selectedCount(selected_ids),
+    },
+  };
+}
+
+/** Machine sync ingest — Bearer secret, not admin cookie. */
+export function handleCrmSyncIngest(
+  headers: { authorization?: string | null; 'x-bbl-crm-sync-key'?: string | null; 'x-bbl-crm-key'?: string | null },
+  body: unknown,
+  opts: { rawBytes?: number; env?: NodeJS.ProcessEnv } = {},
+): CrmJsonResult {
+  const env = opts.env || process.env;
+  const auth = authorizeCrmSync(headers, env);
+  if (!auth.ok) return { status: auth.status, body: { ok: false, message: auth.message } };
+  const result = ingestCrmSync(body, { rawBytes: opts.rawBytes, env });
+  if (!result.ok) return { status: result.status, body: { ok: false, message: result.message } };
+  return {
+    status: 200,
+    body: {
+      ok: true,
+      message: result.message,
+      last_synced_at: result.last_synced_at,
+      counts: result.counts,
+      connection: 'synced',
+    },
+  };
+}
+
+/** Lightweight sync health for Mac (Bearer). */
+export function handleCrmSyncStatus(
+  headers: { authorization?: string | null; 'x-bbl-crm-sync-key'?: string | null; 'x-bbl-crm-key'?: string | null },
+  env = process.env,
+): CrmJsonResult {
+  const auth = authorizeCrmSync(headers, env);
+  if (!auth.ok) return { status: auth.status, body: { ok: false, message: auth.message } };
+  const conn = connectionStatus(env);
+  return {
+    status: 200,
+    body: {
+      ok: true,
+      connection: conn.status,
+      last_synced_at: conn.last_synced_at,
+      stale: conn.stale,
+      message: conn.message,
     },
   };
 }

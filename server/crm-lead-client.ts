@@ -1,133 +1,171 @@
+/**
+ * CRM data access for the admin dashboard.
+ * Reads the Mac→website push-sync snapshot. Never invents lead rows.
+ * Pull-from-Mac is retired (Mac stays offline / outbound-only).
+ */
 import type {
   CrmBookingItem,
   CrmCampaignSummary,
+  CrmEmailHistoryItem,
   CrmEnvelope,
   CrmInboxItem,
   CrmLead,
   CrmOverviewMetrics,
 } from './crm-types';
-import { LEAD_AGENT_CRM_CONTRACT } from './crm-types';
+import { CRM_PUSH_SYNC_CONTRACT, LEAD_AGENT_CRM_CONTRACT } from './crm-types';
 import { safetySnapshot } from './crm-safety';
+import {
+  connectionStatus,
+  emptyOverview,
+  filterLeads,
+  hasSuccessfulSync,
+  readSnapshot,
+  syncSecretConfigured,
+  type CrmSyncStoreEnv,
+} from './crm-sync-store';
 
-export { LEAD_AGENT_CRM_CONTRACT };
+export { CRM_PUSH_SYNC_CONTRACT, LEAD_AGENT_CRM_CONTRACT };
 
-function baseUrl(env: NodeJS.ProcessEnv = process.env) {
-  return (env.LEAD_AGENT_CRM_BASE_URL || env.LEAD_AGENT_CRM_URL || '').replace(/\/$/, '');
-}
-
-function authHeaders(env: NodeJS.ProcessEnv = process.env): Record<string, string> {
-  const secret = env.LEAD_AGENT_CRM_SECRET || '';
-  if (!secret) return {};
+function envelopeForConnection<T>(
+  data: T,
+  env: CrmSyncStoreEnv,
+): CrmEnvelope<T> {
+  const conn = connectionStatus(env);
+  const trusted = conn.status === 'synced' || (conn.status === 'sync_pending' && Boolean(conn.last_synced_at));
+  const source =
+    conn.status === 'synced'
+      ? 'sync_snapshot'
+      : conn.status === 'sync_pending'
+        ? 'sync_pending'
+        : 'not_connected';
   return {
-    Authorization: `Bearer ${secret}`,
-    'X-BBL-CRM-Key': secret,
+    ok: true,
+    source,
+    connection: conn.status,
+    last_synced_at: conn.last_synced_at,
+    message: conn.message,
+    data,
+    metrics_trusted: trusted && hasSuccessfulSync(env),
   };
 }
 
-async function leadAgentGet<T>(
-  path: string,
-  env: NodeJS.ProcessEnv = process.env,
-): Promise<CrmEnvelope<T>> {
-  const root = baseUrl(env);
-  if (!root) {
+export async function fetchOverview(env: CrmSyncStoreEnv = process.env): Promise<CrmEnvelope<CrmOverviewMetrics | null>> {
+  const snapshot = readSnapshot(env);
+  const conn = connectionStatus(env);
+  if (!snapshot?.last_synced_at) {
     return {
       ok: true,
-      source: 'unavailable',
+      source: conn.status === 'sync_pending' ? 'sync_pending' : 'not_connected',
+      connection: conn.status,
+      last_synced_at: null,
+      message: conn.message,
+      data: null,
+      metrics_trusted: false,
+    };
+  }
+  return {
+    ok: true,
+    source: 'sync_snapshot',
+    connection: conn.status,
+    last_synced_at: conn.last_synced_at,
+    message: conn.message,
+    data: snapshot.overview || emptyOverview(),
+    metrics_trusted: true,
+  };
+}
+
+export async function fetchLeads(query = '', env: CrmSyncStoreEnv = process.env): Promise<CrmEnvelope<CrmLead[]>> {
+  const snapshot = readSnapshot(env);
+  if (!snapshot?.last_synced_at) {
+    return envelopeForConnection<CrmLead[]>([], env);
+  }
+  return envelopeForConnection(filterLeads(snapshot.leads, query), env);
+}
+
+export async function fetchInbox(env: CrmSyncStoreEnv = process.env): Promise<CrmEnvelope<CrmInboxItem[]>> {
+  const snapshot = readSnapshot(env);
+  if (!snapshot?.last_synced_at) {
+    return {
+      ...envelopeForConnection<CrmInboxItem[]>([], env),
       message:
-        'Lead agent CRM is not configured on this host (LEAD_AGENT_CRM_BASE_URL). Mac-side leads.db remains the source of truth.',
-      data: emptyForPath<T>(path),
+        connectionStatus(env).message +
+        ' Reply inbox is populated from Mac sync and/or Resend inbound webhooks — never auto-replies.',
     };
   }
+  return {
+    ...envelopeForConnection(snapshot.inbox || [], env),
+    message:
+      snapshot.inbox?.length
+        ? connectionStatus(env).message
+        : 'No replies in the sync cache. Reply detection needs Resend inbound or Gmail readonly on Mac (no auto-replies).',
+  };
+}
 
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), Number(env.LEAD_AGENT_CRM_TIMEOUT_MS || 8000));
-  try {
-    const response = await fetch(`${root}${path}`, {
-      method: 'GET',
-      headers: {
-        Accept: 'application/json',
-        ...authHeaders(env),
-      },
-      signal: controller.signal,
-    });
-    if (!response.ok) {
-      return {
-        ok: false,
-        source: 'unavailable',
-        message: `Lead agent returned ${response.status} for ${path}.`,
-        data: emptyForPath<T>(path),
-      };
-    }
-    const json = (await response.json()) as { ok?: boolean; data?: T } & T;
-    const data = (json.data !== undefined ? json.data : json) as T;
-    return { ok: true, source: 'lead_agent', data };
-  } catch (error) {
-    const message = error instanceof Error ? error.message : 'Lead agent unreachable.';
+export async function fetchBookings(env: CrmSyncStoreEnv = process.env): Promise<CrmEnvelope<CrmBookingItem[]>> {
+  const snapshot = readSnapshot(env);
+  if (!snapshot?.last_synced_at) {
     return {
-      ok: false,
-      source: 'unavailable',
-      message: `Lead agent unreachable (${message}). Showing empty CRM state — no fabricated leads.`,
-      data: emptyForPath<T>(path),
+      ...envelopeForConnection<CrmBookingItem[]>([], env),
+      message:
+        connectionStatus(env).message +
+        ' Booking rows appear after Mac sync. Site→Mac reverse booking notify remains deferred (local_only).',
     };
-  } finally {
-    clearTimeout(timer);
   }
+  return {
+    ...envelopeForConnection(snapshot.bookings || [], env),
+    message:
+      snapshot.bookings?.length
+        ? connectionStatus(env).message
+        : 'No confirmed CRM bookings in the sync cache. Site booking works; reverse sync to Mac remains deferred until a durable host is approved.',
+  };
 }
 
-function emptyForPath<T>(path: string): T {
-  if (path.includes('/overview')) {
-    return {
-      total_leads: 0,
-      new_leads: 0,
-      contacted_leads: 0,
-      emails_sent: 0,
-      emails_delivered: 0,
-      emails_bounced: 0,
-      replies: 0,
-      booked: 0,
-      conversion_rate: null,
-      last_activity_at: null,
-    } as T;
+export async function fetchCampaigns(env: CrmSyncStoreEnv = process.env): Promise<CrmEnvelope<CrmCampaignSummary[]>> {
+  const snapshot = readSnapshot(env);
+  if (!snapshot?.last_synced_at) {
+    return envelopeForConnection<CrmCampaignSummary[]>([], env);
   }
-  return [] as T;
+  return envelopeForConnection(snapshot.campaigns || [], env);
 }
 
-export async function fetchOverview(env: NodeJS.ProcessEnv = process.env) {
-  return leadAgentGet<CrmOverviewMetrics>(LEAD_AGENT_CRM_CONTRACT.overview.replace('GET ', ''), env);
-}
-
-export async function fetchLeads(query = '', env: NodeJS.ProcessEnv = process.env) {
-  const path = `${LEAD_AGENT_CRM_CONTRACT.leads.split('?')[0]}${query ? `?${query}` : ''}`;
-  return leadAgentGet<CrmLead[]>(path.replace('GET ', ''), env);
-}
-
-export async function fetchInbox(env: NodeJS.ProcessEnv = process.env) {
-  return leadAgentGet<CrmInboxItem[]>(LEAD_AGENT_CRM_CONTRACT.inbox.replace('GET ', ''), env);
-}
-
-export async function fetchBookings(env: NodeJS.ProcessEnv = process.env) {
-  return leadAgentGet<CrmBookingItem[]>(LEAD_AGENT_CRM_CONTRACT.bookings.replace('GET ', ''), env);
-}
-
-export async function fetchCampaigns(env: NodeJS.ProcessEnv = process.env) {
-  return leadAgentGet<CrmCampaignSummary[]>(LEAD_AGENT_CRM_CONTRACT.campaigns.replace('GET ', ''), env);
+export async function fetchEmailHistory(env: CrmSyncStoreEnv = process.env): Promise<CrmEnvelope<CrmEmailHistoryItem[]>> {
+  const snapshot = readSnapshot(env);
+  if (!snapshot?.last_synced_at) {
+    return envelopeForConnection<CrmEmailHistoryItem[]>([], env);
+  }
+  return envelopeForConnection(snapshot.email_history || [], env);
 }
 
 export function crmConfigStatus(env: NodeJS.ProcessEnv = process.env) {
+  const conn = connectionStatus(env);
   return {
-    lead_agent_configured: Boolean(baseUrl(env)),
-    lead_agent_base_url: baseUrl(env) || null,
+    connection: conn.status,
+    last_synced_at: conn.last_synced_at,
+    stale: conn.stale,
+    sync_secret_configured: syncSecretConfigured(env),
+    /** @deprecated pull model retired */
+    lead_agent_configured: syncSecretConfigured(env),
+    lead_agent_base_url: null,
     resend_webhook_secret: Boolean(env.RESEND_WEBHOOK_SECRET),
     lead_agent_resend_webhook_url: env.LEAD_AGENT_RESEND_WEBHOOK_URL || null,
-    contract: LEAD_AGENT_CRM_CONTRACT,
-    safety: safetySnapshot(env),
+    contract: CRM_PUSH_SYNC_CONTRACT,
+    safety: {
+      ...safetySnapshot(env),
+      FOLLOWUPS_LIVE: false,
+    },
+    persistence: {
+      store: env.VERCEL ? '/tmp/bbls-crm-sync-snapshot.json (ephemeral)' : './data/crm-sync-snapshot.json',
+      note: 'On Vercel, /tmp is not durable across instances — Mac should push on a schedule (e.g. every 15–60 min).',
+    },
     mac_side_required: [
-      'leads.db + Streamlit CRM on Mac / colocated host',
-      'integration_server.py exposing CRM + resend-webhook routes',
-      'LEAD_AGENT_CRM_BASE_URL (+ secret) on Vercel when host is public',
-      'RESEND_WEBHOOK_SECRET on website + lead agent',
-      'Reply path (Resend inbound or Gmail OAuth) still scaffold-only',
-      'Booking sync production host still deferred',
+      'Run scripts/crm-mac-sync/push_crm_sync.py against local leads.db (readonly)',
+      'Set CRM_SYNC_SECRET on Vercel and Mac (.env) — same value',
+      'POST snapshots to POST /api/crm/sync (Mac → website only)',
+      'Do not expose SQLite or Mac ports to the public internet',
+      'Point Resend webhooks at https://www.bbl.studio/api/resend-webhook',
+      'Reply path (Resend inbound or Gmail OAuth) still optional / scaffold',
+      'Booking site→Mac reverse notify still deferred (preferences)',
+      'Keep EMAIL_OUTREACH_ENABLED=false, EMAIL_DRY_RUN=true, MANUAL_SEND_LIVE_ENABLED=false, FOLLOWUPS_LIVE=false',
     ],
   };
 }

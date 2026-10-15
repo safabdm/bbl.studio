@@ -30,6 +30,8 @@ import {
   handleCrmSendCampaign,
   handleCrmSendTest,
   handleCrmSettings,
+  handleCrmSyncIngest,
+  handleCrmSyncStatus,
 } from '../server/crm-api.js';
 
 export const config = { maxDuration: 30 };
@@ -319,10 +321,53 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
         duplicate: result.duplicate,
         forwarded: result.forwarded,
         stored: result.stored,
+        applied_to_crm: result.applied_to_crm,
+        matched_leads: result.matched_leads,
         event_id: result.event_id,
         type: result.type,
         message: result.message,
       });
+    }
+
+    if (matches(path, '/api/crm/sync') && method === 'POST') {
+      const raw = await readRawBody(req);
+      let body: unknown = {};
+      try {
+        body = raw ? JSON.parse(raw) : {};
+      } catch {
+        return send(res, 400, { ok: false, message: 'Invalid JSON body.' });
+      }
+      const result = handleCrmSyncIngest(
+        {
+          authorization: Array.isArray(req.headers.authorization)
+            ? req.headers.authorization[0]
+            : req.headers.authorization,
+          'x-bbl-crm-sync-key': Array.isArray(req.headers['x-bbl-crm-sync-key'])
+            ? req.headers['x-bbl-crm-sync-key'][0]
+            : req.headers['x-bbl-crm-sync-key'],
+          'x-bbl-crm-key': Array.isArray(req.headers['x-bbl-crm-key'])
+            ? req.headers['x-bbl-crm-key'][0]
+            : req.headers['x-bbl-crm-key'],
+        },
+        body,
+        { rawBytes: Buffer.byteLength(raw, 'utf8') },
+      );
+      return send(res, result.status, result.body);
+    }
+
+    if (matches(path, '/api/crm/sync/status') && method === 'GET') {
+      const result = handleCrmSyncStatus({
+        authorization: Array.isArray(req.headers.authorization)
+          ? req.headers.authorization[0]
+          : req.headers.authorization,
+        'x-bbl-crm-sync-key': Array.isArray(req.headers['x-bbl-crm-sync-key'])
+          ? req.headers['x-bbl-crm-sync-key'][0]
+          : req.headers['x-bbl-crm-sync-key'],
+        'x-bbl-crm-key': Array.isArray(req.headers['x-bbl-crm-key'])
+          ? req.headers['x-bbl-crm-key'][0]
+          : req.headers['x-bbl-crm-key'],
+      });
+      return send(res, result.status, result.body);
     }
 
     if (matches(path, '/api/admin/crm/overview') && method === 'GET') {
