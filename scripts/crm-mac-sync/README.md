@@ -12,9 +12,10 @@ Outbound-only sync from local `leads.db` → BBL Studio website CRM cache.
 
 ## Setup
 
-1. Set the same secret on Vercel and Mac:
+1. Set Vercel durable DB + the same sync secret on Mac:
 
 ```bash
+# Vercel: CRM_DATABASE_URL=<Neon pooled URL>  (required — /tmp CRM storage is disabled)
 export CRM_SYNC_SECRET='long-random-secret'
 # Vercel project env: CRM_SYNC_SECRET=<same>
 ```
