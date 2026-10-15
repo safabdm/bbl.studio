@@ -1,26 +1,12 @@
 import type { IncomingMessage, ServerResponse } from 'node:http';
-import { createHmac, timingSafeEqual } from 'node:crypto';
+import {
+  adminCookieHeader,
+  adminName,
+  matchAdmin,
+  signAdminToken,
+} from '../../server/admin-auth.js';
 
 export const config = { maxDuration: 30 };
-
-const ADMIN_COOKIE = 'bbls_admin_session';
-const ADMIN_EMAIL = (process.env.ADMIN_EMAIL || 'admin@bbls.studio').toLowerCase();
-const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'S@f@1371';
-const ADMIN_NAME = process.env.ADMIN_NAME || 'BBLS Studio';
-const SESSION_SECRET = process.env.SESSION_SECRET || 'bbls-local-dev-session-secret-not-for-production';
-
-function same(left: string, right: string) {
-  const a = Buffer.from(left);
-  const b = Buffer.from(right);
-  return a.length === b.length && timingSafeEqual(a, b);
-}
-
-function signAdminToken() {
-  const exp = Date.now() + 12 * 60 * 60 * 1000;
-  const body = Buffer.from(JSON.stringify({ k: 'admin-v2', e: ADMIN_EMAIL, exp })).toString('base64url');
-  const sig = createHmac('sha256', SESSION_SECRET).update(body).digest('base64url');
-  return `${body}.${sig}`;
-}
 
 function readJson(req: IncomingMessage) {
   return new Promise<Record<string, string>>((resolve) => {
@@ -56,16 +42,13 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
   const body = await readJson(req);
   const email = String(body.email || '').trim().toLowerCase();
   const password = String(body.password || '');
-  if (!same(email, ADMIN_EMAIL) || !same(password, ADMIN_PASSWORD)) {
+  if (!matchAdmin(email, password)) {
     res.statusCode = 401;
     res.end(JSON.stringify({ ok: false, message: 'Invalid credentials.' }));
     return;
   }
 
   res.statusCode = 200;
-  res.setHeader(
-    'Set-Cookie',
-    `${ADMIN_COOKIE}=${encodeURIComponent(signAdminToken())}; Path=/; HttpOnly; SameSite=Lax; Secure; Max-Age=${12 * 3600}`,
-  );
-  res.end(JSON.stringify({ ok: true, name: ADMIN_NAME }));
+  res.setHeader('Set-Cookie', adminCookieHeader(signAdminToken()));
+  res.end(JSON.stringify({ ok: true, name: adminName() }));
 }
