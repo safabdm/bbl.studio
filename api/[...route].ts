@@ -26,7 +26,7 @@ import {
   matchAdmin,
   readAdminToken,
   signAdminToken,
-} from '../server/admin-auth.js';
+} from './admin-auth.js';
 import {
   handleCrmBookings,
   handleCrmCampaigns,
