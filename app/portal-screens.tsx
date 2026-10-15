@@ -43,6 +43,8 @@ function Shell({ title, children, back }: { title: string; children: ReactNode; 
           <span>bbls admin</span>
         </Link>
         <nav className="portal-actions" aria-label="Admin">
+          <Link className="glass-pill" to="/admin">CRM</Link>
+          <Link className="glass-pill" to="/admin/projects">Projects</Link>
           {back ? <Link className="glass-pill" to={back}>Back</Link> : null}
           <button
             className="glass-pill"
@@ -86,7 +88,7 @@ export function AdminLogin() {
       <div className="portal-login">
         <p className="portal-kicker">Private administrator access</p>
         <h1>BBLS Admin</h1>
-        <p className="portal-lead">Sign in to manage clients, pricing, and private project links.</p>
+        <p className="portal-lead">Sign in to open the CRM email dashboard, client portal, and private project links.</p>
         <form className="portal-card" onSubmit={onSubmit}>
           <div className="portal-field">
             <label htmlFor="admin-email">Email</label>
@@ -160,7 +162,7 @@ export function AdminHome() {
     <Shell title="BBLS Admin">
       <p className="portal-kicker">Boutique Brand & Launch Studio</p>
       <h1>Projects</h1>
-      <p className="portal-lead">Create a client, set pricing, then generate a private link.</p>
+      <p className="portal-lead">Create a client, set pricing, then generate a private link. CRM email marketing lives at <Link to="/admin">/admin</Link>.</p>
       <div className="portal-grid">
         <section className="portal-card">
           <h2>Open a project</h2>

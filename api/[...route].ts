@@ -17,6 +17,20 @@ import {
   sendConfirmation,
   sendDueReminders,
 } from './booking-core.js';
+import { processResendWebhook } from './resend-webhook.js';
+import {
+  handleCrmBookings,
+  handleCrmCampaigns,
+  handleCrmInbox,
+  handleCrmLeads,
+  handleCrmOverview,
+  handleCrmPreview,
+  handleCrmSaveDraft,
+  handleCrmSelectionMeta,
+  handleCrmSendCampaign,
+  handleCrmSendTest,
+  handleCrmSettings,
+} from '../server/crm-api.js';
 
 export const config = { maxDuration: 30 };
 
@@ -79,24 +93,36 @@ function cookieHeader(token: string, clear = false) {
   return `${ADMIN_COOKIE}=${value}; Path=/; HttpOnly; SameSite=Lax; Secure; Max-Age=${age}`;
 }
 
-function readJson(req: IncomingMessage) {
-  return new Promise<Record<string, string>>((resolve) => {
+function readRawBody(req: IncomingMessage) {
+  return new Promise<string>((resolve) => {
     const chunks: Buffer[] = [];
     req.on('data', (chunk) => {
       chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(String(chunk)));
     });
-    req.on('end', () => {
-      if (!chunks.length) {
-        resolve({});
-        return;
-      }
-      try {
-        resolve(JSON.parse(Buffer.concat(chunks).toString('utf8')) as Record<string, string>);
-      } catch {
-        resolve({});
-      }
-    });
-    req.on('error', () => resolve({}));
+    req.on('end', () => resolve(Buffer.concat(chunks).toString('utf8')));
+    req.on('error', () => resolve(''));
+  });
+}
+
+function readJson(req: IncomingMessage) {
+  return readRawBody(req).then((raw) => {
+    if (!raw) return {} as Record<string, string>;
+    try {
+      return JSON.parse(raw) as Record<string, string>;
+    } catch {
+      return {} as Record<string, string>;
+    }
+  });
+}
+
+function readJsonUnknown(req: IncomingMessage) {
+  return readRawBody(req).then((raw) => {
+    if (!raw) return {} as Record<string, unknown>;
+    try {
+      return JSON.parse(raw) as Record<string, unknown>;
+    } catch {
+      return {} as Record<string, unknown>;
+    }
   });
 }
 
@@ -276,6 +302,78 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
           },
         ],
       });
+    }
+
+    if (matches(path, '/api/resend-webhook') && method === 'POST') {
+      const raw = await readRawBody(req);
+      const result = await processResendWebhook({
+        body: raw,
+        headers: {
+          'svix-id': req.headers['svix-id'],
+          'svix-timestamp': req.headers['svix-timestamp'],
+          'svix-signature': req.headers['svix-signature'],
+        },
+      });
+      return send(res, result.status, {
+        ok: result.ok,
+        duplicate: result.duplicate,
+        forwarded: result.forwarded,
+        stored: result.stored,
+        event_id: result.event_id,
+        type: result.type,
+        message: result.message,
+      });
+    }
+
+    if (matches(path, '/api/admin/crm/overview') && method === 'GET') {
+      const result = await handleCrmOverview(admin);
+      return send(res, result.status, result.body);
+    }
+    if (matches(path, '/api/admin/crm/leads') && method === 'GET') {
+      const url = new URL(req.url || '/', 'https://www.bbl.studio');
+      const result = await handleCrmLeads(admin, url.searchParams.toString());
+      return send(res, result.status, result.body);
+    }
+    if (matches(path, '/api/admin/crm/inbox') && method === 'GET') {
+      const result = await handleCrmInbox(admin);
+      return send(res, result.status, result.body);
+    }
+    if (matches(path, '/api/admin/crm/bookings') && method === 'GET') {
+      const result = await handleCrmBookings(admin);
+      return send(res, result.status, result.body);
+    }
+    if (matches(path, '/api/admin/crm/campaigns') && method === 'GET') {
+      const result = await handleCrmCampaigns(admin);
+      return send(res, result.status, result.body);
+    }
+    if (matches(path, '/api/admin/crm/settings') && method === 'GET') {
+      const result = handleCrmSettings(admin);
+      return send(res, result.status, result.body);
+    }
+    if (matches(path, '/api/admin/crm/selection') && method === 'POST') {
+      const body = await readJsonUnknown(req);
+      const result = handleCrmSelectionMeta(admin, body as { selected_ids?: Array<number | string> });
+      return send(res, result.status, result.body);
+    }
+    if (matches(path, '/api/admin/crm/preview') && method === 'POST') {
+      const body = await readJsonUnknown(req);
+      const result = await handleCrmPreview(admin, body as never);
+      return send(res, result.status, result.body);
+    }
+    if (matches(path, '/api/admin/crm/drafts') && method === 'POST') {
+      const body = await readJsonUnknown(req);
+      const result = await handleCrmSaveDraft(admin, body as never);
+      return send(res, result.status, result.body);
+    }
+    if (matches(path, '/api/admin/crm/send-test') && method === 'POST') {
+      const body = await readJsonUnknown(req);
+      const result = await handleCrmSendTest(admin, body as never);
+      return send(res, result.status, result.body);
+    }
+    if (matches(path, '/api/admin/crm/send') && method === 'POST') {
+      const body = await readJsonUnknown(req);
+      const result = await handleCrmSendCampaign(admin, body as never);
+      return send(res, result.status, result.body);
     }
 
     return send(res, 404, { ok: false, message: 'Not found.' });

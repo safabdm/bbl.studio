@@ -13,6 +13,20 @@ import { seedIfNeeded } from './seed';
 import { stripeClient, stripeMode } from './stripe';
 import { activeLinks, clientFacingPayload, registerPricingRoutes } from './admin-pricing';
 import { authorizeSuppressionList, processUnsubscribe, readSuppressions } from './unsubscribe';
+import {
+  handleCrmBookings,
+  handleCrmCampaigns,
+  handleCrmInbox,
+  handleCrmLeads,
+  handleCrmOverview,
+  handleCrmPreview,
+  handleCrmSaveDraft,
+  handleCrmSelectionMeta,
+  handleCrmSendCampaign,
+  handleCrmSendTest,
+  handleCrmSettings,
+} from './crm-api';
+import { processResendWebhook } from '../api/resend-webhook';
 
 try {
   seedIfNeeded();
@@ -758,5 +772,90 @@ app.get('/api/admin/projects/:id/export', (c) => {
 });
 
 registerPricingRoutes(app);
+
+app.get('/api/admin/crm/overview', async (c) => {
+  const result = await handleCrmOverview(Boolean(requireAdmin(c)));
+  return c.json(result.body, result.status);
+});
+
+app.get('/api/admin/crm/leads', async (c) => {
+  const url = new URL(c.req.url);
+  const result = await handleCrmLeads(Boolean(requireAdmin(c)), url.searchParams.toString());
+  return c.json(result.body, result.status);
+});
+
+app.get('/api/admin/crm/inbox', async (c) => {
+  const result = await handleCrmInbox(Boolean(requireAdmin(c)));
+  return c.json(result.body, result.status);
+});
+
+app.get('/api/admin/crm/bookings', async (c) => {
+  const result = await handleCrmBookings(Boolean(requireAdmin(c)));
+  return c.json(result.body, result.status);
+});
+
+app.get('/api/admin/crm/campaigns', async (c) => {
+  const result = await handleCrmCampaigns(Boolean(requireAdmin(c)));
+  return c.json(result.body, result.status);
+});
+
+app.get('/api/admin/crm/settings', (c) => {
+  const result = handleCrmSettings(Boolean(requireAdmin(c)));
+  return c.json(result.body, result.status);
+});
+
+app.post('/api/admin/crm/selection', async (c) => {
+  const body = await c.req.json<{ selected_ids?: Array<number | string> }>().catch(() => ({}));
+  const result = handleCrmSelectionMeta(Boolean(requireAdmin(c)), body);
+  return c.json(result.body, result.status);
+});
+
+app.post('/api/admin/crm/preview', async (c) => {
+  const body = await c.req.json().catch(() => ({}));
+  const result = await handleCrmPreview(Boolean(requireAdmin(c)), body);
+  return c.json(result.body, result.status);
+});
+
+app.post('/api/admin/crm/drafts', async (c) => {
+  const body = await c.req.json().catch(() => ({}));
+  const result = await handleCrmSaveDraft(Boolean(requireAdmin(c)), body);
+  return c.json(result.body, result.status);
+});
+
+app.post('/api/admin/crm/send-test', async (c) => {
+  const body = await c.req.json().catch(() => ({}));
+  const result = await handleCrmSendTest(Boolean(requireAdmin(c)), body);
+  return c.json(result.body, result.status);
+});
+
+app.post('/api/admin/crm/send', async (c) => {
+  const body = await c.req.json().catch(() => ({}));
+  const result = await handleCrmSendCampaign(Boolean(requireAdmin(c)), body);
+  return c.json(result.body, result.status);
+});
+
+app.post('/api/resend-webhook', async (c) => {
+  const body = await c.req.text();
+  const result = await processResendWebhook({
+    body,
+    headers: {
+      'svix-id': c.req.header('svix-id') || undefined,
+      'svix-timestamp': c.req.header('svix-timestamp') || undefined,
+      'svix-signature': c.req.header('svix-signature') || undefined,
+    },
+  });
+  return c.json(
+    {
+      ok: result.ok,
+      duplicate: result.duplicate,
+      forwarded: result.forwarded,
+      stored: result.stored,
+      event_id: result.event_id,
+      type: result.type,
+      message: result.message,
+    },
+    result.status,
+  );
+});
 
 export default app;
