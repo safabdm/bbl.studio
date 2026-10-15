@@ -41,7 +41,7 @@ python3 push_crm_sync.py
 
 ## Suggested schedule
 
-On Vercel the snapshot lives under `/tmp` (ephemeral). Re-push every 15–60 minutes with `launchd` or cron when the Mac is awake.
+Neon persists snapshots across deploys. Still re-push every 15–60 minutes with `launchd` or cron when the Mac is awake so CRM stays current.
 
 ## Auth
 
