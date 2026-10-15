@@ -14,7 +14,7 @@
     "format": "oxfmt",
     "test:unsubscribe": "tsx --test server/unsubscribe.test.ts",
     "test:booking": "tsx --test server/booking.test.ts",
-    "test:admin-auth": "tsx --test server/admin-auth.test.ts"
+    "test:admin-auth": "tsx --test api/admin-auth.test.ts server/admin-auth.test.ts"
   },
   "dependencies": {
     "@base-ui/react": "1.7.0",
