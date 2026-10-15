@@ -15,7 +15,8 @@
     "test:unsubscribe": "tsx --test server/unsubscribe.test.ts",
     "test:booking": "tsx --test server/booking.test.ts",
     "test:crm": "tsx --test server/crm-safety.test.ts server/crm-campaigns.test.ts server/resend-webhook.test.ts server/crm-freshness.test.ts server/crm-sync.test.ts",
-    "test:crm-all": "pnpm test:unsubscribe && pnpm test:booking && pnpm test:crm"
+    "test:admin-auth": "tsx --test server/admin-auth.test.ts",
+    "test:crm-all": "pnpm test:unsubscribe && pnpm test:booking && pnpm test:crm && pnpm test:admin-auth"
   },
   "dependencies": {
     "@base-ui/react": "1.7.0",
