@@ -12,8 +12,8 @@
  * Credentials: CRM_DATABASE_URL (preferred) or DATABASE_URL — server-side only.
  */
 import { neon, type NeonQueryFunction } from '@neondatabase/serverless';
-import type { CrmSyncSnapshot } from './crm-types';
-import { emptySnapshot } from './crm-sync-store-empty';
+import type { CrmSyncSnapshot } from './crm-types.js';
+import { emptySnapshot } from './crm-sync-store-empty.js';
 
 export type CrmDbEnv = {
   CRM_DATABASE_URL?: string;

@@ -12,7 +12,7 @@ import type {
   CrmSyncPayload,
   CrmSyncSnapshot,
   TrackingTriState,
-} from './crm-types';
+} from './crm-types.js';
 import {
   CRM_SYNC_MAX_BYTES,
   computeOverviewFromLeads,
@@ -22,14 +22,14 @@ import {
   syncSecretConfigured,
   writeSnapshot,
   type CrmSyncStoreEnv,
-} from './crm-sync-store';
-import { isDurableDbConfigured, requiresDurableDb } from './crm-db';
+} from './crm-sync-store.js';
+import { isDurableDbConfigured, requiresDurableDb } from './crm-db.js';
 import {
   mergeMacEmailHistory,
   mergeMacLeadsIntoExisting,
   type CrmEmailHistoryWithMeta,
   type CrmLeadWithMeta,
-} from './crm-freshness';
+} from './crm-freshness.js';
 
 function safeEqual(left: string, right: string) {
   const a = Buffer.from(left);

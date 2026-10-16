@@ -23,7 +23,7 @@ import type {
   CrmOverviewMetrics,
   CrmSyncSnapshot,
   TrackingTriState,
-} from './crm-types';
+} from './crm-types.js';
 import {
   crmDatabaseUrl,
   dbReadSnapshot,
@@ -31,9 +31,9 @@ import {
   isDurableDbConfigured,
   requiresDurableDb,
   type CrmDbEnv,
-} from './crm-db';
-import { emptyOverview, emptySnapshot } from './crm-sync-store-empty';
-import { resolveProjectRoot } from './project-root';
+} from './crm-db.js';
+import { emptyOverview, emptySnapshot } from './crm-sync-store-empty.js';
+import { resolveProjectRoot } from './project-root.js';
 
 export { emptyOverview, emptySnapshot };
 

@@ -9,7 +9,7 @@ import {
   listTemplates,
   saveDraft,
   sendTestDryRun,
-} from './crm-campaigns';
+} from './crm-campaigns.js';
 import {
   crmConfigStatus,
   fetchBookings,
@@ -18,11 +18,11 @@ import {
   fetchInbox,
   fetchLeads,
   fetchOverview,
-} from './crm-lead-client';
-import { authorizeCrmSync, ingestCrmSync } from './crm-sync-ingest';
-import { connectionStatus } from './crm-sync-store';
-import type { CrmLead, ManualSendRequest } from './crm-types';
-import { safetySnapshot, selectedCount } from './crm-safety';
+} from './crm-lead-client.js';
+import { authorizeCrmSync, ingestCrmSync } from './crm-sync-ingest.js';
+import { connectionStatus } from './crm-sync-store.js';
+import type { CrmLead, ManualSendRequest } from './crm-types.js';
+import { safetySnapshot, selectedCount } from './crm-safety.js';
 
 export type CrmJsonResult = { status: number; body: Record<string, unknown> };
 

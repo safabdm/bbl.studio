@@ -1,4 +1,4 @@
-import type { CrmOverviewMetrics, CrmSyncSnapshot } from './crm-types';
+import type { CrmOverviewMetrics, CrmSyncSnapshot } from './crm-types.js';
 
 export function emptyOverview(): CrmOverviewMetrics {
   return {

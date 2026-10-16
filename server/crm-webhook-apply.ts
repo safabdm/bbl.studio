@@ -3,20 +3,20 @@
  * No auto-replies. Delivery truth only from signed events.
  * Uses freshness merge so webhook state outranks older Mac sync fields.
  */
-import type { CrmEmailHistoryItem, CrmInboxItem, TrackingTriState } from './crm-types';
+import type { CrmEmailHistoryItem, CrmInboxItem, TrackingTriState } from './crm-types.js';
 import {
   computeOverviewFromLeads,
   emptySnapshot,
   readSnapshot,
   writeSnapshot,
   type CrmSyncStoreEnv,
-} from './crm-sync-store';
+} from './crm-sync-store.js';
 import {
   mergeEmailHistoryFreshness,
   mergeLeadFreshness,
   type CrmEmailHistoryWithMeta,
   type CrmLeadWithMeta,
-} from './crm-freshness';
+} from './crm-freshness.js';
 
 export type ResendEventMap = {
   email_accepted?: TrackingTriState;
