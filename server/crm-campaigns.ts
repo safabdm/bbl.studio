@@ -17,7 +17,9 @@ import {
 } from './crm-safety';
 import { resolveProjectRoot } from './project-root';
 
-const root = resolveProjectRoot(import.meta.url);
+function projectRoot() {
+  return resolveProjectRoot(import.meta.url);
+}
 
 export const DEFAULT_TEMPLATES: EmailTemplate[] = [
   {
@@ -59,11 +61,11 @@ const previewSessions = new Map<string, { recipient_ids: string[]; created_at: n
 const PREVIEW_TTL_MS = 2 * 60 * 60 * 1000;
 
 function draftsPath(env: NodeJS.ProcessEnv = process.env) {
-  return resolve(root, env.CRM_DRAFTS_PATH || './data/crm-campaign-drafts.json');
+  return resolve(projectRoot(), env.CRM_DRAFTS_PATH || './data/crm-campaign-drafts.json');
 }
 
 function sendLogPath(env: NodeJS.ProcessEnv = process.env) {
-  return resolve(root, env.CRM_SEND_LOG_PATH || './data/crm-send-log.json');
+  return resolve(projectRoot(), env.CRM_SEND_LOG_PATH || './data/crm-send-log.json');
 }
 
 function readJsonFile<T>(path: string, fallback: T): T {
