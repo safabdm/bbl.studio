@@ -8,7 +8,7 @@ import {
   type ReactNode,
 } from 'react';
 import { Link, NavLink, Route, Routes, useNavigate, useSearchParams } from 'react-router-dom';
-import { BblWordmark } from '../components/bbls-mark';
+import { BblWordmark } from '../components/bbl-mark';
 import { api, usePrivateIndexing } from '../lib/portal';
 import type {
   CrmBookingItem,

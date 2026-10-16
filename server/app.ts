@@ -378,7 +378,7 @@ app.get('/api/portal/proposal.pdf', (c) => {
   );
   return c.body(createReadStream(path) as unknown as ReadableStream, 200, {
     'Content-Type': 'application/pdf',
-    'Content-Disposition': 'attachment; filename="bbls-proposal.pdf"',
+    'Content-Disposition': 'attachment; filename="bbl-proposal.pdf"',
     'X-Robots-Tag': 'noindex, nofollow',
   });
 });
@@ -448,7 +448,7 @@ app.get('/api/portal/agreement.pdf', (c) => {
   if (!acceptance?.pdf_path) return c.json({ ok: false, message: 'Agreement PDF is available after acceptance.' }, 404);
   return c.body(createReadStream(acceptance.pdf_path) as unknown as ReadableStream, 200, {
     'Content-Type': 'application/pdf',
-    'Content-Disposition': 'attachment; filename="bbls-agreement.pdf"',
+    'Content-Disposition': 'attachment; filename="bbl-agreement.pdf"',
     'X-Robots-Tag': 'noindex, nofollow',
   });
 });

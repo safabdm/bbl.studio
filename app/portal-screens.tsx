@@ -1,7 +1,7 @@
 import { FormEvent, type ReactNode, useEffect, useMemo, useState } from 'react';
 import './portal.css';
 import { Link, useNavigate, useParams } from 'react-router-dom';
-import { BblsMark } from '../components/bbls-mark';
+import { BblMark } from '../components/bbl-mark';
 import { PACKAGE_PRESETS } from '../server/packages';
 import { api, money, usePrivateIndexing } from '../lib/portal';
 
@@ -39,7 +39,7 @@ function Shell({ title, children, back }: { title: string; children: ReactNode; 
     <div className="portal-shell">
       <header className="portal-nav">
         <Link to="/admin" className="brand" aria-label="BBL admin home">
-          <BblsMark size={22} />
+          <BblMark size={22} />
           <span>bbl admin</span>
         </Link>
         <nav className="portal-actions" aria-label="Admin">
@@ -80,7 +80,7 @@ export function AdminLogin() {
       });
       navigate('/admin');
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Could not sign in. Use admin@bbls.studio and the current studio password.');
+      setError(err instanceof Error ? err.message : 'Could not sign in. Check the admin email and studio password.');
     }
   }
   return (
@@ -508,7 +508,7 @@ export function ClientPortal({ preview = false }: { preview?: boolean }) {
   return (
     <div className="portal-shell">
       <header className="portal-nav">
-        <span className="brand"><BblsMark size={22} /><span>bbl</span></span>
+        <span className="brand"><BblMark size={22} /><span>bbl</span></span>
         <span className="portal-muted">Private client portal</span>
       </header>
       <div className="portal-wrap">

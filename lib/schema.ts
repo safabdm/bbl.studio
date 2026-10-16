@@ -6,7 +6,7 @@ export function organizationNode() {
     '@type': ['Organization', 'ProfessionalService'],
     '@id': ORG_ID,
     name: STUDIO_NAME,
-    alternateName: ['BBLS', 'Boutique Brand & Launch Studio'],
+    alternateName: ['BBL Studio', 'Boutique Brand & Launch Studio'],
     url: `${SITE_URL}/`,
     image: `${SITE_URL}/og.png`,
     logo: `${SITE_URL}/apple-touch-icon.png`,

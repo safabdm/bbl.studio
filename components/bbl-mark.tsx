@@ -1,6 +1,6 @@
 type MarkVariant = 'white' | 'black';
 
-export function BblsMark({ size = 24, variant = 'white' }: { size?: number; variant?: MarkVariant }) {
+export function BblMark({ size = 24, variant = 'white' }: { size?: number; variant?: MarkVariant }) {
   return (
     <img
       src={variant === 'black' ? '/brand/bbl-mark-black.png?v=bbl-logo-20260924' : '/brand/bbl-mark-white.png?v=bbl-logo-20260924'}

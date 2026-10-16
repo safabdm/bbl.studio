@@ -1,4 +1,4 @@
-import { BblsMark } from '@/components/bbls-mark';
+import { BblMark } from '@/components/bbl-mark';
 import { EMAIL_HREF, PHONE, PHONE_HREF, STUDIO_NAME } from '@/lib/site';
 import { useEffect, useState } from 'react';
 import { Link, NavLink } from 'react-router-dom';
@@ -44,7 +44,7 @@ export function SiteFrame({ children }: { children: React.ReactNode }) {
       <ScrollVideo />
       <div className="site-layer">
         <nav className="glass-nav" aria-label="Primary">
-          <Link to="/" className="brand" onClick={() => setOpen(false)}><BblsMark size={26} /> bbl</Link>
+          <Link to="/" className="brand" onClick={() => setOpen(false)}><BblMark size={26} /> bbl</Link>
           <div className={`nav-links${open ? ' is-open' : ''}`}>
             {links.map((link) => (
               <NavLink key={link.to} to={link.to} onClick={() => setOpen(false)}>
@@ -61,7 +61,7 @@ export function SiteFrame({ children }: { children: React.ReactNode }) {
         </nav>
         <div id="content">{children}</div>
         <footer className="site-footer">
-          <Link to="/" className="footer-brand"><BblsMark size={20} /> bbl</Link>
+          <Link to="/" className="footer-brand"><BblMark size={20} /> bbl</Link>
           <p>{STUDIO_NAME}</p>
           <div className="footer-contacts">
             <Link to="/orange-county-web-design">Services</Link>
