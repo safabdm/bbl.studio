@@ -1,7 +1,7 @@
 import { FormEvent, type ReactNode, useEffect, useMemo, useState } from 'react';
 import './portal.css';
 import { Link, useNavigate, useParams } from 'react-router-dom';
-import { BblsMark } from '../components/bbls-mark';
+import { BblWordmark, BblsMark } from '../components/bbls-mark';
 import { PACKAGE_PRESETS } from '../server/packages';
 import { api, money, usePrivateIndexing } from '../lib/portal';
 
@@ -66,10 +66,13 @@ function Shell({ title, children, back }: { title: string; children: ReactNode; 
 export function AdminLogin() {
   const navigate = useNavigate();
   const [error, setError] = useState('');
-  usePrivateIndexing('BBLS Admin');
+  const [pending, setPending] = useState(false);
+  usePrivateIndexing('BBL Studio Admin');
   async function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const form = new FormData(event.currentTarget);
+    setError('');
+    setPending(true);
     try {
       await api('/api/admin/login', {
         method: 'POST',
@@ -80,30 +83,64 @@ export function AdminLogin() {
       });
       navigate('/admin');
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Could not sign in. Use admin@bbls.studio and the current studio password.');
+      setError(err instanceof Error ? err.message : 'Could not sign in. Check your email and password, then try again.');
+    } finally {
+      setPending(false);
     }
   }
   return (
-    <div className="portal-shell">
-      <div className="portal-login">
-        <p className="portal-kicker">Private administrator access</p>
-        <h1>BBLS Admin</h1>
-        <p className="portal-lead">Sign in to open the CRM email dashboard, client portal, and private project links.</p>
-        <form className="portal-card" onSubmit={onSubmit}>
+    <div className="portal-shell portal-login-shell">
+      <main className="portal-login">
+        <header className="portal-login-brand">
+          <BblWordmark height={42} />
+          <p className="portal-kicker">Private administrator access</p>
+          <h1>BBL Studio Admin</h1>
+          <p className="portal-lead">Sign in to open the CRM, client portal, and private project links.</p>
+        </header>
+        <form
+          className="portal-card portal-login-card"
+          onSubmit={onSubmit}
+          aria-describedby={error ? 'admin-login-error' : undefined}
+        >
           <div className="portal-field">
             <label htmlFor="admin-email">Email</label>
-            <input id="admin-email" name="email" type="email" autoComplete="username" defaultValue="admin@bbls.studio" required />
+            <input
+              id="admin-email"
+              name="email"
+              type="email"
+              autoComplete="username"
+              inputMode="email"
+              spellCheck={false}
+              defaultValue="admin@bbls.studio"
+              required
+              disabled={pending}
+              aria-invalid={error ? true : undefined}
+            />
           </div>
           <div className="portal-field">
             <label htmlFor="admin-password">Password</label>
-            <input id="admin-password" name="password" type="password" autoComplete="current-password" required />
+            <input
+              id="admin-password"
+              name="password"
+              type="password"
+              autoComplete="current-password"
+              required
+              disabled={pending}
+              aria-invalid={error ? true : undefined}
+            />
           </div>
-          {error ? <p className="portal-error" role="alert">{error}</p> : null}
-          <div className="portal-actions">
-            <button className="solid-pill" type="submit">Enter dashboard</button>
+          {error ? (
+            <p id="admin-login-error" className="portal-error" role="alert">
+              {error}
+            </p>
+          ) : null}
+          <div className="portal-actions portal-login-actions">
+            <button className="solid-pill portal-login-submit" type="submit" disabled={pending}>
+              {pending ? 'Signing in…' : 'Enter dashboard'}
+            </button>
           </div>
         </form>
-      </div>
+      </main>
     </div>
   );
 }
