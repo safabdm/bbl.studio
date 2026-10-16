@@ -25,6 +25,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import sqlite3
 import sys
 import urllib.error
@@ -81,9 +82,37 @@ def normalize_email(value: Any) -> str:
     return str(value or "").strip().lower()
 
 
+def has_valid_email(email: str) -> bool:
+    return bool(email) and "@" in email
+
+
+def is_truthy_int(value: Any) -> bool:
+    if value is None or value is False:
+        return False
+    if value is True:
+        return True
+    s = str(value).strip().lower()
+    return s in {"1", "true", "yes", "on"}
+
+
+_HTTP_200_RE = re.compile(r"(?:http\s*=\s*200|\bstatus(?:Code)?\s*[:=]\s*200\b)", re.I)
+
+
+def provider_accepted(provider_message_id: Any, detail: Any, provider: Any = None) -> bool:
+    """Accepted only with provider_message_id + successful provider response evidence."""
+    pmid = str(provider_message_id or "").strip()
+    if not pmid:
+        return False
+    detail_s = str(detail or "")
+    if _HTTP_200_RE.search(detail_s):
+        return True
+    # Some older rows store only "sent via Resend" without http=200 — those stay UNKNOWN.
+    _ = provider
+    return False
+
+
 def fetch_leads(conn: sqlite3.Connection) -> list[dict[str, Any]]:
     if not table_exists(conn, "leads"):
-        # Fallback common names
         for candidate in ("lead", "contacts"):
             if table_exists(conn, candidate):
                 return _fetch_leads_from(conn, candidate)
@@ -99,56 +128,84 @@ def _fetch_leads_from(conn: sqlite3.Connection, table: str) -> list[dict[str, An
         d = dict(row)
         email = normalize_email(d.get("email") or d.get("contact_email"))
         business = str(d.get("business_name") or d.get("business") or d.get("name") or "").strip()
-        if not email or "@" not in email or not business:
+        if not business:
             continue
         lead_id = d.get("id")
+        contactable = has_valid_email(email)
         status = d.get("status") or d.get("sales_status") or d.get("outreach_status")
-        email_status = d.get("email_status") or d.get("delivery_status")
-        accepted = tri(
-            d.get("email_accepted")
-            or d.get("accepted")
-            or (email_status if str(email_status or "").upper() in {"SENT", "ACCEPTED"} else None),
-            {"SENT", "ACCEPTED", "YES", "1", "TRUE"},
-        )
+        email_status = d.get("email_status") or d.get("delivery_status") or d.get("email_delivery_status")
+        outreach_status = str(d.get("email_outreach_status") or "").strip()
+
+        if not contactable:
+            # Include no-email leads; never auto-eligible for outreach.
+            email = ""
+            email_status = "NOT CONTACTABLE"
+            if not outreach_status or outreach_status.upper() in {"NEW", "NOT_READY", ""}:
+                outreach_status = "NOT_CONTACTABLE"
+
+        # Never invent acceptance from local SENT alone — history attach decides.
+        accepted = "UNKNOWN"
+        delivered = tri(d.get("delivered") or d.get("email_delivered"))
+        if delivered == "UNKNOWN":
+            delivered = tri(
+                d.get("email_delivery_status") if str(d.get("email_delivery_status") or "").upper() in {"YES", "NO", "DELIVERED"} else None,
+                {"DELIVERED", "YES"},
+            )
+        bounced = tri(d.get("bounced") or d.get("email_bounced"))
+        replied = tri(d.get("replied") or d.get("email_replied") or d.get("email_reply_status"), {"REPLIED", "YES"})
+
         out.append(
             {
                 "id": lead_id,
                 "business_name": business,
-                "contact_name": d.get("contact_name") or d.get("owner_name") or d.get("contact"),
+                "contact_name": d.get("contact_name")
+                or d.get("contact_first_name")
+                or d.get("owner_name")
+                or d.get("contact"),
                 "email": email,
                 "phone": d.get("phone"),
-                "location": d.get("location") or d.get("city") or d.get("area"),
+                "location": d.get("location") or d.get("city") or d.get("area") or d.get("address"),
                 "category": d.get("category") or d.get("business_type"),
                 "status": status,
                 "sales_status": d.get("sales_status"),
                 "email_status": email_status,
-                "last_contacted_at": d.get("last_contacted_at") or d.get("last_contacted"),
-                "last_activity_at": d.get("last_activity_at") or d.get("updated_at"),
-                "notes": d.get("notes"),
-                "suppressed": bool(d.get("suppressed") or d.get("is_suppressed")),
-                "unsubscribed": bool(d.get("unsubscribed") or d.get("is_unsubscribed")),
+                "email_outreach_status": outreach_status or None,
+                "contactable": contactable,
+                "last_contacted_at": d.get("last_contacted_at")
+                or d.get("last_contacted")
+                or d.get("last_email_sent_at")
+                or None,
+                "last_activity_at": d.get("last_activity_at")
+                or d.get("email_last_activity_at")
+                or d.get("updated_at")
+                or None,
+                "notes": d.get("notes") or d.get("review_notes"),
+                "suppressed": bool(d.get("suppressed") or d.get("is_suppressed") or d.get("opted_out")),
+                "unsubscribed": bool(d.get("unsubscribed") or d.get("is_unsubscribed") or d.get("opted_out")),
                 "email_accepted": accepted,
-                "delivered": tri(d.get("delivered") or d.get("email_delivered")),
-                "bounced": tri(d.get("bounced") or d.get("email_bounced")),
-                "replied": tri(d.get("replied") or d.get("email_replied")),
+                "delivered": delivered if delivered in {"YES", "NO", "UNKNOWN"} else "UNKNOWN",
+                "bounced": bounced,
+                "replied": replied,
                 "booked": tri(
                     d.get("booked")
                     or (str(status or "").upper() == "BOOKED")
-                    or d.get("booking_status"),
+                    or (str(d.get("sales_status") or "").upper() == "BOOKED")
+                    or d.get("booking_status")
+                    or d.get("booked_at"),
                     {"BOOKED", "YES", "1", "TRUE", "CONFIRMED"},
                 ),
                 "booking_status": d.get("booking_status"),
                 "provider_message_ids": [],
             }
         )
-        # keep unused cols lint quiet
         _ = cols
     return out
 
 
 def fetch_email_history(conn: sqlite3.Connection) -> list[dict[str, Any]]:
-    """Pull outreach send history including Resend message ids (the 9 cohort)."""
+    """Pull outreach send history including Resend message ids (actual table: email_outreach_history)."""
     candidates = [
+        "email_outreach_history",
         "email_send_history",
         "email_history",
         "outreach_sends",
@@ -158,50 +215,80 @@ def fetch_email_history(conn: sqlite3.Connection) -> list[dict[str, Any]]:
     ]
     table = next((t for t in candidates if table_exists(conn, t)), None)
     if not table:
-        # Try generic query against email_provider_events for message ids only
-        if table_exists(conn, "email_provider_events"):
-            return []
         return []
 
     cols = columns(conn, table)
     rows = conn.execute(f"SELECT * FROM {table} ORDER BY rowid DESC LIMIT 5000").fetchall()
     out: list[dict[str, Any]] = []
+    seen_keys: set[str] = set()
+
     for row in rows:
         d = dict(row)
         email = normalize_email(d.get("email") or d.get("to_email") or d.get("recipient"))
-        if not email or "@" not in email:
+        # History may exist for contactable leads only; skip blank emails.
+        if not has_valid_email(email):
             continue
-        provider_id = (
+
+        provider_id_raw = (
             d.get("provider_message_id")
             or d.get("resend_id")
             or d.get("resend_message_id")
             or d.get("message_id")
             or d.get("email_id")
         )
+        provider_id = str(provider_id_raw).strip() if provider_id_raw else ""
+        if provider_id == "":
+            provider_id = None
+
         status = str(d.get("status") or d.get("email_status") or "").upper() or None
-        dry_run = bool(d.get("dry_run"))
-        accepted = "YES" if status in {"SENT", "ACCEPTED"} and not dry_run else tri(d.get("accepted"))
-        if status in {"SENT", "ACCEPTED"} and dry_run:
-            # Still mark accepted UNKNOWN for dry_run; keep status
-            accepted = "UNKNOWN"
-        if status in {"SENT", "ACCEPTED"} and not dry_run:
+        dry_run = is_truthy_int(d.get("dry_run"))
+        # Preserve dry_run; DRY_RUN_SENT is never an actual send.
+        if status == "DRY_RUN_SENT":
+            dry_run = True
+
+        detail = d.get("detail") or d.get("provider_response") or d.get("response") or ""
+        accepted = "UNKNOWN"
+        if (
+            not dry_run
+            and status in {"SENT", "ACCEPTED"}
+            and provider_accepted(provider_id, detail, d.get("provider"))
+        ):
             accepted = "YES"
+        # Local SENT alone (no provider_message_id + http=200) stays UNKNOWN.
+
+        row_id = d.get("id")
+        sent_at = d.get("sent_at") or d.get("created_at")
+        # Idempotent key: prefer stable DB id, else provider id, else composite.
+        if row_id is not None and str(row_id).strip() != "":
+            hist_id = f"eoh:{row_id}"
+        elif provider_id:
+            hist_id = f"pmid:{provider_id}"
+        else:
+            hist_id = f"{email}:{d.get('campaign_id') or ''}:{sent_at or ''}:{status or ''}"
+
+        if hist_id in seen_keys:
+            continue
+        seen_keys.add(hist_id)
+
         out.append(
             {
-                "id": str(d.get("id") or provider_id or f"{email}:{d.get('sent_at') or ''}"),
+                "id": hist_id,
                 "lead_id": d.get("lead_id"),
                 "email": email,
                 "business_name": d.get("business_name"),
                 "subject": d.get("subject"),
-                "campaign_name": d.get("campaign_name") or d.get("campaign") or d.get("batch"),
-                "provider_message_id": str(provider_id) if provider_id else None,
+                "campaign_name": d.get("campaign_name")
+                or d.get("campaign")
+                or d.get("campaign_id")
+                or d.get("batch"),
+                "provider_message_id": provider_id,
                 "status": status,
                 "dry_run": dry_run,
                 "accepted": accepted,
-                "delivered": tri(d.get("delivered")),
-                "bounced": tri(d.get("bounced")),
-                "replied": tri(d.get("replied")),
-                "sent_at": d.get("sent_at") or d.get("created_at"),
+                "delivered": "UNKNOWN",  # delivery only from signed webhooks
+                "bounced": "UNKNOWN",
+                "replied": "UNKNOWN",
+                "sent_at": sent_at,
             }
         )
         _ = cols
@@ -217,7 +304,7 @@ def fetch_bookings(conn: sqlite3.Connection) -> list[dict[str, Any]]:
         for row in rows:
             d = dict(row)
             email = normalize_email(d.get("email") or d.get("lead_email"))
-            if not email or "@" not in email:
+            if not has_valid_email(email):
                 continue
             out.append(
                 {
@@ -227,7 +314,9 @@ def fetch_bookings(conn: sqlite3.Connection) -> list[dict[str, Any]]:
                     "lead_id": d.get("lead_id"),
                     "meeting_start": d.get("meeting_start") or d.get("starts_at"),
                     "booked_at": d.get("booked_at") or d.get("created_at"),
-                    "status": "confirmed" if str(d.get("status") or "confirmed").lower() in {"confirmed", "booked"} else "unknown",
+                    "status": "confirmed"
+                    if str(d.get("status") or "confirmed").lower() in {"confirmed", "booked"}
+                    else "unknown",
                 }
             )
         return out
@@ -235,7 +324,7 @@ def fetch_bookings(conn: sqlite3.Connection) -> list[dict[str, Any]]:
 
 
 def fetch_suppressions(conn: sqlite3.Connection) -> list[dict[str, Any]]:
-    for table in ("suppressions", "email_suppressions", "unsubscribes"):
+    for table in ("email_suppressions", "suppressions", "unsubscribes"):
         if not table_exists(conn, table):
             continue
         rows = conn.execute(f"SELECT * FROM {table}").fetchall()
@@ -243,7 +332,7 @@ def fetch_suppressions(conn: sqlite3.Connection) -> list[dict[str, Any]]:
         for row in rows:
             d = dict(row)
             email = normalize_email(d.get("email"))
-            if not email or "@" not in email:
+            if not has_valid_email(email):
                 continue
             out.append(
                 {
@@ -292,7 +381,7 @@ def fetch_campaigns(conn: sqlite3.Connection) -> list[dict[str, Any]]:
 
 
 def attach_provider_ids(leads: list[dict[str, Any]], history: list[dict[str, Any]]) -> None:
-    by_email = {l["email"]: l for l in leads}
+    by_email = {l["email"]: l for l in leads if has_valid_email(l.get("email") or "")}
     for item in history:
         lead = by_email.get(item["email"])
         if not lead:
@@ -302,14 +391,11 @@ def attach_provider_ids(leads: list[dict[str, Any]], history: list[dict[str, Any
             ids = lead.setdefault("provider_message_ids", [])
             if pid not in ids:
                 ids.append(pid)
-        if item.get("accepted") == "YES":
+        # Only promote acceptance from verified provider acceptance — never dry_run / bare SENT.
+        if item.get("accepted") == "YES" and not item.get("dry_run"):
             lead["email_accepted"] = "YES"
-        if item.get("delivered") == "YES":
-            lead["delivered"] = "YES"
-        if item.get("bounced") == "YES":
-            lead["bounced"] = "YES"
-        if item.get("replied") == "YES":
-            lead["replied"] = "YES"
+        # Delivery / bounce / reply stay UNKNOWN unless already YES from lead columns
+        # (website webhooks are SoT for those fields after sync).
 
 
 def build_payload(conn: sqlite3.Connection) -> dict[str, Any]:
@@ -320,7 +406,7 @@ def build_payload(conn: sqlite3.Connection) -> dict[str, Any]:
     suppressions = fetch_suppressions(conn)
     campaigns = fetch_campaigns(conn)
     for row in suppressions:
-        lead = next((l for l in leads if l["email"] == row["email"]), None)
+        lead = next((l for l in leads if l.get("email") and l["email"] == row["email"]), None)
         if lead:
             lead["suppressed"] = True
             if "unsub" in str(row.get("reason") or "").lower():
@@ -337,6 +423,42 @@ def build_payload(conn: sqlite3.Connection) -> dict[str, Any]:
         "inbox": [],  # replies preferred via Resend inbound on website; Mac may fill later
         "bookings": bookings,
         "suppressions": suppressions,
+    }
+
+
+def accounting_summary(payload: dict[str, Any]) -> dict[str, int]:
+    leads = payload.get("leads") or []
+    history = payload.get("email_history") or []
+    with_email = sum(1 for l in leads if has_valid_email(l.get("email") or ""))
+    without_email = len(leads) - with_email
+    not_contactable = sum(
+        1
+        for l in leads
+        if not l.get("contactable", has_valid_email(l.get("email") or ""))
+        or str(l.get("email_status") or "").upper() == "NOT CONTACTABLE"
+    )
+    dry_run_rows = sum(1 for h in history if h.get("dry_run"))
+    live_sent = sum(
+        1 for h in history if (not h.get("dry_run")) and str(h.get("status") or "").upper() == "SENT"
+    )
+    accepted_yes = sum(1 for h in history if h.get("accepted") == "YES" and not h.get("dry_run"))
+    accepted_unknown_live_sent = sum(
+        1
+        for h in history
+        if (not h.get("dry_run"))
+        and str(h.get("status") or "").upper() == "SENT"
+        and h.get("accepted") != "YES"
+    )
+    return {
+        "leads": len(leads),
+        "with_email": with_email,
+        "without_email": without_email,
+        "not_contactable": not_contactable,
+        "email_history": len(history),
+        "dry_run_history": dry_run_rows,
+        "live_sent_history": live_sent,
+        "accepted_yes": accepted_yes,
+        "live_sent_accepted_unknown": accepted_unknown_live_sent,
     }
 
 
@@ -383,19 +505,30 @@ def main() -> int:
     finally:
         conn.close()
 
+    summary = accounting_summary(payload)
     print(
         "[crm-mac-sync] snapshot:",
-        f"leads={len(payload['leads'])}",
-        f"email_history={len(payload['email_history'])}",
+        f"leads={summary['leads']}",
+        f"with_email={summary['with_email']}",
+        f"without_email={summary['without_email']}",
+        f"not_contactable={summary['not_contactable']}",
+        f"email_history={summary['email_history']}",
         f"campaigns={len(payload['campaigns'])}",
         f"bookings={len(payload['bookings'])}",
         f"suppressions={len(payload['suppressions'])}",
     )
-    live_hist = [h for h in payload["email_history"] if not h.get("dry_run") and h.get("status") in {"SENT", "ACCEPTED"}]
-    print(f"[crm-mac-sync] live SENT/ACCEPTED history rows: {len(live_hist)}")
+    print(
+        "[crm-mac-sync] accounting:",
+        f"dry_run_history={summary['dry_run_history']}",
+        f"live_sent={summary['live_sent_history']}",
+        f"accepted_yes={summary['accepted_yes']}",
+        f"live_sent_accepted_unknown={summary['live_sent_accepted_unknown']}",
+        "(delivery/bounce/reply default UNKNOWN)",
+    )
 
     if dry:
         out = Path(env("CRM_SYNC_DRY_RUN_PATH", "./crm-sync-payload.dry-run.json"))
+        # Scrub PII from console; full payload file is local-only for inspection.
         out.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
         print(f"[crm-mac-sync] dry-run wrote {out} — no POST")
         return 0

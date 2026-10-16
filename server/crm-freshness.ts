@@ -321,8 +321,11 @@ export function mergeMacEmailHistory(
   at?: string,
 ): CrmEmailHistoryWithMeta[] {
   const when = isoNow(at);
+  // Prefer stable Mac history id (eoh:N), then provider id, then composite — no dupes on repeat sync.
   const keyOf = (row: CrmEmailHistoryWithMeta) =>
-    row.provider_message_id || `${row.lead_id}:${row.email}:${row.sent_at || ''}`;
+    (row.id != null && String(row.id).trim() !== '' ? String(row.id) : null) ||
+    row.provider_message_id ||
+    `${row.lead_id}:${row.email}:${row.sent_at || ''}`;
   const map = new Map(existing.map((row) => [keyOf(row), row]));
   for (const row of incoming) {
     const key = keyOf(row);

@@ -64,6 +64,7 @@ export type SelectableLead = {
   unsubscribed?: boolean;
   bounced?: 'YES' | 'NO' | 'UNKNOWN';
   email_status?: string | null;
+  contactable?: boolean;
 };
 
 export function normalizeId(id: number | string) {
@@ -113,6 +114,15 @@ export function filterSendableRecipients(
     }
     if (lead.bounced === 'YES' || status === 'BOUNCED' || status === 'COMPLAINED') {
       excluded.push({ id: lead.id, reason: status === 'COMPLAINED' ? 'complained' : 'bounced' });
+      continue;
+    }
+    const statusLabel = String(lead.email_status || '').toUpperCase();
+    if (
+      lead.contactable === false ||
+      statusLabel === 'NOT CONTACTABLE' ||
+      statusLabel === 'NOT_CONTACTABLE'
+    ) {
+      excluded.push({ id: lead.id, reason: 'not_contactable' });
       continue;
     }
     if (!lead.email || !String(lead.email).includes('@')) {

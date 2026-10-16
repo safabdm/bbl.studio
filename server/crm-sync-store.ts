@@ -233,10 +233,11 @@ export function computeOverviewFromLeads(
   const statuses = leads.map((l) => String(l.status || l.sales_status || '').toLowerCase());
   const new_leads = statuses.filter((s) => !s || s === 'new').length;
   const contacted_leads = leads.filter(
-    (l) => l.email_accepted === 'YES' || Boolean(l.last_contacted_at) || String(l.email_status || '').toUpperCase() === 'SENT',
+    (l) => l.email_accepted === 'YES' || Boolean(l.last_contacted_at),
   ).length;
+  // Count only verified provider acceptance — never bare SENT / dry_run.
   const emails_sent =
-    emailHistory.filter((e) => e.accepted === 'YES' || e.status === 'SENT' || e.status === 'ACCEPTED').length ||
+    emailHistory.filter((e) => e.accepted === 'YES' && !e.dry_run).length ||
     leads.filter((l) => l.email_accepted === 'YES').length;
   const emails_delivered = leads.filter((l) => l.delivered === 'YES').length;
   const emails_bounced = leads.filter((l) => l.bounced === 'YES').length;
@@ -298,11 +299,27 @@ function asTri(value: unknown, fallback: TrackingTriState = 'UNKNOWN'): Tracking
   return fallback;
 }
 
+export function leadHasValidEmail(email: string | null | undefined): boolean {
+  const e = String(email || '').trim().toLowerCase();
+  return Boolean(e) && e.includes('@');
+}
+
 export function normalizeLead(raw: Partial<CrmLead> & Record<string, unknown>): CrmLead | null {
   const id = raw.id;
-  const email = String(raw.email || '').trim().toLowerCase();
+  const emailRaw = String(raw.email || '').trim().toLowerCase();
   const business = String(raw.business_name || raw.business || '').trim();
-  if (id == null || id === '' || !email.includes('@') || !business) return null;
+  if (id == null || id === '' || !business) return null;
+
+  const contactable = raw.contactable === false ? false : leadHasValidEmail(emailRaw);
+  const email = contactable ? emailRaw : '';
+  let emailStatus = (raw.email_status as string | null | undefined) ?? null;
+  let outreachStatus = (raw.email_outreach_status as string | null | undefined) ?? null;
+  if (!contactable) {
+    emailStatus =
+      String(emailStatus || '').toUpperCase() === 'NOT CONTACTABLE' ? emailStatus : 'NOT CONTACTABLE';
+    if (!outreachStatus) outreachStatus = 'NOT_CONTACTABLE';
+  }
+
   return {
     id,
     business_name: business,
@@ -313,7 +330,9 @@ export function normalizeLead(raw: Partial<CrmLead> & Record<string, unknown>): 
     category: (raw.category as string | null | undefined) ?? null,
     status: (raw.status as string | null | undefined) ?? null,
     sales_status: (raw.sales_status as string | null | undefined) ?? null,
-    email_status: (raw.email_status as string | null | undefined) ?? null,
+    email_status: emailStatus,
+    email_outreach_status: outreachStatus,
+    contactable,
     last_contacted_at: (raw.last_contacted_at as string | null | undefined) ?? null,
     last_activity_at: (raw.last_activity_at as string | null | undefined) ?? null,
     notes: (raw.notes as string | null | undefined) ?? null,
@@ -363,9 +382,15 @@ export function upsertEmailHistory(
   history: CrmEmailHistoryItem[],
   item: CrmEmailHistoryItem,
 ): CrmEmailHistoryItem[] {
-  const key = item.provider_message_id || `${item.lead_id}:${item.email}:${item.sent_at || ''}`;
+  const key =
+    (item.id != null && String(item.id).trim() !== '' ? String(item.id) : null) ||
+    item.provider_message_id ||
+    `${item.lead_id}:${item.email}:${item.sent_at || ''}`;
   const next = history.filter((row) => {
-    const rowKey = row.provider_message_id || `${row.lead_id}:${row.email}:${row.sent_at || ''}`;
+    const rowKey =
+      (row.id != null && String(row.id).trim() !== '' ? String(row.id) : null) ||
+      row.provider_message_id ||
+      `${row.lead_id}:${row.email}:${row.sent_at || ''}`;
     return rowKey !== key;
   });
   next.unshift(item);

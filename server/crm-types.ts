@@ -17,19 +17,27 @@ export type CrmLead = {
   id: number | string;
   business_name: string;
   contact_name?: string | null;
+  /** Empty string when no email — lead is NOT CONTACTABLE / never auto-eligible. */
   email: string;
   phone?: string | null;
   location?: string | null;
   category?: string | null;
   status?: string | null;
   sales_status?: string | null;
+  /** Use "NOT CONTACTABLE" when email is missing. */
   email_status?: string | null;
+  email_outreach_status?: string | null;
+  /** False when missing/invalid email — never auto-eligible for outreach. */
+  contactable?: boolean;
   last_contacted_at?: string | null;
   last_activity_at?: string | null;
   notes?: string | null;
   suppressed?: boolean;
   unsubscribed?: boolean;
-  /** Provider accepted the message (email.sent / local SENT). Not delivery. */
+  /**
+   * Provider accepted the message (provider_message_id + successful provider response).
+   * Local SENT alone is NOT acceptance. Not delivery.
+   */
   email_accepted: TrackingTriState;
   delivered: TrackingTriState;
   bounced: TrackingTriState;
@@ -211,6 +219,9 @@ export const CRM_PUSH_SYNC_CONTRACT = {
   },
   notes: [
     'Mac reads leads.db readonly and pushes JSON — never expose SQLite publicly',
+    'Include ALL leads (including no-email); label NOT CONTACTABLE — never auto-eligible',
+    'Accepted only with provider_message_id + successful provider response; bare SENT ≠ accepted',
+    'Delivery/bounce/reply stay UNKNOWN until signed Resend webhooks',
     'Website persists snapshot cache; Vercel /tmp is ephemeral — re-push after cold start',
     'Resend webhooks land on website and update the snapshot in place',
     'Booking site→Mac reverse notify remains deferred (preferences)',

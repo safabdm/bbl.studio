@@ -136,6 +136,165 @@ describe('CRM sync ingest', () => {
     assert.equal(parsed.ok, false);
   });
 
+  it('stores no-email leads as NOT CONTACTABLE', async () => {
+    const result = await ingestCrmSync(
+      {
+        schema_version: 1,
+        leads: [
+          {
+            id: 10,
+            business_name: 'No Email Salon',
+            email: '',
+            contactable: false,
+            email_status: 'NOT CONTACTABLE',
+            email_accepted: 'UNKNOWN',
+            delivered: 'UNKNOWN',
+            bounced: 'UNKNOWN',
+            replied: 'UNKNOWN',
+            booked: 'UNKNOWN',
+          },
+          {
+            id: 11,
+            business_name: 'Has Email Salon',
+            email: 'has@example.com',
+            email_accepted: 'UNKNOWN',
+            delivered: 'UNKNOWN',
+            bounced: 'UNKNOWN',
+            replied: 'UNKNOWN',
+            booked: 'UNKNOWN',
+          },
+        ],
+      },
+      { env: env() },
+    );
+    assert.equal(result.ok, true);
+    if (!result.ok) return;
+    assert.equal(result.counts.leads, 2);
+    const snap = await readSnapshot(env());
+    const noEmail = snap?.leads.find((l) => String(l.id) === '10');
+    assert.equal(noEmail?.email, '');
+    assert.equal(noEmail?.contactable, false);
+    assert.equal(noEmail?.email_status, 'NOT CONTACTABLE');
+    assert.equal(noEmail?.email_accepted, 'UNKNOWN');
+  });
+
+  it('does not treat bare SENT as accepted; requires provider evidence', async () => {
+    const result = await ingestCrmSync(
+      {
+        schema_version: 1,
+        leads: [
+          {
+            id: 1,
+            business_name: 'Bare Sent',
+            email: 'bare@example.com',
+            email_accepted: 'UNKNOWN',
+            delivered: 'UNKNOWN',
+            bounced: 'UNKNOWN',
+            replied: 'UNKNOWN',
+            booked: 'UNKNOWN',
+          },
+          {
+            id: 2,
+            business_name: 'Verified Sent',
+            email: 'ok@example.com',
+            email_accepted: 'UNKNOWN',
+            delivered: 'UNKNOWN',
+            bounced: 'UNKNOWN',
+            replied: 'UNKNOWN',
+            booked: 'UNKNOWN',
+          },
+        ],
+        email_history: [
+          {
+            id: 'eoh:100',
+            lead_id: 1,
+            email: 'bare@example.com',
+            status: 'SENT',
+            dry_run: false,
+            // local SENT only — no provider_message_id
+            accepted: 'UNKNOWN',
+            delivered: 'UNKNOWN',
+            bounced: 'UNKNOWN',
+            replied: 'UNKNOWN',
+          },
+          {
+            id: 'eoh:113',
+            lead_id: 2,
+            email: 'ok@example.com',
+            status: 'SENT',
+            dry_run: false,
+            provider_message_id: 're_ok_1',
+            accepted: 'YES',
+            detail: 'sent via Resend http=200 message_id=re_ok_1',
+            delivered: 'UNKNOWN',
+            bounced: 'UNKNOWN',
+            replied: 'UNKNOWN',
+          },
+          {
+            id: 'eoh:dry',
+            lead_id: 2,
+            email: 'ok@example.com',
+            status: 'DRY_RUN_SENT',
+            dry_run: true,
+            accepted: 'YES',
+            provider_message_id: 'should_not_count',
+            delivered: 'UNKNOWN',
+            bounced: 'UNKNOWN',
+            replied: 'UNKNOWN',
+          },
+        ],
+      },
+      { env: env() },
+    );
+    assert.equal(result.ok, true);
+    if (!result.ok) return;
+    const snap = await readSnapshot(env());
+    const bare = snap?.leads.find((l) => String(l.id) === '1');
+    const ok = snap?.leads.find((l) => String(l.id) === '2');
+    assert.equal(bare?.email_accepted, 'UNKNOWN');
+    assert.equal(ok?.email_accepted, 'YES');
+    assert.equal(ok?.delivered, 'UNKNOWN');
+    const histBare = snap?.email_history.find((h) => h.id === 'eoh:100');
+    const histOk = snap?.email_history.find((h) => h.id === 'eoh:113');
+    const histDry = snap?.email_history.find((h) => h.id === 'eoh:dry');
+    assert.equal(histBare?.accepted, 'UNKNOWN');
+    assert.equal(histOk?.accepted, 'YES');
+    assert.equal(histDry?.accepted, 'UNKNOWN');
+    assert.equal(histDry?.dry_run, true);
+    assert.equal(snap?.overview.emails_sent, 1);
+  });
+
+  it('idempotent history merge does not duplicate by id', async () => {
+    const hist = {
+      id: 'eoh:113',
+      lead_id: 2,
+      email: 'ok@example.com',
+      status: 'SENT',
+      dry_run: false,
+      provider_message_id: 're_ok_1',
+      accepted: 'YES',
+      delivered: 'UNKNOWN',
+      bounced: 'UNKNOWN',
+      replied: 'UNKNOWN',
+    };
+    const lead = {
+      id: 2,
+      business_name: 'Verified Sent',
+      email: 'ok@example.com',
+      email_accepted: 'YES',
+      delivered: 'UNKNOWN',
+      bounced: 'UNKNOWN',
+      replied: 'UNKNOWN',
+      booked: 'UNKNOWN',
+      provider_message_ids: ['re_ok_1'],
+    };
+    await ingestCrmSync({ leads: [lead], email_history: [hist] }, { env: env() });
+    await ingestCrmSync({ leads: [lead], email_history: [hist] }, { env: env() });
+    const snap = await readSnapshot(env());
+    assert.equal(snap?.email_history.filter((h) => h.id === 'eoh:113').length, 1);
+    assert.equal(snap?.leads.length, 1);
+  });
+
   it('stores leads + 9 email history rows with Resend ids', async () => {
     const history = Array.from({ length: 9 }, (_, i) => ({
       lead_id: i + 1,

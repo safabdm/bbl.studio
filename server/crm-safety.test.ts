@@ -59,6 +59,22 @@ describe('lead selection', () => {
     assert.equal(included[0]?.id, 1);
     assert.equal(excluded.length, 4);
   });
+
+  it('excludes NOT CONTACTABLE / missing-email leads from outreach', () => {
+    const { included, excluded } = filterSendableRecipients(
+      [
+        { id: 1, email: 'a@example.com', contactable: true },
+        { id: 2, email: '', contactable: false, email_status: 'NOT CONTACTABLE' },
+        { id: 3, email: '', email_status: 'NOT CONTACTABLE' },
+        { id: 4, email: 'nope' },
+      ],
+      [1, 2, 3, 4],
+    );
+    assert.equal(included.length, 1);
+    assert.equal(included[0]?.id, 1);
+    assert.equal(excluded.some((e) => e.reason === 'not_contactable'), true);
+    assert.equal(excluded.some((e) => e.reason === 'invalid_email'), true);
+  });
 });
 
 describe('manual send confirm gate', () => {
