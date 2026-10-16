@@ -8,14 +8,14 @@ import type {
   ManualSendRequest,
   ManualSendResult,
   PersonalizedPreview,
-} from './crm-types';
+} from './crm-types.js';
 import {
   filterSendableRecipients,
   isDryRun,
   maySendLive,
   validateManualSendGate,
-} from './crm-safety';
-import { resolveProjectRoot } from './project-root';
+} from './crm-safety.js';
+import { resolveProjectRoot } from './project-root.js';
 
 function projectRoot() {
   return resolveProjectRoot(import.meta.url);

@@ -15,7 +15,7 @@
  *
  * Timestamp: when rank and source-priority tie, newer `at` wins.
  */
-import type { CrmEmailHistoryItem, CrmLead, TrackingTriState } from './crm-types';
+import type { CrmEmailHistoryItem, CrmLead, TrackingTriState } from './crm-types.js';
 
 export type TrackingSource = 'mac' | 'webhook';
 

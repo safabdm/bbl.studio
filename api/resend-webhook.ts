@@ -7,7 +7,7 @@
 import { createHmac, timingSafeEqual } from 'node:crypto';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
-import { resolveProjectRoot } from '../server/project-root';
+import { resolveProjectRoot } from '../server/project-root.js';
 
 /** Lazy — avoid pulling Neon/CRM into unrelated catch-all cold starts. */
 async function crmDb() {

@@ -14,9 +14,9 @@
     "format": "oxfmt",
     "test:unsubscribe": "tsx --test server/unsubscribe.test.ts",
     "test:booking": "tsx --test server/booking.test.ts",
-    "test:crm": "tsx --test server/crm-safety.test.ts server/crm-campaigns.test.ts server/resend-webhook.test.ts server/crm-freshness.test.ts server/crm-sync.test.ts",
+    "test:crm": "tsx --test server/crm-safety.test.ts server/crm-campaigns.test.ts server/resend-webhook.test.ts server/crm-freshness.test.ts server/crm-sync.test.ts server/crm-esm-imports.test.ts",
     "test:admin-auth": "tsx --test api/admin-auth.test.ts server/admin-auth.test.ts api/crm-sync-auth.test.ts",
-    "test:serverless-init": "tsx --test server/project-root.test.ts",
+    "test:serverless-init": "tsx --test server/project-root.test.ts server/crm-esm-imports.test.ts",
     "test:crm-all": "pnpm test:unsubscribe && pnpm test:booking && pnpm test:crm && pnpm test:admin-auth && pnpm test:serverless-init"
   },
   "dependencies": {

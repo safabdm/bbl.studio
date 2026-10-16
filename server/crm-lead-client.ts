@@ -11,9 +11,9 @@ import type {
   CrmInboxItem,
   CrmLead,
   CrmOverviewMetrics,
-} from './crm-types';
-import { CRM_PUSH_SYNC_CONTRACT, LEAD_AGENT_CRM_CONTRACT } from './crm-types';
-import { safetySnapshot } from './crm-safety';
+} from './crm-types.js';
+import { CRM_PUSH_SYNC_CONTRACT, LEAD_AGENT_CRM_CONTRACT } from './crm-types.js';
+import { safetySnapshot } from './crm-safety.js';
 import {
   connectionStatus,
   emptyOverview,
@@ -23,8 +23,8 @@ import {
   readSnapshot,
   syncSecretConfigured,
   type CrmSyncStoreEnv,
-} from './crm-sync-store';
-import { isDurableDbConfigured } from './crm-db';
+} from './crm-sync-store.js';
+import { isDurableDbConfigured } from './crm-db.js';
 
 export { CRM_PUSH_SYNC_CONTRACT, LEAD_AGENT_CRM_CONTRACT };
 
