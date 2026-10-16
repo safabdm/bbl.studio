@@ -16,7 +16,6 @@ import {
   sendConfirmation,
   sendDueReminders,
 } from './booking-core.js';
-import { processResendWebhook } from './resend-webhook.js';
 import {
   ADMIN_COOKIE,
   adminCookieHeader,
@@ -27,21 +26,29 @@ import {
   readAdminToken,
   signAdminToken,
 } from './admin-auth.js';
-import {
-  handleCrmBookings,
-  handleCrmCampaigns,
-  handleCrmInbox,
-  handleCrmLeads,
-  handleCrmOverview,
-  handleCrmPreview,
-  handleCrmSaveDraft,
-  handleCrmSelectionMeta,
-  handleCrmSendCampaign,
-  handleCrmSendTest,
-  handleCrmSettings,
-  handleCrmSyncIngest,
-  handleCrmSyncStatus,
-} from '../server/crm-api.js';
+import { authorizeCrmSync } from './crm-sync-auth.js';
+
+/** Lazy CRM / webhook loads — keep booking + admin/me off the CRM module graph. */
+async function loadCrmApi() {
+  return import('../server/crm-api.js');
+}
+async function loadResendWebhook() {
+  return import('./resend-webhook.js');
+}
+
+function crmHeaders(req: IncomingMessage) {
+  return {
+    authorization: Array.isArray(req.headers.authorization)
+      ? req.headers.authorization[0]
+      : req.headers.authorization,
+    'x-bbl-crm-sync-key': Array.isArray(req.headers['x-bbl-crm-sync-key'])
+      ? req.headers['x-bbl-crm-sync-key'][0]
+      : req.headers['x-bbl-crm-sync-key'],
+    'x-bbl-crm-key': Array.isArray(req.headers['x-bbl-crm-key'])
+      ? req.headers['x-bbl-crm-key'][0]
+      : req.headers['x-bbl-crm-key'],
+  };
+}
 
 export const config = { maxDuration: 30 };
 
@@ -276,6 +283,7 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
 
     if (matches(path, '/api/resend-webhook') && method === 'POST') {
       const raw = await readRawBody(req);
+      const { processResendWebhook } = await loadResendWebhook();
       const result = await processResendWebhook({
         body: raw,
         headers: {
@@ -298,6 +306,9 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
     }
 
     if (matches(path, '/api/crm/sync') && method === 'POST') {
+      const headers = crmHeaders(req);
+      const auth = authorizeCrmSync(headers);
+      if (!auth.ok) return send(res, auth.status, { ok: false, message: auth.message });
       const raw = await readRawBody(req);
       let body: unknown = {};
       try {
@@ -305,86 +316,91 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
       } catch {
         return send(res, 400, { ok: false, message: 'Invalid JSON body.' });
       }
-      const result = await handleCrmSyncIngest(
-        {
-          authorization: Array.isArray(req.headers.authorization)
-            ? req.headers.authorization[0]
-            : req.headers.authorization,
-          'x-bbl-crm-sync-key': Array.isArray(req.headers['x-bbl-crm-sync-key'])
-            ? req.headers['x-bbl-crm-sync-key'][0]
-            : req.headers['x-bbl-crm-sync-key'],
-          'x-bbl-crm-key': Array.isArray(req.headers['x-bbl-crm-key'])
-            ? req.headers['x-bbl-crm-key'][0]
-            : req.headers['x-bbl-crm-key'],
-        },
-        body,
-        { rawBytes: Buffer.byteLength(raw, 'utf8') },
-      );
-      return send(res, result.status, result.body);
-    }
-
-    if (matches(path, '/api/crm/sync/status') && method === 'GET') {
-      const result = await handleCrmSyncStatus({
-        authorization: Array.isArray(req.headers.authorization)
-          ? req.headers.authorization[0]
-          : req.headers.authorization,
-        'x-bbl-crm-sync-key': Array.isArray(req.headers['x-bbl-crm-sync-key'])
-          ? req.headers['x-bbl-crm-sync-key'][0]
-          : req.headers['x-bbl-crm-sync-key'],
-        'x-bbl-crm-key': Array.isArray(req.headers['x-bbl-crm-key'])
-          ? req.headers['x-bbl-crm-key'][0]
-          : req.headers['x-bbl-crm-key'],
+      const { handleCrmSyncIngest } = await loadCrmApi();
+      const result = await handleCrmSyncIngest(headers, body, {
+        rawBytes: Buffer.byteLength(raw, 'utf8'),
       });
       return send(res, result.status, result.body);
     }
 
+    if (matches(path, '/api/crm/sync/status') && method === 'GET') {
+      const headers = crmHeaders(req);
+      const auth = authorizeCrmSync(headers);
+      if (!auth.ok) return send(res, auth.status, { ok: false, message: auth.message });
+      const { handleCrmSyncStatus } = await loadCrmApi();
+      const result = await handleCrmSyncStatus(headers);
+      return send(res, result.status, result.body);
+    }
+
     if (matches(path, '/api/admin/crm/overview') && method === 'GET') {
+      if (!admin) return send(res, 401, { ok: false, message: 'Sign in required.' });
+      const { handleCrmOverview } = await loadCrmApi();
       const result = await handleCrmOverview(admin);
       return send(res, result.status, result.body);
     }
     if (matches(path, '/api/admin/crm/leads') && method === 'GET') {
+      if (!admin) return send(res, 401, { ok: false, message: 'Sign in required.' });
       const url = new URL(req.url || '/', 'https://www.bbl.studio');
+      const { handleCrmLeads } = await loadCrmApi();
       const result = await handleCrmLeads(admin, url.searchParams.toString());
       return send(res, result.status, result.body);
     }
     if (matches(path, '/api/admin/crm/inbox') && method === 'GET') {
+      if (!admin) return send(res, 401, { ok: false, message: 'Sign in required.' });
+      const { handleCrmInbox } = await loadCrmApi();
       const result = await handleCrmInbox(admin);
       return send(res, result.status, result.body);
     }
     if (matches(path, '/api/admin/crm/bookings') && method === 'GET') {
+      if (!admin) return send(res, 401, { ok: false, message: 'Sign in required.' });
+      const { handleCrmBookings } = await loadCrmApi();
       const result = await handleCrmBookings(admin);
       return send(res, result.status, result.body);
     }
     if (matches(path, '/api/admin/crm/campaigns') && method === 'GET') {
+      if (!admin) return send(res, 401, { ok: false, message: 'Sign in required.' });
+      const { handleCrmCampaigns } = await loadCrmApi();
       const result = await handleCrmCampaigns(admin);
       return send(res, result.status, result.body);
     }
     if (matches(path, '/api/admin/crm/settings') && method === 'GET') {
+      if (!admin) return send(res, 401, { ok: false, message: 'Sign in required.' });
+      const { handleCrmSettings } = await loadCrmApi();
       const result = await handleCrmSettings(admin);
       return send(res, result.status, result.body);
     }
     if (matches(path, '/api/admin/crm/selection') && method === 'POST') {
+      if (!admin) return send(res, 401, { ok: false, message: 'Sign in required.' });
       const body = await readJsonUnknown(req);
+      const { handleCrmSelectionMeta } = await loadCrmApi();
       const result = handleCrmSelectionMeta(admin, body as { selected_ids?: Array<number | string> });
       return send(res, result.status, result.body);
     }
     if (matches(path, '/api/admin/crm/preview') && method === 'POST') {
+      if (!admin) return send(res, 401, { ok: false, message: 'Sign in required.' });
       const body = await readJsonUnknown(req);
+      const { handleCrmPreview } = await loadCrmApi();
       const result = await handleCrmPreview(admin, body as never);
       return send(res, result.status, result.body);
     }
     if (matches(path, '/api/admin/crm/drafts') && method === 'POST') {
+      if (!admin) return send(res, 401, { ok: false, message: 'Sign in required.' });
       const body = await readJsonUnknown(req);
+      const { handleCrmSaveDraft } = await loadCrmApi();
       const result = await handleCrmSaveDraft(admin, body as never);
       return send(res, result.status, result.body);
     }
     if (matches(path, '/api/admin/crm/send-test') && method === 'POST') {
+      if (!admin) return send(res, 401, { ok: false, message: 'Sign in required.' });
       const body = await readJsonUnknown(req);
+      const { handleCrmSendTest } = await loadCrmApi();
       const result = await handleCrmSendTest(admin, body as never);
       return send(res, result.status, result.body);
     }
     if (matches(path, '/api/admin/crm/send') && method === 'POST') {
+      if (!admin) return send(res, 401, { ok: false, message: 'Sign in required.' });
       const body = await readJsonUnknown(req);
+      const { handleCrmSendCampaign } = await loadCrmApi();
       const result = await handleCrmSendCampaign(admin, body as never);
       return send(res, result.status, result.body);
     }

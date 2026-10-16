@@ -7,15 +7,19 @@
 import { createHmac, timingSafeEqual } from 'node:crypto';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
-import { applyResendEventToSnapshot } from '../server/crm-webhook-apply';
-import {
-  dbHasWebhookEvent,
-  dbRememberWebhookEvent,
-  isDurableDbConfigured,
-} from '../server/crm-db';
 import { resolveProjectRoot } from '../server/project-root';
 
-const root = resolveProjectRoot(import.meta.url);
+/** Lazy — avoid pulling Neon/CRM into unrelated catch-all cold starts. */
+async function crmDb() {
+  return import('../server/crm-db.js');
+}
+async function crmWebhookApply() {
+  return import('../server/crm-webhook-apply.js');
+}
+
+function projectRoot() {
+  return resolveProjectRoot(import.meta.url);
+}
 
 export type ResendWebhookEnv = {
   RESEND_WEBHOOK_SECRET?: string;
@@ -99,7 +103,7 @@ export function verifyResendSignature(opts: {
 }
 
 function idempotencyPath(env: ResendWebhookEnv) {
-  return resolve(root, env.RESEND_WEBHOOK_IDEMPOTENCY_PATH || './data/resend-webhook-events.json');
+  return resolve(projectRoot(), env.RESEND_WEBHOOK_IDEMPOTENCY_PATH || './data/resend-webhook-events.json');
 }
 
 export function readSeenEventIds(env: ResendWebhookEnv = process.env): string[] {
@@ -172,11 +176,12 @@ export async function processResendWebhook(opts: {
 
   const parsed = parseResendEvent(opts.body);
   const eventId = svixId || parsed.event_id;
-  const useDurableEvents = isDurableDbConfigured(env);
+  const db = await crmDb();
+  const useDurableEvents = db.isDurableDbConfigured(env);
 
   if (eventId) {
     const seen = useDurableEvents
-      ? await dbHasWebhookEvent(eventId, env)
+      ? await db.dbHasWebhookEvent(eventId, env)
       : readSeenEventIds(env).includes(eventId);
     if (seen) {
       return {
@@ -192,7 +197,7 @@ export async function processResendWebhook(opts: {
 
   if (eventId) {
     if (useDurableEvents) {
-      const inserted = await dbRememberWebhookEvent(eventId, parsed.type, parsed, env);
+      const inserted = await db.dbRememberWebhookEvent(eventId, parsed.type, parsed, env);
       if (!inserted) {
         return {
           ok: true,
@@ -209,6 +214,7 @@ export async function processResendWebhook(opts: {
   }
 
   // Primary path: update website CRM snapshot (Mac is outbound-only / often offline).
+  const { applyResendEventToSnapshot } = await crmWebhookApply();
   const applied = await applyResendEventToSnapshot(opts.body, env);
 
   const forwardUrl = (env.LEAD_AGENT_RESEND_WEBHOOK_URL || '').trim();

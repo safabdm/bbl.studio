@@ -37,7 +37,9 @@ import { resolveProjectRoot } from './project-root';
 
 export { emptyOverview, emptySnapshot };
 
-const root = resolveProjectRoot(import.meta.url);
+function projectRoot() {
+  return resolveProjectRoot(import.meta.url);
+}
 
 /** Soft payload budget (bytes) for ingest validation. */
 export const CRM_SYNC_MAX_BYTES = 4 * 1024 * 1024;
@@ -54,7 +56,7 @@ let memorySnapshot: CrmSyncSnapshot | null = null;
 export function crmSyncStorePath(env: CrmSyncStoreEnv = process.env): string {
   if (env.CRM_SYNC_STORE_PATH) return resolve(env.CRM_SYNC_STORE_PATH);
   // Never default to /tmp on Vercel — durable DB is required there.
-  return resolve(root, 'data/crm-sync-snapshot.json');
+  return resolve(projectRoot(), 'data/crm-sync-snapshot.json');
 }
 
 export function persistenceInfo(env: CrmSyncStoreEnv = process.env) {
