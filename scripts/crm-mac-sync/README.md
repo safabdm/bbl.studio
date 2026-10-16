@@ -55,12 +55,20 @@ X-BBL-CRM-Sync-Key: <CRM_SYNC_SECRET>
 
 | Slice | Source |
 |---|---|
-| leads | `leads` table (+ tracking columns when present) |
-| email_history | send/history tables incl. Resend message ids (9 cohort) |
+| leads | **all** `leads` rows (no-email → `NOT CONTACTABLE`, never outreach-eligible) |
+| email_history | `email_outreach_history` (actual schema) + fallbacks; Resend ids when present |
 | campaigns | optional campaigns tables |
 | bookings | `booking_events` / bookings if present |
-| suppressions | unsub/suppression tables |
+| suppressions | `email_suppressions` / unsub tables |
 | inbox | empty by default; website prefers Resend inbound webhooks |
+
+### Acceptance / tracking rules
+
+- **Accepted = YES** only when `dry_run=0`, status SENT/ACCEPTED, `provider_message_id` present, and provider success evidence (`http=200` in `detail`)
+- Local SENT alone → **UNKNOWN** (not provider acceptance)
+- Delivery / bounce / reply → **UNKNOWN** until signed Resend webhooks on the website
+- Dry-run / `DRY_RUN_SENT` rows are preserved but **never** counted as actual sends
+- History ids are stable (`eoh:<id>`) so repeat syncs are idempotent
 
 ## Safety confirmation
 

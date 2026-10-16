@@ -70,11 +70,39 @@ function asTri(value: unknown, fallback: TrackingTriState = 'UNKNOWN'): Tracking
   return fallback;
 }
 
+function providerAcceptedEvidence(row: Record<string, unknown>): boolean {
+  const pmid = String(row.provider_message_id || row.resend_id || '').trim();
+  if (!pmid) return false;
+  const detail = String(row.detail || row.provider_response || row.response || '');
+  if (/http\s*=\s*200/i.test(detail) || /\bstatus(?:Code)?\s*[:=]\s*200\b/i.test(detail)) {
+    return true;
+  }
+  // Explicit Mac-computed accepted=YES with provider_message_id is trusted
+  // (Mac already required http=200 + pmid). Bare SENT alone is not.
+  return String(row.accepted || '').toUpperCase() === 'YES';
+}
+
 function normalizeEmailHistory(raw: unknown): CrmEmailHistoryItem | null {
   if (!raw || typeof raw !== 'object') return null;
   const row = raw as Record<string, unknown>;
   const email = String(row.email || '').trim().toLowerCase();
   if (!email.includes('@')) return null;
+  const status = (row.status as string | null | undefined) ?? null;
+  const statusUpper = String(status || '').toUpperCase();
+  const dryRun =
+    Boolean(row.dry_run) || statusUpper === 'DRY_RUN_SENT' || String(row.dry_run) === '1';
+  const pmid =
+    (row.provider_message_id as string | null | undefined) ||
+    (row.resend_id as string | null | undefined) ||
+    null;
+  let accepted: TrackingTriState = 'UNKNOWN';
+  if (!dryRun && providerAcceptedEvidence({ ...row, provider_message_id: pmid })) {
+    accepted = 'YES';
+  } else if (row.accepted != null && String(row.accepted).trim() !== '') {
+    // Preserve explicit NO; never upgrade SENT → YES without evidence.
+    const tri = asTri(row.accepted, 'UNKNOWN');
+    accepted = tri === 'YES' && (!pmid || dryRun) ? 'UNKNOWN' : tri;
+  }
   return {
     id: row.id != null ? String(row.id) : undefined,
     lead_id: (row.lead_id as number | string | null | undefined) ?? null,
@@ -82,10 +110,10 @@ function normalizeEmailHistory(raw: unknown): CrmEmailHistoryItem | null {
     business_name: (row.business_name as string | null | undefined) ?? null,
     subject: (row.subject as string | null | undefined) ?? null,
     campaign_name: (row.campaign_name as string | null | undefined) ?? null,
-    provider_message_id: (row.provider_message_id as string | null | undefined) || (row.resend_id as string | null | undefined) || null,
-    status: (row.status as string | null | undefined) ?? null,
-    dry_run: Boolean(row.dry_run),
-    accepted: asTri(row.accepted, row.status === 'SENT' || row.status === 'ACCEPTED' ? 'YES' : 'UNKNOWN'),
+    provider_message_id: pmid ? String(pmid) : null,
+    status,
+    dry_run: dryRun,
+    accepted,
     delivered: asTri(row.delivered, 'UNKNOWN'),
     bounced: asTri(row.bounced, 'UNKNOWN'),
     replied: asTri(row.replied, 'UNKNOWN'),
@@ -211,7 +239,8 @@ export function parseSyncPayload(body: unknown, rawBytes = 0): { ok: true; paylo
     .filter((item): item is NonNullable<typeof item> => Boolean(item));
 
   // Enrich leads from email history (accepted + provider ids) without inventing delivery.
-  const byEmail = new Map(leads.map((l) => [l.email, l]));
+  // Never promote bare SENT / dry_run to accepted; never invent delivery/bounce/reply.
+  const byEmail = new Map(leads.filter((l) => l.email.includes('@')).map((l) => [l.email, l]));
   for (const hist of email_history) {
     const lead = byEmail.get(hist.email);
     if (!lead) continue;
@@ -220,7 +249,7 @@ export function parseSyncPayload(body: unknown, rawBytes = 0): { ok: true; paylo
       ids.add(hist.provider_message_id);
       lead.provider_message_ids = [...ids];
     }
-    if (hist.accepted === 'YES' || hist.status === 'SENT' || hist.status === 'ACCEPTED') {
+    if (hist.accepted === 'YES' && !hist.dry_run) {
       lead.email_accepted = 'YES';
     }
     if (hist.delivered === 'YES') lead.delivered = 'YES';

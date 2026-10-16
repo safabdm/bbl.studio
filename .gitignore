@@ -1,5 +1,7 @@
 # dependencies
 /node_modules
+/.pnpm-home
+/crm-sync-payload.dry-run.json
 /.pnp
 .pnp.*
 .yarn/*
