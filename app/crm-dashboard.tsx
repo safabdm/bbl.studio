@@ -343,7 +343,7 @@ function CrmShell({ children }: { children: ReactNode }) {
       <div className="crm-shell">
         <aside className="crm-side">
           <Link to="/admin" className="crm-brand" aria-label="BBL Studio CRM home">
-            <BblWordmark height={22} />
+            <BblWordmark height={22} variant="black" />
           </Link>
           <nav className="crm-side-nav" aria-label="CRM sections">
             {NAV.map((group) => (
@@ -1354,13 +1354,15 @@ export function CrmDashboard() {
   return (
     <CrmShell>
       <Routes>
-        <Route path="/admin" element={<OverviewPage />} />
-        <Route path="/admin/leads" element={<LeadsPage />} />
-        <Route path="/admin/campaigns" element={<CampaignsPage />} />
-        <Route path="/admin/inbox" element={<InboxPage />} />
-        <Route path="/admin/bookings" element={<BookingsPage />} />
-        <Route path="/admin/analytics" element={<AnalyticsPage />} />
-        <Route path="/admin/settings" element={<SettingsPage />} />
+        {/* Relative paths: this <Routes> is mounted under <Route path="/admin/*"> in main.tsx. */}
+        <Route index element={<OverviewPage />} />
+        <Route path="leads" element={<LeadsPage />} />
+        <Route path="campaigns" element={<CampaignsPage />} />
+        <Route path="inbox" element={<InboxPage />} />
+        <Route path="bookings" element={<BookingsPage />} />
+        <Route path="analytics" element={<AnalyticsPage />} />
+        <Route path="settings" element={<SettingsPage />} />
+        <Route path="*" element={<OverviewPage />} />
       </Routes>
     </CrmShell>
   );
