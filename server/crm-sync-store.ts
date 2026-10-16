@@ -13,7 +13,6 @@
  */
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
-import { fileURLToPath } from 'node:url';
 import type {
   CrmBookingItem,
   CrmCampaignSummary,
@@ -34,10 +33,11 @@ import {
   type CrmDbEnv,
 } from './crm-db';
 import { emptyOverview, emptySnapshot } from './crm-sync-store-empty';
+import { resolveProjectRoot } from './project-root';
 
 export { emptyOverview, emptySnapshot };
 
-const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
+const root = resolveProjectRoot(import.meta.url);
 
 /** Soft payload budget (bytes) for ingest validation. */
 export const CRM_SYNC_MAX_BYTES = 4 * 1024 * 1024;

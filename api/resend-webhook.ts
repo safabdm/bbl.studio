@@ -7,15 +7,15 @@
 import { createHmac, timingSafeEqual } from 'node:crypto';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
-import { fileURLToPath } from 'node:url';
 import { applyResendEventToSnapshot } from '../server/crm-webhook-apply';
 import {
   dbHasWebhookEvent,
   dbRememberWebhookEvent,
   isDurableDbConfigured,
 } from '../server/crm-db';
+import { resolveProjectRoot } from '../server/project-root';
 
-const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
+const root = resolveProjectRoot(import.meta.url);
 
 export type ResendWebhookEnv = {
   RESEND_WEBHOOK_SECRET?: string;
