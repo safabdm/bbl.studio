@@ -117,7 +117,7 @@ describe('dry-run send path', () => {
   });
 
   it('send test is always dry-run', () => {
-    const result = sendTestDryRun('admin@bbls.studio', 'Subject', 'Body');
+    const result = sendTestDryRun('hello@bbl.studio', 'Subject', 'Body');
     assert.equal(result.ok, true);
     assert.equal(result.dry_run, true);
     assert.match(result.message, /Nothing was sent/);

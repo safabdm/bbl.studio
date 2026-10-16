@@ -92,7 +92,7 @@ export function AdminLogin() {
         <form className="portal-card" onSubmit={onSubmit}>
           <div className="portal-field">
             <label htmlFor="admin-email">Email</label>
-            <input id="admin-email" name="email" type="email" autoComplete="username" defaultValue="admin@bbls.studio" required />
+            <input id="admin-email" name="email" type="email" autoComplete="username" defaultValue="hello@bbl.studio" required />
           </div>
           <div className="portal-field">
             <label htmlFor="admin-password">Password</label>

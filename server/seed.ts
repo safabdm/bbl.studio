@@ -14,7 +14,7 @@ function insert(table: string, data: Record<string, unknown>) {
 }
 
 function syncAdminPassword() {
-  const email = (process.env.ADMIN_EMAIL || 'admin@bbls.studio').toLowerCase();
+  const email = (process.env.ADMIN_EMAIL || 'hello@bbl.studio').toLowerCase();
   const password = process.env.ADMIN_PASSWORD || 'S@f@1371';
   const admin = row<{ id: string }>(`SELECT id FROM admin_users WHERE email = ?`, [email]);
   if (admin) {
@@ -33,7 +33,7 @@ export function seedIfNeeded() {
   const adminId = id('adm_');
   insert('admin_users', {
     id: adminId,
-    email: (process.env.ADMIN_EMAIL || 'admin@bbls.studio').toLowerCase(),
+    email: (process.env.ADMIN_EMAIL || 'hello@bbl.studio').toLowerCase(),
     password_hash: hashPassword(process.env.ADMIN_PASSWORD || 'S@f@1371'),
     name: process.env.ADMIN_NAME || 'BBL Studio',
     created_at: created,
@@ -197,7 +197,7 @@ export function seedIfNeeded() {
     expired: `${origin}/client/${expiredToken}`,
     revoked: `${origin}/client/${revokedToken}`,
     admin: `${origin}/admin`,
-    adminEmail: process.env.ADMIN_EMAIL || 'admin@bbls.studio',
+    adminEmail: process.env.ADMIN_EMAIL || 'hello@bbl.studio',
     adminPassword: process.env.ADMIN_PASSWORD || 'S@f@1371',
     expiresAt: expires,
     note: 'Fictional sample only. Tokens are shown once in this local file. No real email is sent.',
