@@ -4,12 +4,13 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { after, describe, it } from 'node:test';
-import {
+import handler, {
   processResendWebhook,
   rememberEventId,
   verifyResendSignature,
   webhookSecretBytes,
 } from '../api/resend-webhook.ts';
+import type { IncomingMessage, ServerResponse } from 'node:http';
 
 const dir = mkdtempSync(join(tmpdir(), 'bbls-resend-'));
 const secret = `whsec_${Buffer.from('test-resend-webhook-secret').toString('base64')}`;
@@ -121,5 +122,29 @@ describe('idempotency helper', () => {
     const pathEnv = { RESEND_WEBHOOK_IDEMPOTENCY_PATH: join(dir, 'helper.json') };
     assert.equal(rememberEventId('once', pathEnv), true);
     assert.equal(rememberEventId('once', pathEnv), false);
+  });
+});
+
+describe('Vercel default handler', () => {
+  it('exports a default POST entry that rejects GET with 405', async () => {
+    assert.equal(typeof handler, 'function');
+    let status = 0;
+    let body = '';
+    const req = { method: 'GET', headers: {}, on() { return req; } } as unknown as IncomingMessage;
+    const res = {
+      setHeader() {},
+      end(payload: string) {
+        body = payload;
+      },
+      set statusCode(value: number) {
+        status = value;
+      },
+      get statusCode() {
+        return status;
+      },
+    } as unknown as ServerResponse;
+    await handler(req, res);
+    assert.equal(status, 405);
+    assert.match(body, /Use POST/);
   });
 });
