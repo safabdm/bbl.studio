@@ -16,6 +16,7 @@ import {
   sendConfirmation,
   sendDueReminders,
 } from './booking-core.js';
+import { processResendWebhook } from './resend-webhook.js';
 import {
   ADMIN_COOKIE,
   adminCookieHeader,
@@ -26,6 +27,21 @@ import {
   readAdminToken,
   signAdminToken,
 } from './admin-auth.js';
+import {
+  handleCrmBookings,
+  handleCrmCampaigns,
+  handleCrmInbox,
+  handleCrmLeads,
+  handleCrmOverview,
+  handleCrmPreview,
+  handleCrmSaveDraft,
+  handleCrmSelectionMeta,
+  handleCrmSendCampaign,
+  handleCrmSendTest,
+  handleCrmSettings,
+  handleCrmSyncIngest,
+  handleCrmSyncStatus,
+} from '../server/crm-api.js';
 
 export const config = { maxDuration: 30 };
 
@@ -44,24 +60,36 @@ function send(res: ServerResponse, status: number, body: unknown, extra: Record<
   res.end(JSON.stringify(body));
 }
 
-function readJson(req: IncomingMessage) {
-  return new Promise<Record<string, string>>((resolve) => {
+function readRawBody(req: IncomingMessage) {
+  return new Promise<string>((resolve) => {
     const chunks: Buffer[] = [];
     req.on('data', (chunk) => {
       chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(String(chunk)));
     });
-    req.on('end', () => {
-      if (!chunks.length) {
-        resolve({});
-        return;
-      }
-      try {
-        resolve(JSON.parse(Buffer.concat(chunks).toString('utf8')) as Record<string, string>);
-      } catch {
-        resolve({});
-      }
-    });
-    req.on('error', () => resolve({}));
+    req.on('end', () => resolve(Buffer.concat(chunks).toString('utf8')));
+    req.on('error', () => resolve(''));
+  });
+}
+
+function readJson(req: IncomingMessage) {
+  return readRawBody(req).then((raw) => {
+    if (!raw) return {} as Record<string, string>;
+    try {
+      return JSON.parse(raw) as Record<string, string>;
+    } catch {
+      return {} as Record<string, string>;
+    }
+  });
+}
+
+function readJsonUnknown(req: IncomingMessage) {
+  return readRawBody(req).then((raw) => {
+    if (!raw) return {} as Record<string, unknown>;
+    try {
+      return JSON.parse(raw) as Record<string, unknown>;
+    } catch {
+      return {} as Record<string, unknown>;
+    }
   });
 }
 
@@ -244,6 +272,121 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
           },
         ],
       });
+    }
+
+    if (matches(path, '/api/resend-webhook') && method === 'POST') {
+      const raw = await readRawBody(req);
+      const result = await processResendWebhook({
+        body: raw,
+        headers: {
+          'svix-id': req.headers['svix-id'],
+          'svix-timestamp': req.headers['svix-timestamp'],
+          'svix-signature': req.headers['svix-signature'],
+        },
+      });
+      return send(res, result.status, {
+        ok: result.ok,
+        duplicate: result.duplicate,
+        forwarded: result.forwarded,
+        stored: result.stored,
+        applied_to_crm: result.applied_to_crm,
+        matched_leads: result.matched_leads,
+        event_id: result.event_id,
+        type: result.type,
+        message: result.message,
+      });
+    }
+
+    if (matches(path, '/api/crm/sync') && method === 'POST') {
+      const raw = await readRawBody(req);
+      let body: unknown = {};
+      try {
+        body = raw ? JSON.parse(raw) : {};
+      } catch {
+        return send(res, 400, { ok: false, message: 'Invalid JSON body.' });
+      }
+      const result = await handleCrmSyncIngest(
+        {
+          authorization: Array.isArray(req.headers.authorization)
+            ? req.headers.authorization[0]
+            : req.headers.authorization,
+          'x-bbl-crm-sync-key': Array.isArray(req.headers['x-bbl-crm-sync-key'])
+            ? req.headers['x-bbl-crm-sync-key'][0]
+            : req.headers['x-bbl-crm-sync-key'],
+          'x-bbl-crm-key': Array.isArray(req.headers['x-bbl-crm-key'])
+            ? req.headers['x-bbl-crm-key'][0]
+            : req.headers['x-bbl-crm-key'],
+        },
+        body,
+        { rawBytes: Buffer.byteLength(raw, 'utf8') },
+      );
+      return send(res, result.status, result.body);
+    }
+
+    if (matches(path, '/api/crm/sync/status') && method === 'GET') {
+      const result = await handleCrmSyncStatus({
+        authorization: Array.isArray(req.headers.authorization)
+          ? req.headers.authorization[0]
+          : req.headers.authorization,
+        'x-bbl-crm-sync-key': Array.isArray(req.headers['x-bbl-crm-sync-key'])
+          ? req.headers['x-bbl-crm-sync-key'][0]
+          : req.headers['x-bbl-crm-sync-key'],
+        'x-bbl-crm-key': Array.isArray(req.headers['x-bbl-crm-key'])
+          ? req.headers['x-bbl-crm-key'][0]
+          : req.headers['x-bbl-crm-key'],
+      });
+      return send(res, result.status, result.body);
+    }
+
+    if (matches(path, '/api/admin/crm/overview') && method === 'GET') {
+      const result = await handleCrmOverview(admin);
+      return send(res, result.status, result.body);
+    }
+    if (matches(path, '/api/admin/crm/leads') && method === 'GET') {
+      const url = new URL(req.url || '/', 'https://www.bbl.studio');
+      const result = await handleCrmLeads(admin, url.searchParams.toString());
+      return send(res, result.status, result.body);
+    }
+    if (matches(path, '/api/admin/crm/inbox') && method === 'GET') {
+      const result = await handleCrmInbox(admin);
+      return send(res, result.status, result.body);
+    }
+    if (matches(path, '/api/admin/crm/bookings') && method === 'GET') {
+      const result = await handleCrmBookings(admin);
+      return send(res, result.status, result.body);
+    }
+    if (matches(path, '/api/admin/crm/campaigns') && method === 'GET') {
+      const result = await handleCrmCampaigns(admin);
+      return send(res, result.status, result.body);
+    }
+    if (matches(path, '/api/admin/crm/settings') && method === 'GET') {
+      const result = await handleCrmSettings(admin);
+      return send(res, result.status, result.body);
+    }
+    if (matches(path, '/api/admin/crm/selection') && method === 'POST') {
+      const body = await readJsonUnknown(req);
+      const result = handleCrmSelectionMeta(admin, body as { selected_ids?: Array<number | string> });
+      return send(res, result.status, result.body);
+    }
+    if (matches(path, '/api/admin/crm/preview') && method === 'POST') {
+      const body = await readJsonUnknown(req);
+      const result = await handleCrmPreview(admin, body as never);
+      return send(res, result.status, result.body);
+    }
+    if (matches(path, '/api/admin/crm/drafts') && method === 'POST') {
+      const body = await readJsonUnknown(req);
+      const result = await handleCrmSaveDraft(admin, body as never);
+      return send(res, result.status, result.body);
+    }
+    if (matches(path, '/api/admin/crm/send-test') && method === 'POST') {
+      const body = await readJsonUnknown(req);
+      const result = await handleCrmSendTest(admin, body as never);
+      return send(res, result.status, result.body);
+    }
+    if (matches(path, '/api/admin/crm/send') && method === 'POST') {
+      const body = await readJsonUnknown(req);
+      const result = await handleCrmSendCampaign(admin, body as never);
+      return send(res, result.status, result.body);
     }
 
     return send(res, 404, { ok: false, message: 'Not found.' });

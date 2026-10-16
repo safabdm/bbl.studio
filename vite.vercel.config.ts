@@ -28,7 +28,15 @@ export default defineConfig({
     rollupOptions: {
       output: {
         manualChunks(id) {
-          if (id.includes('app/portal-screens') || id.includes('app/portal.css') || id.includes('lib/portal') || id.includes('server/packages')) {
+          if (
+            id.includes('app/portal-screens')
+            || id.includes('app/portal.css')
+            || id.includes('app/crm-dashboard')
+            || id.includes('app/crm.css')
+            || id.includes('lib/portal')
+            || id.includes('server/packages')
+            || id.includes('server/crm-types')
+          ) {
             return 'portal';
           }
         },

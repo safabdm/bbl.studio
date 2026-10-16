@@ -10,6 +10,7 @@ const AdminProject = lazy(() => import('./app/portal-screens').then((module) => 
 const AdminPricing = lazy(() => import('./app/portal-screens').then((module) => ({ default: module.AdminPricing })));
 const ClientPortal = lazy(() => import('./app/portal-screens').then((module) => ({ default: module.ClientPortal })));
 const RequireAdmin = lazy(() => import('./app/portal-screens').then((module) => ({ default: module.RequireAdmin })));
+const CrmDashboard = lazy(() => import('./app/crm-dashboard').then((module) => ({ default: module.CrmDashboard })));
 const UnsubscribePage = lazy(() => import('./app/unsubscribe'));
 
 function PortalFallback() {
@@ -31,10 +32,11 @@ createRoot(document.getElementById('root')!).render(
         <Route path="/" element={<Home />} />
         <Route path="/unsubscribe" element={<Suspense fallback={<PortalFallback />}><UnsubscribePage /></Suspense>} />
         <Route path="/admin/login" element={<Suspense fallback={<PortalFallback />}><AdminLogin /></Suspense>} />
-        <Route path="/admin" element={<PortalGate><AdminHome /></PortalGate>} />
+        <Route path="/admin/projects" element={<PortalGate><AdminHome /></PortalGate>} />
         <Route path="/admin/projects/:projectId" element={<PortalGate><AdminProject /></PortalGate>} />
         <Route path="/admin/projects/:projectId/pricing" element={<PortalGate><AdminPricing /></PortalGate>} />
         <Route path="/admin/projects/:projectId/preview" element={<PortalGate><ClientPortal preview /></PortalGate>} />
+        <Route path="/admin/*" element={<PortalGate><CrmDashboard /></PortalGate>} />
         <Route path="/client/:token" element={<Suspense fallback={<PortalFallback />}><ClientPortal /></Suspense>} />
       </Routes>
     </BrowserRouter>
