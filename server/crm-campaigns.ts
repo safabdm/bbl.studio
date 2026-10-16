@@ -1,7 +1,6 @@
 import { createHash, randomBytes } from 'node:crypto';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
-import { fileURLToPath } from 'node:url';
 import type {
   CampaignDraft,
   CrmLead,
@@ -16,8 +15,9 @@ import {
   maySendLive,
   validateManualSendGate,
 } from './crm-safety';
+import { resolveProjectRoot } from './project-root';
 
-const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
+const root = resolveProjectRoot(import.meta.url);
 
 export const DEFAULT_TEMPLATES: EmailTemplate[] = [
   {
