@@ -1,10 +1,19 @@
-import { useEffect, useMemo, useState, type ReactNode } from 'react';
-import { Link, NavLink, Route, Routes, useNavigate } from 'react-router-dom';
-import { BblsMark } from '../components/bbls-mark';
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useState,
+  type ReactNode,
+} from 'react';
+import { Link, NavLink, Route, Routes, useNavigate, useSearchParams } from 'react-router-dom';
+import { BblWordmark } from '../components/bbls-mark';
 import { api, usePrivateIndexing } from '../lib/portal';
 import type {
   CrmBookingItem,
   CrmCampaignSummary,
+  CrmEmailHistoryItem,
   CrmInboxItem,
   CrmLead,
   EmailTemplate,
@@ -13,11 +22,11 @@ import type {
 import './crm.css';
 import './portal.css';
 
-function asText(value: unknown, fallback = '') {
-  if (value == null) return fallback;
-  if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') return String(value);
-  return fallback;
-}
+/* ------------------------------------------------------------------ */
+/* Types + helpers                                                     */
+/* ------------------------------------------------------------------ */
+
+type Connection = 'not_connected' | 'sync_pending' | 'synced';
 
 type OverviewResponse = {
   metrics: {
@@ -33,7 +42,7 @@ type OverviewResponse = {
     last_activity_at?: string | null;
   } | null;
   source: string;
-  connection?: 'not_connected' | 'sync_pending' | 'synced';
+  connection?: Connection;
   last_synced_at?: string | null;
   metrics_trusted?: boolean;
   message?: string;
@@ -43,69 +52,315 @@ type OverviewResponse = {
     MANUAL_SEND_LIVE_ENABLED?: boolean;
     FOLLOWUPS_LIVE?: boolean;
   };
+  sync?: { status?: Connection; stale?: boolean; last_synced_at?: string | null };
 };
 
 type LeadsResponse = {
   leads: CrmLead[];
   source: string;
-  connection?: 'not_connected' | 'sync_pending' | 'synced';
+  connection?: Connection;
   last_synced_at?: string | null;
   message?: string;
   empty?: boolean;
   metrics_trusted?: boolean;
 };
 
-function connectionBanner(connection?: string, message?: string) {
-  if (!connection && !message) return null;
-  if (connection === 'synced' && !message) return null;
-  const label =
-    connection === 'not_connected'
-      ? 'Not connected'
-      : connection === 'sync_pending'
-        ? 'Sync pending'
-        : connection === 'synced'
-          ? 'Connected'
-          : null;
-  const cls = connection === 'synced' ? 'crm-banner' : 'crm-banner warn';
+const SELECTION_KEY = 'bbl_crm_selected_ids';
+
+function asText(value: unknown, fallback = '') {
+  if (value == null) return fallback;
+  if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') return String(value);
+  return fallback;
+}
+
+function parseDate(value: unknown): Date | null {
+  if (typeof value !== 'string' || !value.trim()) return null;
+  const d = new Date(value);
+  return Number.isNaN(d.getTime()) ? null : d;
+}
+
+/** "Oct 8" this year, "Oct 8, 2025" otherwise. */
+function fmtDate(value: unknown, withTime = false) {
+  const d = parseDate(value);
+  if (!d) return '—';
+  const sameYear = d.getFullYear() === new Date().getFullYear();
+  const date = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', ...(sameYear ? {} : { year: 'numeric' }) });
+  if (!withTime) return date;
+  return `${date}, ${d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}`;
+}
+
+function fmtRelative(value: unknown) {
+  const d = parseDate(value);
+  if (!d) return 'never';
+  const mins = Math.round((Date.now() - d.getTime()) / 60000);
+  if (mins < 1) return 'just now';
+  if (mins < 60) return `${mins}m ago`;
+  const hours = Math.round(mins / 60);
+  if (hours < 48) return `${hours}h ago`;
+  return `${Math.round(hours / 24)}d ago`;
+}
+
+function isContactable(lead: CrmLead) {
+  if (lead.contactable === false) return false;
+  const status = String(lead.email_status || '').toUpperCase();
+  if (status === 'NOT CONTACTABLE' || status === 'NOT_CONTACTABLE') return false;
+  return Boolean(lead.email && lead.email.includes('@'));
+}
+
+function isBlocked(lead: CrmLead) {
+  return Boolean(lead.suppressed || lead.unsubscribed || lead.bounced === 'YES');
+}
+
+function isContacted(lead: CrmLead) {
+  const status = String(lead.status || lead.sales_status || '').toLowerCase();
+  return lead.email_accepted === 'YES' || Boolean(lead.last_contacted_at) || status === 'contacted';
+}
+
+function lastActivity(lead: CrmLead) {
+  return lead.last_activity_at || lead.last_contacted_at || null;
+}
+
+/** One stage label per lead, derived only from evidence fields. */
+function stageOf(lead: CrmLead): { label: string; tone: 'good' | 'warn' | 'muted' | 'accent' } {
+  if (lead.booked === 'YES') return { label: 'Booked', tone: 'good' };
+  if (lead.replied === 'YES') return { label: 'Replied', tone: 'accent' };
+  if (lead.unsubscribed) return { label: 'Unsubscribed', tone: 'muted' };
+  if (lead.bounced === 'YES') return { label: 'Bounced', tone: 'warn' };
+  if (lead.suppressed) return { label: 'Suppressed', tone: 'muted' };
+  if (isContacted(lead)) return { label: 'Contacted', tone: 'muted' };
+  if (!isContactable(lead)) return { label: 'No email', tone: 'muted' };
+  return { label: 'Ready', tone: 'accent' };
+}
+
+function pct(part: number, whole: number) {
+  if (!whole) return 0;
+  return Math.round((part / whole) * 100);
+}
+
+/* ------------------------------------------------------------------ */
+/* Shared status (sync + safety), loaded once by the shell             */
+/* ------------------------------------------------------------------ */
+
+type CrmStatus = {
+  overview: OverviewResponse | null;
+  error: string;
+  reload: () => void;
+};
+
+const StatusContext = createContext<CrmStatus>({ overview: null, error: '', reload: () => undefined });
+
+function useCrmStatus() {
+  return useContext(StatusContext);
+}
+
+function useLeads() {
+  const [data, setData] = useState<LeadsResponse | null>(null);
+  const [error, setError] = useState('');
+  const [loading, setLoading] = useState(true);
+  useEffect(() => {
+    void api<LeadsResponse>('/api/admin/crm/leads')
+      .then(setData)
+      .catch((err) => setError(err instanceof Error ? err.message : 'Could not load leads.'))
+      .finally(() => setLoading(false));
+  }, []);
+  return { data, leads: data?.leads || [], error, loading };
+}
+
+function readSelection(): string[] {
+  try {
+    const raw = sessionStorage.getItem(SELECTION_KEY);
+    const parsed = raw ? (JSON.parse(raw) as unknown) : [];
+    return Array.isArray(parsed) ? parsed.map(String) : [];
+  } catch {
+    return [];
+  }
+}
+
+function writeSelection(ids: string[]) {
+  try {
+    sessionStorage.setItem(SELECTION_KEY, JSON.stringify(ids));
+  } catch {
+    // storage unavailable — selection stays in memory only
+  }
+}
+
+/* ------------------------------------------------------------------ */
+/* Small UI pieces                                                     */
+/* ------------------------------------------------------------------ */
+
+function PageHeader({ title, description, actions }: { title: string; description?: string; actions?: ReactNode }) {
   return (
-    <div className={cls}>
-      {label ? <strong>{label}. </strong> : null}
-      {message || ''}
+    <header className="crm-page-head">
+      <div>
+        <h1>{title}</h1>
+        {description ? <p className="crm-lead">{description}</p> : null}
+      </div>
+      {actions ? <div className="crm-head-actions">{actions}</div> : null}
+    </header>
+  );
+}
+
+function SyncNotice() {
+  const { overview } = useCrmStatus();
+  const connection = overview?.connection;
+  if (!overview || connection === 'synced') return null;
+  const label = connection === 'sync_pending' ? 'Sync pending' : 'Not connected';
+  return (
+    <div className="crm-banner warn" role="status">
+      <strong>{label}.</strong>{' '}
+      {connection === 'sync_pending'
+        ? 'Showing the last snapshot. Counts may be out of date until the Mac pushes again.'
+        : 'No CRM snapshot has reached the site yet. Numbers stay blank instead of showing false zeros.'}
     </div>
   );
 }
 
-function metricDisplay(trusted: boolean | undefined, value: number | string | null | undefined, suffix = '') {
-  if (!trusted || value == null || value === '') return '—';
-  return `${value}${suffix}`;
+function StagePill({ lead }: { lead: CrmLead }) {
+  const stage = stageOf(lead);
+  return <span className={`crm-pill ${stage.tone}`}>{stage.label}</span>;
 }
 
-function StatusPill({ value }: { value: string | null | undefined }) {
+/** [field, letter, label, flagUnknown] — booking isn't a provider event, so its Unknown stays quiet. */
+const TRACK_FIELDS = [
+  ['email_accepted', 'A', 'Accepted by provider', true],
+  ['delivered', 'D', 'Delivered', true],
+  ['replied', 'R', 'Replied', true],
+  ['booked', 'B', 'Booked', false],
+] as const;
+
+function TrackingDots({ lead }: { lead: CrmLead }) {
+  const contacted = isContacted(lead);
+  return (
+    <span className="crm-track" aria-label="Email tracking">
+      {TRACK_FIELDS.map(([key, letter, label, flagUnknown]) => {
+        const raw = String(lead[key] || 'UNKNOWN').toUpperCase();
+        // Before any contact, UNKNOWN is just "not applicable" — render it quiet.
+        const state = raw === 'YES' ? 'yes' : raw === 'NO' ? 'no' : contacted && flagUnknown ? 'unknown' : 'na';
+        const text = state === 'yes' ? 'Yes' : state === 'no' ? 'No' : state === 'unknown' ? 'Unknown (no provider evidence)' : contacted ? 'Not yet' : 'Not contacted';
+        return (
+          <span key={key} className={`crm-dot ${state}`} title={`${label}: ${text}`}>
+            {letter}
+            <span className="sr-only"> {label}: {text}</span>
+          </span>
+        );
+      })}
+    </span>
+  );
+}
+
+function TriPill({ value }: { value: string | null | undefined }) {
   const v = (value || 'UNKNOWN').toUpperCase();
-  const cls = v === 'YES' ? 'yes' : v === 'NO' ? 'no' : 'unknown';
-  return <span className={`crm-status ${cls}`}>{v}</span>;
+  const cls = v === 'YES' ? 'good' : v === 'NO' ? 'muted' : 'warn';
+  return <span className={`crm-pill ${cls}`}>{v === 'YES' ? 'Yes' : v === 'NO' ? 'No' : 'Unknown'}</span>;
+}
+
+function Empty({ title, children }: { title: string; children?: ReactNode }) {
+  return (
+    <div className="crm-empty">
+      <strong>{title}</strong>
+      {children ? <p>{children}</p> : null}
+    </div>
+  );
+}
+
+function CheckRow({ ok, label, value }: { ok: boolean | null; label: string; value: ReactNode }) {
+  return (
+    <div className="crm-check">
+      <span className={`crm-check-mark ${ok === null ? 'neutral' : ok ? 'ok' : 'bad'}`} aria-hidden="true" />
+      <span className="crm-check-label">{label}</span>
+      <span className="crm-check-value">{value}</span>
+    </div>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/* Shell                                                               */
+/* ------------------------------------------------------------------ */
+
+const NAV: Array<{ group: string; items: Array<{ to: string; label: string; end?: boolean }> }> = [
+  {
+    group: 'Pipeline',
+    items: [
+      { to: '/admin', label: 'Overview', end: true },
+      { to: '/admin/leads', label: 'Leads' },
+      { to: '/admin/inbox', label: 'Inbox' },
+      { to: '/admin/bookings', label: 'Bookings' },
+    ],
+  },
+  {
+    group: 'Outreach',
+    items: [
+      { to: '/admin/campaigns', label: 'Campaigns' },
+      { to: '/admin/analytics', label: 'Analytics' },
+    ],
+  },
+  {
+    group: 'Studio',
+    items: [
+      { to: '/admin/projects', label: 'Client portal' },
+      { to: '/admin/settings', label: 'Settings' },
+    ],
+  },
+];
+
+function SidebarStatus() {
+  const { overview } = useCrmStatus();
+  const connection = overview?.connection;
+  const synced = connection === 'synced';
+  const live = Boolean(overview?.safety?.MANUAL_SEND_LIVE_ENABLED) && overview?.safety?.EMAIL_DRY_RUN === false;
+  return (
+    <div className="crm-side-status">
+      <div className="crm-side-row">
+        <span className={`crm-led ${synced ? 'ok' : 'warn'}`} aria-hidden="true" />
+        <span>{synced ? 'Synced' : connection === 'sync_pending' ? 'Sync pending' : overview ? 'Not connected' : 'Checking…'}</span>
+        <span className="crm-side-meta">{overview ? fmtRelative(overview.last_synced_at) : ''}</span>
+      </div>
+      <div className="crm-side-row">
+        <span className={`crm-led ${live ? 'live' : 'off'}`} aria-hidden="true" />
+        <span>{live ? 'Live sending on' : 'Sending off'}</span>
+        <span className="crm-side-meta">{live ? '' : 'dry-run'}</span>
+      </div>
+    </div>
+  );
 }
 
 function CrmShell({ children }: { children: ReactNode }) {
   usePrivateIndexing('BBL Studio CRM');
+  const [overview, setOverview] = useState<OverviewResponse | null>(null);
+  const [error, setError] = useState('');
+  const load = useCallback(() => {
+    void api<OverviewResponse>('/api/admin/crm/overview')
+      .then((data) => {
+        setOverview(data);
+        setError('');
+      })
+      .catch((err) => setError(err instanceof Error ? err.message : 'Could not load CRM status.'));
+  }, []);
+  useEffect(load, [load]);
+
   return (
-    <div className="crm-shell">
-      <header className="crm-nav">
-        <Link to="/admin" className="crm-nav-brand" aria-label="BBL Studio CRM home">
-          <BblsMark size={22} />
-          <span>BBL Studio CRM</span>
-        </Link>
-        <nav className="crm-nav-links" aria-label="CRM sections">
-          <NavLink to="/admin" end className={({ isActive }) => (isActive ? 'active' : undefined)}>Overview</NavLink>
-          <NavLink to="/admin/leads" className={({ isActive }) => (isActive ? 'active' : undefined)}>Leads</NavLink>
-          <NavLink to="/admin/campaigns" className={({ isActive }) => (isActive ? 'active' : undefined)}>Email Campaigns</NavLink>
-          <NavLink to="/admin/inbox" className={({ isActive }) => (isActive ? 'active' : undefined)}>Inbox / Replies</NavLink>
-          <NavLink to="/admin/bookings" className={({ isActive }) => (isActive ? 'active' : undefined)}>Bookings</NavLink>
-          <NavLink to="/admin/analytics" className={({ isActive }) => (isActive ? 'active' : undefined)}>Analytics</NavLink>
-          <NavLink to="/admin/settings" className={({ isActive }) => (isActive ? 'active' : undefined)}>Settings</NavLink>
-          <NavLink to="/admin/projects" className={({ isActive }) => (isActive ? 'active' : undefined)}>Client portal</NavLink>
+    <StatusContext.Provider value={{ overview, error, reload: load }}>
+      <div className="crm-shell">
+        <aside className="crm-side">
+          <Link to="/admin" className="crm-brand" aria-label="BBL Studio CRM home">
+            <BblWordmark height={22} />
+          </Link>
+          <nav className="crm-side-nav" aria-label="CRM sections">
+            {NAV.map((group) => (
+              <div className="crm-nav-group" key={group.group}>
+                <p className="crm-nav-label">{group.group}</p>
+                {group.items.map((item) => (
+                  <NavLink key={item.to} to={item.to} end={item.end} className={({ isActive }) => (isActive ? 'active' : undefined)}>
+                    {item.label}
+                  </NavLink>
+                ))}
+              </div>
+            ))}
+          </nav>
+          <SidebarStatus />
           <button
             type="button"
+            className="crm-logout"
             onClick={() => {
               void api('/api/admin/logout', { method: 'POST', body: '{}' }).catch(() => undefined);
               window.location.replace('/admin/login');
@@ -113,227 +368,459 @@ function CrmShell({ children }: { children: ReactNode }) {
           >
             Log out
           </button>
-        </nav>
-      </header>
-      <div className="crm-wrap">{children}</div>
-    </div>
+        </aside>
+        <main className="crm-main">
+          <div className="crm-wrap">{children}</div>
+        </main>
+      </div>
+    </StatusContext.Provider>
   );
 }
 
+/* ------------------------------------------------------------------ */
+/* Overview                                                            */
+/* ------------------------------------------------------------------ */
+
 function OverviewPage() {
-  const [data, setData] = useState<OverviewResponse | null>(null);
-  const [error, setError] = useState('');
-  useEffect(() => {
-    void api<OverviewResponse>('/api/admin/crm/overview')
-      .then(setData)
-      .catch((err) => setError(err instanceof Error ? err.message : 'Could not load overview.'));
-  }, []);
-  const m = data?.metrics;
-  const trusted = Boolean(data?.metrics_trusted);
+  const { overview, error: statusError } = useCrmStatus();
+  const { leads, error, loading } = useLeads();
+  const trusted = Boolean(overview?.metrics_trusted) && leads.length > 0;
+
+  const stats = useMemo(() => {
+    const contactable = leads.filter(isContactable);
+    const contacted = leads.filter(isContacted);
+    const yes = (key: 'email_accepted' | 'delivered' | 'replied' | 'booked') => leads.filter((l) => l[key] === 'YES').length;
+    const unknownDelivery = contacted.filter((l) => l.delivered !== 'YES' && l.delivered !== 'NO' && l.bounced !== 'YES').length;
+    const ready = leads.filter((l) => isContactable(l) && !isContacted(l) && !isBlocked(l)).length;
+    return {
+      total: leads.length,
+      contactable: contactable.length,
+      noEmail: leads.length - contactable.length,
+      contacted: contacted.length,
+      accepted: yes('email_accepted'),
+      delivered: yes('delivered'),
+      replied: yes('replied'),
+      booked: yes('booked'),
+      bounced: leads.filter((l) => l.bounced === 'YES').length,
+      unknownDelivery,
+      ready,
+    };
+  }, [leads]);
+
+  const funnel: Array<{ label: string; value: number; note?: string }> = [
+    { label: 'Leads', value: stats.total },
+    { label: 'Contactable', value: stats.contactable, note: `${stats.noEmail} without email` },
+    { label: 'Contacted', value: stats.contacted },
+    { label: 'Provider accepted', value: stats.accepted },
+    { label: 'Delivered', value: stats.delivered, note: stats.unknownDelivery ? `${stats.unknownDelivery} unknown` : undefined },
+    { label: 'Replied', value: stats.replied },
+    { label: 'Booked', value: stats.booked },
+  ];
+
+  const attention: Array<{ text: string; to: string; tone: 'warn' | 'accent' | 'muted' }> = [];
+  if (overview && overview.connection !== 'synced') {
+    attention.push({ text: 'CRM sync is not current. Run the Mac push before trusting these numbers.', to: '/admin/settings', tone: 'warn' });
+  }
+  if (trusted && stats.unknownDelivery) {
+    attention.push({
+      text: `${stats.unknownDelivery} contacted lead${stats.unknownDelivery === 1 ? ' has' : 's have'} no delivery evidence. Check the Resend webhook.`,
+      to: '/admin/settings',
+      tone: 'warn',
+    });
+  }
+  if (trusted && stats.replied) {
+    attention.push({ text: `${stats.replied} repl${stats.replied === 1 ? 'y' : 'ies'} to review.`, to: '/admin/inbox', tone: 'accent' });
+  }
+  if (trusted && stats.ready) {
+    attention.push({ text: `${stats.ready} contactable lead${stats.ready === 1 ? '' : 's'} not yet contacted.`, to: '/admin/leads?view=ready', tone: 'accent' });
+  }
+  if (trusted && stats.noEmail) {
+    attention.push({ text: `${stats.noEmail} leads have no verified email and cannot be contacted.`, to: '/admin/leads?view=no-email', tone: 'muted' });
+  }
+
+  const recent = useMemo(
+    () =>
+      [...leads]
+        .filter((l) => parseDate(lastActivity(l)))
+        .sort((a, b) => String(lastActivity(b)).localeCompare(String(lastActivity(a))))
+        .slice(0, 6),
+    [leads],
+  );
+
   return (
     <>
-      <p className="crm-kicker">Owner dashboard</p>
-      <h1>Overview</h1>
-      <p className="crm-lead">Manual email marketing only. Automated outreach stays off. Mac pushes CRM snapshots outbound; delivery truth comes from signed Resend webhooks.</p>
-      {connectionBanner(data?.connection, data?.message)}
-      {error ? <p className="crm-error">{error}</p> : null}
-      <div className="crm-metrics">
-        {[
-          ['Total leads', metricDisplay(trusted, m?.total_leads)],
-          ['New', metricDisplay(trusted, m?.new_leads)],
-          ['Contacted', metricDisplay(trusted, m?.contacted_leads)],
-          ['Emails sent', metricDisplay(trusted, m?.emails_sent)],
-          ['Delivered', metricDisplay(trusted, m?.emails_delivered)],
-          ['Bounced', metricDisplay(trusted, m?.emails_bounced)],
-          ['Replies', metricDisplay(trusted, m?.replies)],
-          ['Booked', metricDisplay(trusted, m?.booked)],
-          ['Conversion', metricDisplay(trusted, m?.conversion_rate, '%')],
-        ].map(([label, value]) => (
-          <div className="crm-metric" key={String(label)}>
-            <span>{label}</span>
-            <strong>{value}</strong>
-          </div>
-        ))}
-      </div>
-      {!trusted ? (
-        <p className="crm-muted" style={{ marginTop: '0.85rem' }}>
-          Counts show as em dashes until a successful Mac sync. Zeros appear only after real synced data.
-        </p>
-      ) : null}
-      <div className="crm-panel">
-        <h2>Safety</h2>
-        <p className="crm-muted" style={{ marginTop: '.75rem' }}>
-          EMAIL_OUTREACH_ENABLED={asText(data?.safety?.EMAIL_OUTREACH_ENABLED, 'false')} · EMAIL_DRY_RUN={asText(data?.safety?.EMAIL_DRY_RUN, 'true')} · MANUAL_SEND_LIVE_ENABLED={asText(data?.safety?.MANUAL_SEND_LIVE_ENABLED, 'false')} · FOLLOWUPS_LIVE={asText(data?.safety?.FOLLOWUPS_LIVE, 'false')}
-        </p>
-        <div className="crm-actions">
-          <Link className="crm-btn" to="/admin/leads">Go to Leads</Link>
-          <Link className="crm-btn-secondary" to="/admin/campaigns">Compose campaign</Link>
+      <PageHeader
+        title="Overview"
+        description="From lead to booked call. Counts come only from synced data and signed provider events."
+        actions={
+          <>
+            <Link className="crm-btn-secondary" to="/admin/campaigns">New campaign</Link>
+            <Link className="crm-btn" to="/admin/leads?view=ready">Review ready leads</Link>
+          </>
+        }
+      />
+      <SyncNotice />
+      {statusError || error ? <p className="crm-error">{statusError || error}</p> : null}
+
+      <section className="crm-panel" aria-labelledby="funnel-title">
+        <div className="crm-panel-head">
+          <h2 id="funnel-title">Pipeline</h2>
+          <span className="crm-muted">Last activity {fmtDate(overview?.metrics?.last_activity_at)}</span>
         </div>
+        <ol className="crm-funnel">
+          {funnel.map((step) => (
+            <li key={step.label}>
+              <span className="crm-funnel-label">{step.label}</span>
+              <strong>{trusted ? step.value : loading ? '…' : '—'}</strong>
+              <span className="crm-bar" aria-hidden="true">
+                <span style={{ width: trusted ? `${Math.max(pct(step.value, stats.total), step.value ? 2 : 0)}%` : '0%' }} />
+              </span>
+              <span className="crm-funnel-note">{trusted && step.note ? step.note : ' '}</span>
+            </li>
+          ))}
+        </ol>
+      </section>
+
+      <div className="crm-grid-2">
+        <section className="crm-panel" aria-labelledby="attention-title">
+          <div className="crm-panel-head">
+            <h2 id="attention-title">Needs attention</h2>
+          </div>
+          {attention.length ? (
+            <ul className="crm-attention">
+              {attention.map((item) => (
+                <li key={item.text}>
+                  <span className={`crm-led ${item.tone === 'warn' ? 'warn' : item.tone === 'accent' ? 'accent' : 'off'}`} aria-hidden="true" />
+                  <span>{item.text}</span>
+                  <Link to={item.to} className="crm-link">Open</Link>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="crm-muted crm-pad">Nothing waiting.</p>
+          )}
+        </section>
+
+        <section className="crm-panel" aria-labelledby="recent-title">
+          <div className="crm-panel-head">
+            <h2 id="recent-title">Recent activity</h2>
+            <Link to="/admin/leads" className="crm-link">All leads</Link>
+          </div>
+          {recent.length ? (
+            <ul className="crm-recent">
+              {recent.map((lead) => (
+                <li key={String(lead.id)}>
+                  <span className="crm-recent-name">{lead.business_name}</span>
+                  <StagePill lead={lead} />
+                  <span className="crm-muted">{fmtDate(lastActivity(lead))}</span>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="crm-muted crm-pad">{loading ? 'Loading…' : 'No dated activity in the snapshot yet.'}</p>
+          )}
+        </section>
       </div>
     </>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/* Leads                                                               */
+/* ------------------------------------------------------------------ */
+
+const VIEWS: Array<{ id: string; label: string; test: (l: CrmLead) => boolean }> = [
+  { id: 'all', label: 'All', test: () => true },
+  { id: 'ready', label: 'Ready', test: (l) => isContactable(l) && !isContacted(l) && !isBlocked(l) },
+  { id: 'contacted', label: 'Contacted', test: isContacted },
+  { id: 'replied', label: 'Replied', test: (l) => l.replied === 'YES' },
+  { id: 'booked', label: 'Booked', test: (l) => l.booked === 'YES' },
+  { id: 'no-email', label: 'No email', test: (l) => !isContactable(l) },
+];
+
+function LeadDrawer({ lead, onClose, onCompose }: { lead: CrmLead; onClose: () => void; onCompose: () => void }) {
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [onClose]);
+  const contactable = isContactable(lead);
+  const rows: Array<[string, ReactNode]> = [
+    ['Contact', lead.contact_name || '—'],
+    ['Email', contactable ? lead.email : <span className="crm-muted">No verified email</span>],
+    ['Phone', lead.phone || '—'],
+    ['Location', lead.location || '—'],
+    ['Category', lead.category || '—'],
+    ['Outreach status', lead.email_outreach_status || '—'],
+    ['Last contacted', fmtDate(lead.last_contacted_at, true)],
+    ['Last activity', fmtDate(lead.last_activity_at, true)],
+  ];
+  return (
+    <div className="crm-drawer-backdrop" role="presentation" onClick={onClose}>
+      <aside className="crm-drawer" role="dialog" aria-modal="true" aria-labelledby="lead-title" onClick={(e) => e.stopPropagation()}>
+        <div className="crm-drawer-head">
+          <div>
+            <h2 id="lead-title">{lead.business_name}</h2>
+            <StagePill lead={lead} />
+          </div>
+          <button type="button" className="crm-icon-btn" onClick={onClose} aria-label="Close">×</button>
+        </div>
+        <dl className="crm-dl">
+          {rows.map(([k, v]) => (
+            <div key={k}>
+              <dt>{k}</dt>
+              <dd>{v}</dd>
+            </div>
+          ))}
+        </dl>
+        <h3 className="crm-subhead">Email tracking</h3>
+        <dl className="crm-dl">
+          <div><dt>Provider accepted</dt><dd><TriPill value={lead.email_accepted} /></dd></div>
+          <div><dt>Delivered</dt><dd><TriPill value={lead.delivered} /></dd></div>
+          <div><dt>Bounced</dt><dd><TriPill value={lead.bounced} /></dd></div>
+          <div><dt>Replied</dt><dd><TriPill value={lead.replied} /></dd></div>
+          <div><dt>Booked</dt><dd><TriPill value={lead.booked} /></dd></div>
+          <div><dt>Provider message ids</dt><dd>{lead.provider_message_ids?.length || 0}</dd></div>
+        </dl>
+        {lead.suppressed || lead.unsubscribed ? (
+          <p className="crm-banner warn">{lead.unsubscribed ? 'Unsubscribed.' : 'Suppressed.'} Excluded from every send.</p>
+        ) : null}
+        {lead.notes ? (
+          <>
+            <h3 className="crm-subhead">Notes</h3>
+            <p className="crm-notes">{lead.notes}</p>
+          </>
+        ) : null}
+        <div className="crm-drawer-foot">
+          <button type="button" className="crm-btn" disabled={!contactable || isBlocked(lead)} onClick={onCompose}>
+            Draft email
+          </button>
+        </div>
+      </aside>
+    </div>
   );
 }
 
 function LeadsPage() {
   const navigate = useNavigate();
-  const [leads, setLeads] = useState<CrmLead[]>([]);
-  const [connection, setConnection] = useState('');
-  const [message, setMessage] = useState('');
-  const [error, setError] = useState('');
+  const [params, setParams] = useSearchParams();
+  const { data, leads, error, loading } = useLeads();
   const [q, setQ] = useState('');
-  const [status, setStatus] = useState('');
-  const [selected, setSelected] = useState<string[]>([]);
+  const [sort, setSort] = useState<'activity' | 'name'>('activity');
+  const [selected, setSelected] = useState<string[]>(() => readSelection());
+  const [open, setOpen] = useState<CrmLead | null>(null);
+  const view = VIEWS.find((v) => v.id === params.get('view')) || VIEWS[0];
 
-  useEffect(() => {
-    const params = new URLSearchParams();
-    if (status) params.set('status', status);
-    void api<LeadsResponse>(`/api/admin/crm/leads?${params.toString()}`)
-      .then((data) => {
-        setLeads(data.leads || []);
-        setConnection(data.connection || data.source || '');
-        setMessage(data.message || '');
-      })
-      .catch((err) => setError(err instanceof Error ? err.message : 'Could not load leads.'));
-  }, [status]);
+  const counts = useMemo(() => Object.fromEntries(VIEWS.map((v) => [v.id, leads.filter(v.test).length])), [leads]);
 
   const filtered = useMemo(() => {
     const needle = q.trim().toLowerCase();
-    if (!needle) return leads;
-    return leads.filter((lead) =>
-      [lead.business_name, lead.contact_name, lead.email, lead.location, lead.category]
-        .filter(Boolean)
-        .some((value) => String(value).toLowerCase().includes(needle)),
+    const rows = leads.filter(view.test).filter((lead) =>
+      !needle
+        ? true
+        : [lead.business_name, lead.contact_name, lead.email, lead.location, lead.category]
+            .filter(Boolean)
+            .some((value) => String(value).toLowerCase().includes(needle)),
     );
-  }, [leads, q]);
+    return rows.sort((a, b) =>
+      sort === 'name'
+        ? a.business_name.localeCompare(b.business_name)
+        : String(lastActivity(b) || '').localeCompare(String(lastActivity(a) || '')),
+    );
+  }, [leads, view, q, sort]);
 
-  const allFilteredIds = filtered.map((lead) => String(lead.id));
-  const allSelected = allFilteredIds.length > 0 && allFilteredIds.every((id) => selected.includes(id));
+  const selectable = filtered.filter((l) => isContactable(l) && !isBlocked(l)).map((l) => String(l.id));
+  const allSelected = selectable.length > 0 && selectable.every((id) => selected.includes(id));
 
-  function toggle(id: string) {
-    setSelected((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
+  function update(next: string[]) {
+    setSelected(next);
+    writeSelection(next);
   }
 
-  function composeSelected() {
-    sessionStorage.setItem('bbl_crm_selected_ids', JSON.stringify(selected));
+  function toggle(id: string) {
+    update(selected.includes(id) ? selected.filter((x) => x !== id) : [...selected, id]);
+  }
+
+  function compose(ids = selected) {
+    writeSelection(ids);
     navigate('/admin/campaigns');
   }
 
+  const connection = data?.connection;
+
   return (
     <>
-      <p className="crm-kicker">Lead management</p>
-      <h1>Leads</h1>
-      <p className="crm-lead">Select contacts, then compose. Unverified delivery fields show UNKNOWN. No fabricated lead rows.</p>
-      {connectionBanner(connection, message)}
+      <PageHeader
+        title="Leads"
+        description="Only leads with a verified email can be selected. Tracking stays Unknown until a provider event confirms it."
+      />
+      <SyncNotice />
       {error ? <p className="crm-error">{error}</p> : null}
+
       <div className="crm-toolbar">
+        <div className="crm-tabs" role="tablist" aria-label="Lead views">
+          {VIEWS.map((v) => (
+            <button
+              key={v.id}
+              type="button"
+              role="tab"
+              aria-selected={v.id === view.id}
+              className={v.id === view.id ? 'active' : undefined}
+              onClick={() => setParams(v.id === 'all' ? {} : { view: v.id })}
+            >
+              {v.label}
+              <span className="crm-count">{loading ? '' : counts[v.id]}</span>
+            </button>
+          ))}
+        </div>
         <div className="crm-filters">
-          <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search name, email, location" aria-label="Search leads" />
-          <select value={status} onChange={(e) => setStatus(e.target.value)} aria-label="Filter by status">
-            <option value="">All statuses</option>
-            <option value="new">New</option>
-            <option value="contacted">Contacted</option>
-            <option value="replied">Replied</option>
-            <option value="booked">Booked</option>
+          <input type="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search" aria-label="Search leads" />
+          <select value={sort} onChange={(e) => setSort(e.target.value as 'activity' | 'name')} aria-label="Sort leads">
+            <option value="activity">Recent activity</option>
+            <option value="name">Name A–Z</option>
           </select>
         </div>
-        <div className="crm-selected">
-          <strong>{selected.length}</strong> selected
-        </div>
       </div>
-      <div className="crm-actions">
-        <button className="crm-btn-secondary" type="button" onClick={() => setSelected(allSelected ? [] : allFilteredIds)}>
-          {allSelected ? 'Deselect filtered' : 'Select filtered'}
-        </button>
-        <button className="crm-btn-secondary" type="button" onClick={() => setSelected([])}>Clear selection</button>
-        <button className="crm-btn" type="button" disabled={!selected.length} onClick={composeSelected}>Compose email</button>
-      </div>
-      {!filtered.length ? (
-        <div className="crm-empty">
-          {connection === 'not_connected'
-            ? 'Not connected — Mac has not pushed a CRM snapshot yet. This is not a zero-lead database; run scripts/crm-mac-sync/push_crm_sync.py when the Mac worker is online.'
-            : connection === 'sync_pending'
-              ? 'Sync pending — waiting for a successful Mac push (or last sync is stale). Leads will appear here after POST /api/crm/sync succeeds.'
-              : 'No leads match this filter. Synced CRM data is present; try clearing filters.'}
-        </div>
+
+      {loading ? (
+        <div className="crm-skeleton" aria-busy="true" aria-label="Loading leads" />
+      ) : !filtered.length ? (
+        connection === 'not_connected' ? (
+          <Empty title="No snapshot yet">
+            The Mac hasn't pushed CRM data. Run <code>scripts/crm-mac-sync/push_crm_sync.py</code> while the lead agent is online.
+          </Empty>
+        ) : (
+          <Empty title="No leads in this view">Try another view or clear the search.</Empty>
+        )
       ) : (
         <div className="crm-table-wrap">
           <table className="crm-table">
             <thead>
               <tr>
-                <th>
+                <th className="crm-col-check">
                   <input
                     type="checkbox"
                     checked={allSelected}
-                    onChange={() => setSelected(allSelected ? [] : allFilteredIds)}
-                    aria-label="Select all filtered"
+                    disabled={!selectable.length}
+                    onChange={() => update(allSelected ? selected.filter((id) => !selectable.includes(id)) : [...new Set([...selected, ...selectable])])}
+                    aria-label="Select all contactable leads in this view"
                   />
                 </th>
                 <th>Business</th>
-                <th>Email</th>
-                <th>Status</th>
-                <th>Accepted</th>
-                <th>Delivered</th>
-                <th>Bounced</th>
-                <th>Replied</th>
-                <th>Booked</th>
-                <th>Last activity</th>
+                <th>Contact</th>
+                <th>Stage</th>
+                <th>
+                  <span title="A accepted · D delivered · R replied · B booked">Tracking</span>
+                </th>
+                <th className="crm-col-date">Last activity</th>
               </tr>
             </thead>
             <tbody>
               {filtered.map((lead) => {
                 const id = String(lead.id);
+                const canSelect = isContactable(lead) && !isBlocked(lead);
                 return (
-                  <tr key={id}>
-                    <td>
-                      <input type="checkbox" checked={selected.includes(id)} onChange={() => toggle(id)} aria-label={`Select ${lead.business_name}`} />
+                  <tr key={id} className={selected.includes(id) ? 'selected' : undefined} onClick={() => setOpen(lead)}>
+                    <td className="crm-col-check" onClick={(e) => e.stopPropagation()}>
+                      <input
+                        type="checkbox"
+                        checked={selected.includes(id)}
+                        disabled={!canSelect}
+                        onChange={() => toggle(id)}
+                        aria-label={`Select ${lead.business_name}`}
+                        title={canSelect ? undefined : 'Not contactable'}
+                      />
                     </td>
                     <td>
-                      <div>{lead.business_name}</div>
-                      <div className="crm-muted">{lead.location || lead.category || ''}</div>
+                      <button type="button" className="crm-row-link" onClick={(e) => { e.stopPropagation(); setOpen(lead); }}>
+                        {lead.business_name}
+                      </button>
+                      <div className="crm-muted crm-sub">{lead.location || lead.category || ''}</div>
                     </td>
-                    <td>{lead.email}</td>
-                    <td>{lead.status || lead.sales_status || '—'}</td>
-                    <td><StatusPill value={lead.email_accepted} /></td>
-                    <td><StatusPill value={lead.delivered} /></td>
-                    <td><StatusPill value={lead.bounced} /></td>
-                    <td><StatusPill value={lead.replied} /></td>
-                    <td><StatusPill value={lead.booked} /></td>
-                    <td>{lead.last_activity_at || lead.last_contacted_at || '—'}</td>
+                    <td>
+                      {isContactable(lead) ? (
+                        <>
+                          {lead.contact_name ? <div>{lead.contact_name}</div> : null}
+                          <div className={lead.contact_name ? 'crm-muted crm-sub' : 'crm-muted'}>{lead.email}</div>
+                        </>
+                      ) : (
+                        <span className="crm-muted">No email</span>
+                      )}
+                    </td>
+                    <td><StagePill lead={lead} /></td>
+                    <td><TrackingDots lead={lead} /></td>
+                    <td className="crm-col-date crm-muted">{fmtDate(lastActivity(lead))}</td>
                   </tr>
                 );
               })}
             </tbody>
           </table>
+          <p className="crm-legend">
+            <span className="crm-dot yes">A</span> confirmed <span className="crm-dot unknown">A</span> unknown <span className="crm-dot no">A</span> no
+            <span className="crm-legend-sep">·</span> A accepted · D delivered · R replied · B booked
+          </p>
         </div>
       )}
+
+      {selected.length ? (
+        <div className="crm-bulkbar" role="region" aria-label="Selection">
+          <span><strong>{selected.length}</strong> selected</span>
+          <button type="button" className="crm-btn-ghost" onClick={() => update([])}>Clear</button>
+          <button type="button" className="crm-btn" onClick={() => compose()}>Compose email</button>
+        </div>
+      ) : null}
+
+      {open ? (
+        <LeadDrawer
+          lead={open}
+          onClose={() => setOpen(null)}
+          onCompose={() => compose([...new Set([...selected, String(open.id)])])}
+        />
+      ) : null}
     </>
   );
 }
 
+/* ------------------------------------------------------------------ */
+/* Campaigns                                                           */
+/* ------------------------------------------------------------------ */
+
+const PLACEHOLDERS = ['contact_name', 'business_name', 'location', 'category'];
+
+function Stepper({ step }: { step: number }) {
+  const steps = ['Recipients', 'Compose', 'Preview', 'Confirm'];
+  return (
+    <ol className="crm-stepper" aria-label="Campaign steps">
+      {steps.map((label, i) => (
+        <li key={label} className={i < step ? 'done' : i === step ? 'current' : undefined} aria-current={i === step ? 'step' : undefined}>
+          <span className="crm-step-num">{i + 1}</span>
+          {label}
+        </li>
+      ))}
+    </ol>
+  );
+}
+
 function CampaignsPage() {
+  const { overview } = useCrmStatus();
   const [templates, setTemplates] = useState<EmailTemplate[]>([]);
   const [leads, setLeads] = useState<CrmLead[]>([]);
-  const [selected, setSelected] = useState<string[]>([]);
+  const [selected, setSelected] = useState<string[]>(() => readSelection());
   const [templateId, setTemplateId] = useState('');
   const [name, setName] = useState('Manual campaign');
   const [subject, setSubject] = useState('');
   const [body, setBody] = useState('');
   const [previewToken, setPreviewToken] = useState('');
   const [previews, setPreviews] = useState<PersonalizedPreview[]>([]);
+  const [previewIndex, setPreviewIndex] = useState(0);
   const [showConfirm, setShowConfirm] = useState(false);
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
-    const stored = sessionStorage.getItem('bbl_crm_selected_ids');
-    if (stored) {
-      try {
-        setSelected(JSON.parse(stored) as string[]);
-      } catch {
-        // ignore
-      }
-    }
     void Promise.all([
       api<{ templates: EmailTemplate[]; message?: string }>('/api/admin/crm/campaigns'),
       api<LeadsResponse>('/api/admin/crm/leads'),
@@ -350,13 +837,34 @@ function CampaignsPage() {
       .catch((err) => setError(err instanceof Error ? err.message : 'Could not load campaigns.'));
   }, []);
 
+  const recipients = useMemo(() => {
+    const wanted = new Set(selected);
+    return leads.filter((l) => wanted.has(String(l.id)));
+  }, [leads, selected]);
+
+  function invalidate() {
+    setPreviewToken('');
+  }
+
+  function removeRecipient(id: string) {
+    const next = selected.filter((x) => x !== id);
+    setSelected(next);
+    writeSelection(next);
+    invalidate();
+  }
+
   function applyTemplate(id: string) {
     setTemplateId(id);
     const tpl = templates.find((item) => item.id === id);
     if (!tpl) return;
     setSubject(tpl.subject);
     setBody(tpl.body);
-    setPreviewToken('');
+    invalidate();
+  }
+
+  function insertPlaceholder(key: string) {
+    setBody((prev) => `${prev}{{${key}}}`);
+    invalidate();
   }
 
   async function onPreview() {
@@ -366,16 +874,11 @@ function CampaignsPage() {
     try {
       const data = await api<{ preview_token: string; previews: PersonalizedPreview[] }>('/api/admin/crm/preview', {
         method: 'POST',
-        body: JSON.stringify({
-          recipient_ids: selected,
-          subject,
-          body,
-          leads,
-        }),
+        body: JSON.stringify({ recipient_ids: selected, subject, body, leads }),
       });
       setPreviewToken(data.preview_token);
       setPreviews(data.previews || []);
-      setMessage(`Preview ready for ${data.previews?.length || 0} recipient(s). Review, then confirm send.`);
+      setPreviewIndex(0);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Preview failed.');
     } finally {
@@ -389,15 +892,9 @@ function CampaignsPage() {
     try {
       await api('/api/admin/crm/drafts', {
         method: 'POST',
-        body: JSON.stringify({
-          name,
-          subject,
-          body,
-          template_id: templateId || null,
-          recipient_ids: selected,
-        }),
+        body: JSON.stringify({ name, subject, body, template_id: templateId || null, recipient_ids: selected }),
       });
-      setMessage('Draft saved locally on this host.');
+      setMessage('Draft saved.');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not save draft.');
     } finally {
@@ -447,83 +944,141 @@ function CampaignsPage() {
     }
   }
 
-  const sample = previews[0];
+  const step = !selected.length ? 0 : !previewToken ? 1 : showConfirm ? 3 : 2;
+  const sample = previews[Math.min(previewIndex, previews.length - 1)];
+  const live = Boolean(overview?.safety?.MANUAL_SEND_LIVE_ENABLED) && overview?.safety?.EMAIL_DRY_RUN === false;
 
   return (
     <>
-      <p className="crm-kicker">Manual campaigns</p>
-      <h1>Email Campaigns</h1>
-      <p className="crm-lead">Flow: select → compose → preview → confirm → send. Dry-run by default. Live ESP send stays off unless MANUAL_SEND_LIVE_ENABLED is explicitly enabled.</p>
-      <div className="crm-banner warn">Zero live campaign emails in this phase. Send Test and Send Campaign are dry-run only.</div>
-      {message ? <p className="crm-ok">{message}</p> : null}
-      {error ? <p className="crm-error">{error}</p> : null}
-      <div className="crm-grid-2">
-        <div className="crm-panel">
-          <h2>Composer</h2>
-          <p className="crm-selected" style={{ marginTop: '.75rem' }}>
-            <strong>{selected.length}</strong> recipients selected
-          </p>
-          <div className="crm-field">
-            <label htmlFor="camp-name">Campaign name</label>
-            <input id="camp-name" value={name} onChange={(e) => setName(e.target.value)} />
+      <PageHeader
+        title="Campaigns"
+        description="Select recipients, write, preview every personalization, then confirm."
+        actions={
+          <>
+            <button className="crm-btn-ghost" type="button" disabled={busy} onClick={() => void onSaveDraft()}>Save draft</button>
+            <button className="crm-btn-secondary" type="button" disabled={busy || !subject} onClick={() => void onSendTest()}>Send test</button>
+          </>
+        }
+      />
+      <div className={`crm-banner ${live ? 'warn' : ''}`} role="note">
+        {live
+          ? <><strong>Live sending is enabled.</strong> Confirmed campaigns can reach recipients.</>
+          : <><strong>Dry-run mode.</strong> Nothing is sent while live sending is off. Runs are logged only.</>}
+      </div>
+      <Stepper step={step} />
+      {message ? <p className="crm-ok" role="status">{message}</p> : null}
+      {error ? <p className="crm-error" role="alert">{error}</p> : null}
+
+      <div className="crm-grid-2 crm-compose">
+        <section className="crm-panel">
+          <div className="crm-panel-head">
+            <h2>Recipients <span className="crm-count">{selected.length}</span></h2>
+            <Link to="/admin/leads?view=ready" className="crm-link">{selected.length ? 'Edit in Leads' : 'Select in Leads'}</Link>
           </div>
-          <div className="crm-field">
-            <label htmlFor="camp-template">Template</label>
-            <select id="camp-template" value={templateId} onChange={(e) => applyTemplate(e.target.value)}>
-              {templates.map((tpl) => (
-                <option key={tpl.id} value={tpl.id}>{tpl.name}</option>
+          {recipients.length ? (
+            <ul className="crm-chips">
+              {recipients.slice(0, 24).map((lead) => (
+                <li key={String(lead.id)}>
+                  {lead.business_name}
+                  <button type="button" onClick={() => removeRecipient(String(lead.id))} aria-label={`Remove ${lead.business_name}`}>×</button>
+                </li>
               ))}
-            </select>
+              {recipients.length > 24 ? <li className="crm-muted">+{recipients.length - 24} more</li> : null}
+            </ul>
+          ) : (
+            <p className="crm-muted crm-pad">No recipients yet. Pick contactable leads first.</p>
+          )}
+
+          <div className="crm-field-row">
+            <div className="crm-field">
+              <label htmlFor="camp-name">Campaign name</label>
+              <input id="camp-name" value={name} onChange={(e) => setName(e.target.value)} />
+            </div>
+            <div className="crm-field">
+              <label htmlFor="camp-template">Template</label>
+              <select id="camp-template" value={templateId} onChange={(e) => applyTemplate(e.target.value)}>
+                {templates.map((tpl) => (
+                  <option key={tpl.id} value={tpl.id}>{tpl.name}</option>
+                ))}
+              </select>
+            </div>
           </div>
           <div className="crm-field">
             <label htmlFor="camp-subject">Subject</label>
-            <input id="camp-subject" value={subject} onChange={(e) => { setSubject(e.target.value); setPreviewToken(''); }} />
+            <input id="camp-subject" value={subject} onChange={(e) => { setSubject(e.target.value); invalidate(); }} />
           </div>
           <div className="crm-field">
-            <label htmlFor="camp-body">Body</label>
-            <textarea id="camp-body" value={body} onChange={(e) => { setBody(e.target.value); setPreviewToken(''); }} />
+            <label htmlFor="camp-body">Message</label>
+            <textarea id="camp-body" value={body} onChange={(e) => { setBody(e.target.value); invalidate(); }} />
           </div>
-          <p className="crm-muted">Placeholders: {'{{contact_name}}'}, {'{{business_name}}'}, {'{{email}}'}, {'{{location}}'}, {'{{category}}'}</p>
+          <div className="crm-placeholders" aria-label="Insert placeholder">
+            {PLACEHOLDERS.map((key) => (
+              <button key={key} type="button" onClick={() => insertPlaceholder(key)}>{`{{${key}}}`}</button>
+            ))}
+          </div>
           <div className="crm-actions">
-            <button className="crm-btn-secondary" type="button" disabled={busy} onClick={() => void onSaveDraft()}>Save Draft</button>
-            <button className="crm-btn-secondary" type="button" disabled={busy || !selected.length} onClick={() => void onPreview()}>Preview Email</button>
-            <button className="crm-btn-secondary" type="button" disabled={busy} onClick={() => void onSendTest()}>Send Test</button>
-            <button className="crm-btn-secondary" type="button" disabled={!previewToken} onClick={() => setShowConfirm(true)}>Review Recipients</button>
-            <button className="crm-btn" type="button" disabled={busy || !previewToken || !selected.length} onClick={() => setShowConfirm(true)}>Send Campaign</button>
+            <button className="crm-btn" type="button" disabled={busy || !selected.length || !subject || !body} onClick={() => void onPreview()}>
+              {previewToken ? 'Refresh preview' : 'Preview'}
+            </button>
           </div>
-        </div>
-        <div className="crm-panel">
-          <h2>Preview</h2>
-          {!sample ? (
-            <div className="crm-empty">Preview a campaign to personalize the first recipient and unlock the confirm gate.</div>
+        </section>
+
+        <section className="crm-panel">
+          <div className="crm-panel-head">
+            <h2>Preview</h2>
+            {previews.length > 1 ? (
+              <div className="crm-pager">
+                <button type="button" className="crm-icon-btn" disabled={previewIndex === 0} onClick={() => setPreviewIndex((i) => i - 1)} aria-label="Previous recipient">‹</button>
+                <span className="crm-muted">{previewIndex + 1} / {previews.length}</span>
+                <button type="button" className="crm-icon-btn" disabled={previewIndex >= previews.length - 1} onClick={() => setPreviewIndex((i) => i + 1)} aria-label="Next recipient">›</button>
+              </div>
+            ) : null}
+          </div>
+          {!sample || !previewToken ? (
+            <Empty title={previews.length ? 'Preview is out of date' : 'No preview yet'}>
+              {previews.length ? 'You changed recipients or copy. Preview again to unlock sending.' : 'Preview personalizes the message for each recipient and unlocks sending.'}
+            </Empty>
           ) : (
             <>
-              <p className="crm-muted" style={{ marginTop: '.75rem' }}>To: {sample.email} · {sample.business_name}</p>
-              <p style={{ margin: '.75rem 0 0', fontWeight: 500 }}>{sample.subject}</p>
-              <div className="crm-preview" style={{ marginTop: '.75rem' }}>{sample.body}</div>
+              <div className="crm-mail">
+                <dl>
+                  <div><dt>From</dt><dd>BBL Studio &lt;hello@bbl.studio&gt;</dd></div>
+                  <div><dt>To</dt><dd>{sample.email} · {sample.business_name}</dd></div>
+                  <div><dt>Subject</dt><dd className="crm-mail-subject">{sample.subject}</dd></div>
+                </dl>
+                <div className="crm-mail-body">{sample.body}</div>
+              </div>
+              <div className="crm-actions">
+                <button className="crm-btn" type="button" disabled={busy} onClick={() => setShowConfirm(true)}>
+                  Review &amp; send to {previews.length}
+                </button>
+              </div>
             </>
           )}
-        </div>
+        </section>
       </div>
+
       {showConfirm ? (
         <div className="crm-modal-backdrop" role="presentation" onClick={() => setShowConfirm(false)}>
           <div className="crm-modal" role="dialog" aria-modal="true" aria-labelledby="confirm-title" onClick={(e) => e.stopPropagation()}>
-            <h3 id="confirm-title">Confirm campaign send</h3>
-            <p className="crm-muted" style={{ marginTop: '.75rem' }}>
-              Campaign <strong style={{ color: '#fff' }}>{name}</strong> · subject <strong style={{ color: '#fff' }}>{subject}</strong> · <strong style={{ color: '#fff' }}>{selected.length}</strong> selected
-            </p>
-            <ul>
+            <h3 id="confirm-title">Send “{name}”?</h3>
+            <dl className="crm-dl compact">
+              <div><dt>Subject</dt><dd>{subject}</dd></div>
+              <div><dt>Recipients</dt><dd>{previews.length}</dd></div>
+              <div><dt>Mode</dt><dd>{live ? 'Live' : 'Dry-run (nothing is sent)'}</dd></div>
+            </dl>
+            <ul className="crm-confirm-list">
               {previews.slice(0, 12).map((item) => (
-                <li key={String(item.lead_id)}>{item.business_name} — {item.email}</li>
+                <li key={String(item.lead_id)}><span>{item.business_name}</span><span className="crm-muted">{item.email}</span></li>
               ))}
-              {previews.length > 12 ? <li>…and {previews.length - 12} more</li> : null}
+              {previews.length > 12 ? <li className="crm-muted">+{previews.length - 12} more</li> : null}
             </ul>
-            <p className="crm-banner warn" style={{ marginTop: '1rem' }}>
-              This will run as a dry-run. No live emails will be sent while MANUAL_SEND_LIVE_ENABLED is off.
-            </p>
-            <div className="crm-actions">
-              <button className="crm-btn-secondary" type="button" onClick={() => setShowConfirm(false)}>Cancel</button>
-              <button className="crm-btn" type="button" disabled={busy} onClick={() => void onConfirmSend()}>Confirm dry-run send</button>
+            <p className="crm-muted">Unsubscribed, suppressed and bounced addresses are excluded automatically.</p>
+            <div className="crm-actions end">
+              <button className="crm-btn-ghost" type="button" onClick={() => setShowConfirm(false)}>Cancel</button>
+              <button className="crm-btn" type="button" disabled={busy} onClick={() => void onConfirmSend()}>
+                {live ? 'Send campaign' : 'Run dry-run'}
+              </button>
             </div>
           </div>
         </div>
@@ -532,44 +1087,53 @@ function CampaignsPage() {
   );
 }
 
+/* ------------------------------------------------------------------ */
+/* Inbox                                                               */
+/* ------------------------------------------------------------------ */
+
 function InboxPage() {
-  const [items, setItems] = useState<CrmInboxItem[]>([]);
-  const [connection, setConnection] = useState('');
-  const [message, setMessage] = useState('');
+  const [items, setItems] = useState<CrmInboxItem[] | null>(null);
+  const [error, setError] = useState('');
   useEffect(() => {
-    void api<{ items: CrmInboxItem[]; message?: string; connection?: string }>('/api/admin/crm/inbox')
-      .then((data) => {
-        setItems(data.items || []);
-        setConnection(data.connection || '');
-        setMessage(data.message || '');
-      })
-      .catch(() => setMessage('Inbox unavailable until CRM sync / reply path is configured.'));
+    void api<{ items: CrmInboxItem[] }>('/api/admin/crm/inbox')
+      .then((data) => setItems(data.items || []))
+      .catch((err) => {
+        setItems([]);
+        setError(err instanceof Error ? err.message : 'Inbox unavailable.');
+      });
   }, []);
+  const sorted = useMemo(
+    () => [...(items || [])].sort((a, b) => String(b.received_at || '').localeCompare(String(a.received_at || ''))),
+    [items],
+  );
   return (
     <>
-      <p className="crm-kicker">Replies</p>
-      <h1>Inbox / Replies</h1>
-      <p className="crm-lead">No auto-replies. Replies arrive via Mac sync and/or Resend inbound webhooks (tracking only).</p>
-      {connectionBanner(connection, message)}
-      {!items.length ? (
-        <div className="crm-empty">
-          {connection === 'not_connected' || connection === 'sync_pending'
-            ? 'Not connected / sync pending — reply inbox stays empty until CRM sync (and optional inbound webhooks) are live.'
-            : 'No replies in the sync cache yet. Reply detection needs Resend inbound or Gmail OAuth readonly on Mac — never auto-replies.'}
-        </div>
+      <PageHeader title="Inbox" description="Replies matched to leads. Tracking only — nothing here sends a response." />
+      <SyncNotice />
+      {error ? <p className="crm-error">{error}</p> : null}
+      {items === null ? (
+        <div className="crm-skeleton" aria-busy="true" aria-label="Loading inbox" />
+      ) : !sorted.length ? (
+        <Empty title="No replies imported">
+          An empty inbox here does not mean nobody replied. Replies to hello@bbl.studio land in Microsoft 365, which is not
+          connected to the CRM yet. Check that mailbox directly, including Junk.
+        </Empty>
       ) : (
         <div className="crm-table-wrap">
           <table className="crm-table">
             <thead>
-              <tr><th>From</th><th>Subject</th><th>Received</th><th>Source</th></tr>
+              <tr><th>From</th><th>Message</th><th className="crm-col-date">Received</th><th>Source</th></tr>
             </thead>
             <tbody>
-              {items.map((item) => (
+              {sorted.map((item) => (
                 <tr key={asText(item.id)}>
                   <td>{asText(item.from_email)}</td>
-                  <td>{asText(item.subject || item.snippet, '—')}</td>
-                  <td>{asText(item.received_at, '—')}</td>
-                  <td>{asText(item.source, 'unknown')}</td>
+                  <td>
+                    <div>{asText(item.subject, '(no subject)')}</div>
+                    {item.snippet ? <div className="crm-muted crm-sub crm-clamp">{item.snippet}</div> : null}
+                  </td>
+                  <td className="crm-col-date crm-muted">{fmtDate(item.received_at, true)}</td>
+                  <td><span className="crm-pill muted">{item.source === 'resend_inbound' ? 'Resend' : item.source === 'gmail' ? 'Gmail' : 'Unknown'}</span></td>
                 </tr>
               ))}
             </tbody>
@@ -579,48 +1143,58 @@ function InboxPage() {
     </>
   );
 }
+
+/* ------------------------------------------------------------------ */
+/* Bookings                                                            */
+/* ------------------------------------------------------------------ */
 
 function BookingsPage() {
-  const [bookings, setBookings] = useState<CrmBookingItem[]>([]);
-  const [connection, setConnection] = useState('');
-  const [message, setMessage] = useState('');
+  const [bookings, setBookings] = useState<CrmBookingItem[] | null>(null);
+  const [error, setError] = useState('');
   useEffect(() => {
-    void api<{ bookings: CrmBookingItem[]; message?: string; connection?: string }>('/api/admin/crm/bookings')
-      .then((data) => {
-        setBookings(data.bookings || []);
-        setConnection(data.connection || '');
-        setMessage(data.message || '');
-      })
-      .catch(() => setMessage('Bookings unavailable until CRM sync.'));
+    void api<{ bookings: CrmBookingItem[] }>('/api/admin/crm/bookings')
+      .then((data) => setBookings(data.bookings || []))
+      .catch((err) => {
+        setBookings([]);
+        setError(err instanceof Error ? err.message : 'Bookings unavailable.');
+      });
   }, []);
+  const now = Date.now();
+  const sorted = useMemo(
+    () => [...(bookings || [])].sort((a, b) => String(b.meeting_start || '').localeCompare(String(a.meeting_start || ''))),
+    [bookings],
+  );
   return (
     <>
-      <p className="crm-kicker">Consultations</p>
-      <h1>Bookings</h1>
-      <p className="crm-lead">Confirmed bookings only. Site booking stays live; site→Mac reverse notify remains deferred. Mac may push BOOKED rows in the sync snapshot.</p>
-      {connectionBanner(connection, message)}
-      {!bookings.length ? (
-        <div className="crm-empty">
-          {connection === 'not_connected' || connection === 'sync_pending'
-            ? 'Not connected / sync pending — booking rows are not shown as zero until Mac sync succeeds.'
-            : 'No confirmed CRM bookings in the sync cache. Site booking works; reverse sync host is still deferred.'}
-        </div>
+      <PageHeader title="Bookings" description="Consultations booked from the site or synced from the Mac." />
+      <SyncNotice />
+      {error ? <p className="crm-error">{error}</p> : null}
+      {bookings === null ? (
+        <div className="crm-skeleton" aria-busy="true" aria-label="Loading bookings" />
+      ) : !sorted.length ? (
+        <Empty title="No bookings in the CRM">Site booking works; bookings appear here once synced into the CRM snapshot.</Empty>
       ) : (
         <div className="crm-table-wrap">
           <table className="crm-table">
             <thead>
-              <tr><th>Name</th><th>Email</th><th>Meeting</th><th>Booked at</th><th>Status</th></tr>
+              <tr><th>Meeting</th><th>Name</th><th>Email</th><th className="crm-col-date">Booked</th><th>Status</th></tr>
             </thead>
             <tbody>
-              {bookings.map((item) => (
-                <tr key={asText(item.id)}>
-                  <td>{asText(item.name, '—')}</td>
-                  <td>{asText(item.email)}</td>
-                  <td>{asText(item.meeting_start, '—')}</td>
-                  <td>{asText(item.booked_at, '—')}</td>
-                  <td>{asText(item.status, 'confirmed')}</td>
-                </tr>
-              ))}
+              {sorted.map((item) => {
+                const upcoming = (parseDate(item.meeting_start)?.getTime() || 0) > now;
+                return (
+                  <tr key={asText(item.id)}>
+                    <td>
+                      {fmtDate(item.meeting_start, true)}
+                      {upcoming ? <span className="crm-pill accent crm-inline">Upcoming</span> : null}
+                    </td>
+                    <td>{asText(item.name, '—')}</td>
+                    <td className="crm-muted">{asText(item.email)}</td>
+                    <td className="crm-col-date crm-muted">{fmtDate(item.booked_at)}</td>
+                    <td><span className={`crm-pill ${item.status === 'confirmed' ? 'good' : 'muted'}`}>{item.status === 'confirmed' ? 'Confirmed' : 'Unknown'}</span></td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>
@@ -629,121 +1203,152 @@ function BookingsPage() {
   );
 }
 
+/* ------------------------------------------------------------------ */
+/* Analytics                                                           */
+/* ------------------------------------------------------------------ */
+
 function AnalyticsPage() {
-  const [campaigns, setCampaigns] = useState<CrmCampaignSummary[]>([]);
-  const [connection, setConnection] = useState('');
-  const [message, setMessage] = useState('');
-  const [historyCount, setHistoryCount] = useState(0);
+  const [campaigns, setCampaigns] = useState<CrmCampaignSummary[] | null>(null);
+  const [history, setHistory] = useState<CrmEmailHistoryItem[]>([]);
+  const [error, setError] = useState('');
   useEffect(() => {
-    void api<{
-      campaigns: CrmCampaignSummary[];
-      message?: string;
-      connection?: string;
-      email_history?: unknown[];
-    }>('/api/admin/crm/campaigns')
+    void api<{ campaigns: CrmCampaignSummary[]; email_history?: CrmEmailHistoryItem[] }>('/api/admin/crm/campaigns')
       .then((data) => {
         setCampaigns(data.campaigns || []);
-        setConnection(data.connection || '');
-        setMessage(data.message || '');
-        setHistoryCount(data.email_history?.length || 0);
+        setHistory(data.email_history || []);
       })
-      .catch(() => setMessage('Campaign analytics unavailable until CRM sync.'));
+      .catch((err) => {
+        setCampaigns([]);
+        setError(err instanceof Error ? err.message : 'Analytics unavailable.');
+      });
   }, []);
+
+  const live = history.filter((h) => !h.dry_run);
+  const tiles = [
+    { label: 'Live sends', value: live.length, note: `${history.length - live.length} dry-runs excluded` },
+    { label: 'Provider accepted', value: live.filter((h) => h.accepted === 'YES').length, note: `${live.filter((h) => h.accepted !== 'YES').length} unknown` },
+    { label: 'Delivered', value: live.filter((h) => h.delivered === 'YES').length, note: `${live.filter((h) => h.delivered === 'UNKNOWN').length} unknown` },
+    { label: 'Bounced', value: live.filter((h) => h.bounced === 'YES').length },
+    { label: 'Replied', value: live.filter((h) => h.replied === 'YES').length },
+  ];
+  const rate = (n?: number, d?: number) => (n == null || !d ? '—' : `${pct(n, d)}%`);
+
   return (
     <>
-      <p className="crm-kicker">Performance</p>
-      <h1>Analytics</h1>
-      <p className="crm-lead">Per-campaign accepted / delivered / bounced / replied / booked. Historical delivery stays UNKNOWN without webhook events. Synced email history (incl. the 9 cohort sends) appears after Mac push.</p>
-      {connectionBanner(connection, message)}
-      {historyCount ? (
-        <p className="crm-muted" style={{ marginTop: '0.85rem' }}>
-          Email history rows in sync cache: <strong style={{ color: '#fff' }}>{historyCount}</strong>
-        </p>
+      <PageHeader title="Analytics" description="Outcomes from live sends only. Unknown means no provider event has arrived — not a failure." />
+      <SyncNotice />
+      {error ? <p className="crm-error">{error}</p> : null}
+      {history.length ? (
+        <div className="crm-tiles">
+          {tiles.map((t) => (
+            <div className="crm-tile" key={t.label}>
+              <span>{t.label}</span>
+              <strong>{t.value}</strong>
+              <em>{t.note || ' '}</em>
+            </div>
+          ))}
+        </div>
       ) : null}
-      {!campaigns.length ? (
-        <div className="crm-empty">
-          {connection === 'not_connected' || connection === 'sync_pending'
-            ? 'Not connected / sync pending — campaign metrics stay blank until Mac sync.'
-            : 'No campaign metrics in the sync cache yet. Local dry-run sends are logged under data/crm-send-log.json on this host.'}
-        </div>
-      ) : (
-        <div className="crm-table-wrap">
-          <table className="crm-table">
-            <thead>
-              <tr>
-                <th>Campaign</th><th>Status</th><th>Recipients</th><th>Accepted</th><th>Delivered</th><th>Bounced</th><th>Replied</th><th>Booked</th>
-              </tr>
-            </thead>
-            <tbody>
-              {campaigns.map((item) => (
-                <tr key={asText(item.id)}>
-                  <td>{asText(item.name || item.id)}</td>
-                  <td>{asText(item.status, 'unknown')}</td>
-                  <td>{asText(item.recipient_count, '—')}</td>
-                  <td>{asText(item.accepted, '—')}</td>
-                  <td>{asText(item.delivered, '—')}</td>
-                  <td>{asText(item.bounced, '—')}</td>
-                  <td>{asText(item.replied, '—')}</td>
-                  <td>{asText(item.booked, '—')}</td>
+      <section className="crm-panel">
+        <div className="crm-panel-head"><h2>Campaigns</h2></div>
+        {campaigns === null ? (
+          <div className="crm-skeleton" aria-busy="true" aria-label="Loading campaigns" />
+        ) : !campaigns.length ? (
+          <p className="crm-muted crm-pad">No campaign summaries in the snapshot yet.</p>
+        ) : (
+          <div className="crm-table-wrap flush">
+            <table className="crm-table">
+              <thead>
+                <tr>
+                  <th>Campaign</th><th>Status</th><th className="num">Recipients</th><th className="num">Accepted</th>
+                  <th className="num">Delivered</th><th className="num">Bounced</th><th className="num">Replied</th><th className="num">Reply rate</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
+              </thead>
+              <tbody>
+                {campaigns.map((item) => (
+                  <tr key={asText(item.id)}>
+                    <td>
+                      <div>{asText(item.name || item.id)}</div>
+                      <div className="crm-muted crm-sub">{fmtDate(item.sent_at || item.created_at)}</div>
+                    </td>
+                    <td><span className="crm-pill muted">{asText(item.status, 'unknown').replace('_', ' ')}</span></td>
+                    <td className="num">{asText(item.recipient_count, '—')}</td>
+                    <td className="num">{asText(item.accepted, '—')}</td>
+                    <td className="num">{asText(item.delivered, '—')}</td>
+                    <td className="num">{asText(item.bounced, '—')}</td>
+                    <td className="num">{asText(item.replied, '—')}</td>
+                    <td className="num">{rate(item.replied, item.recipient_count)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </section>
     </>
   );
 }
+
+/* ------------------------------------------------------------------ */
+/* Settings                                                            */
+/* ------------------------------------------------------------------ */
 
 function SettingsPage() {
   const [data, setData] = useState<Record<string, unknown> | null>(null);
+  const [failed, setFailed] = useState(false);
   useEffect(() => {
-    void api<Record<string, unknown>>('/api/admin/crm/settings').then(setData).catch(() => setData(null));
+    void api<Record<string, unknown>>('/api/admin/crm/settings').then(setData).catch(() => setFailed(true));
   }, []);
   const safety = (data?.safety || {}) as Record<string, unknown>;
   const mac = (data?.mac_side_required || []) as string[];
   const persistence = (data?.persistence || {}) as Record<string, unknown>;
+  const connection = asText(data?.connection, 'not_connected');
+  const onOff = (v: unknown) => (v === true ? 'On' : 'Off');
+
   return (
     <>
-      <p className="crm-kicker">Configuration</p>
-      <h1>Settings</h1>
-      <p className="crm-lead">Owner-only admin auth. CRM data arrives via authenticated Mac→website push sync — the Mac is never exposed publicly.</p>
-      <div className="crm-panel">
-        <h2>Connection</h2>
-        <ul className="crm-muted" style={{ marginTop: '.75rem' }}>
-          <li>Status: {asText(data?.connection, 'not_connected')}</li>
-          <li>Last synced: {asText(data?.last_synced_at, '(never)')}</li>
-          <li>Stale: {String(data?.stale)}</li>
-          <li>CRM_SYNC_SECRET set: {String(data?.sync_secret_configured)}</li>
-          <li>Durable DB configured: {String(data?.durable_db_configured)}</li>
-          <li>Resend webhook secret set: {String(data?.resend_webhook_secret)}</li>
-          <li>Optional forward URL: {asText(data?.lead_agent_resend_webhook_url, '(not set)')}</li>
-          <li>Store backend: {asText(persistence.backend, '—')}</li>
-          <li>Store: {asText(persistence.store, '—')}</li>
-        </ul>
+      <PageHeader title="Settings" description="Integration health and send safety. Values come from server environment variables." />
+      {failed ? <p className="crm-error">Could not load settings.</p> : null}
+      <div className="crm-grid-2">
+        <section className="crm-panel">
+          <div className="crm-panel-head"><h2>Integrations</h2></div>
+          <div className="crm-checks">
+            <CheckRow ok={connection === 'synced'} label="Mac → site sync" value={connection === 'synced' ? 'Connected' : connection === 'sync_pending' ? 'Pending' : 'Not connected'} />
+            <CheckRow ok={data?.stale === false} label="Last sync" value={`${fmtDate(data?.last_synced_at, true)} · ${fmtRelative(data?.last_synced_at)}`} />
+            <CheckRow ok={Boolean(data?.sync_secret_configured)} label="Sync secret" value={data?.sync_secret_configured ? 'Set' : 'Missing'} />
+            <CheckRow ok={Boolean(data?.durable_db_configured)} label="Database" value={asText(persistence.backend, '—').replace('_', ' ')} />
+            <CheckRow ok={Boolean(data?.resend_webhook_secret)} label="Resend webhook" value={data?.resend_webhook_secret ? 'Secret set' : 'Not configured'} />
+            <CheckRow ok={false} label="Reply inbox (M365)" value="Not connected" />
+          </div>
+        </section>
+        <section className="crm-panel">
+          <div className="crm-panel-head"><h2>Send safety</h2></div>
+          <div className="crm-checks">
+            <CheckRow ok={safety.EMAIL_OUTREACH_ENABLED !== true} label="Automated outreach" value={onOff(safety.EMAIL_OUTREACH_ENABLED)} />
+            <CheckRow ok={safety.EMAIL_DRY_RUN !== false} label="Dry-run" value={safety.EMAIL_DRY_RUN === false ? 'Off' : 'On'} />
+            <CheckRow ok={safety.MANUAL_SEND_LIVE_ENABLED !== true} label="Manual live send" value={onOff(safety.MANUAL_SEND_LIVE_ENABLED)} />
+            <CheckRow ok={safety.FOLLOWUPS_LIVE !== true} label="Automatic follow-ups" value={onOff(safety.FOLLOWUPS_LIVE)} />
+          </div>
+          <p className="crm-muted crm-pad">Green means safe. Change flags in Vercel environment variables, then redeploy.</p>
+        </section>
       </div>
-      <div className="crm-panel">
-        <h2>Safety flags</h2>
-        <ul className="crm-muted" style={{ marginTop: '.75rem' }}>
-          <li>EMAIL_OUTREACH_ENABLED: {String(safety.EMAIL_OUTREACH_ENABLED)}</li>
-          <li>EMAIL_DRY_RUN: {String(safety.EMAIL_DRY_RUN)}</li>
-          <li>MANUAL_SEND_LIVE_ENABLED: {String(safety.MANUAL_SEND_LIVE_ENABLED)}</li>
-          <li>FOLLOWUPS_LIVE: {String(safety.FOLLOWUPS_LIVE ?? false)}</li>
-        </ul>
-      </div>
-      <div className="crm-panel">
-        <h2>Mac sync remaining</h2>
-        <ul className="crm-muted" style={{ marginTop: '.75rem' }}>
-          {mac.map((item) => <li key={item}>{item}</li>)}
-        </ul>
-      </div>
-      <div className="crm-panel">
-        <h2>Push-sync contract (Mac → website)</h2>
-        <pre className="crm-preview" style={{ marginTop: '.75rem' }}>{JSON.stringify(data?.contract || {}, null, 2)}</pre>
-      </div>
+      {mac.length ? (
+        <section className="crm-panel">
+          <div className="crm-panel-head"><h2>Setup checklist</h2></div>
+          <ol className="crm-checklist">
+            {mac.map((item) => <li key={item}>{item}</li>)}
+          </ol>
+        </section>
+      ) : null}
+      <details className="crm-panel crm-details">
+        <summary>Push-sync contract (Mac → website)</summary>
+        <pre className="crm-code">{JSON.stringify(data?.contract || {}, null, 2)}</pre>
+      </details>
     </>
   );
 }
+
+/* ------------------------------------------------------------------ */
 
 export function CrmDashboard() {
   return (
@@ -760,4 +1365,3 @@ export function CrmDashboard() {
     </CrmShell>
   );
 }
-
