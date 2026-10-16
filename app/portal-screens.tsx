@@ -1,7 +1,7 @@
 import { FormEvent, type ReactNode, useEffect, useMemo, useState } from 'react';
 import './portal.css';
 import { Link, useNavigate, useParams } from 'react-router-dom';
-import { BblMark } from '../components/bbl-mark';
+import { BblWordmark } from '../components/bbl-mark';
 import { PACKAGE_PRESETS } from '../server/packages';
 import { api, money, usePrivateIndexing } from '../lib/portal';
 
@@ -20,6 +20,45 @@ async function sharePreviewLink(url: string) {
   await navigator.clipboard.writeText(url);
   return `Preview link copied: ${url}`;
 }
+const PLAN_LABELS: Record<string, string> = {
+  full: 'Paid in full before work begins',
+  two: 'Deposit, then remaining balance',
+  three: 'Three payments (50 / 25 / 25)',
+  custom: 'Custom schedule',
+};
+
+function humanize(value: unknown) {
+  const text = String(value || '').replace(/_/g, ' ').trim();
+  return text ? text.charAt(0).toUpperCase() + text.slice(1) : '—';
+}
+
+function fmtDay(value: unknown) {
+  if (!value) return 'Not set';
+  const d = new Date(String(value));
+  return Number.isNaN(d.getTime()) ? 'Not set' : d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+}
+
+/** Dollar input bound to a cents value. */
+function MoneyField({ id, label, cents, onChange, hint }: { id: string; label: string; cents: number; onChange: (cents: number) => void; hint?: string }) {
+  return (
+    <div className="portal-field">
+      <label htmlFor={id}>{label}</label>
+      <div className="portal-money">
+        <input
+          id={id}
+          type="number"
+          min="0"
+          step="0.01"
+          inputMode="decimal"
+          value={Number.isFinite(cents) ? cents / 100 : 0}
+          onChange={(event) => onChange(Math.round(Number(event.target.value || 0) * 100))}
+        />
+      </div>
+      {hint ? <span className="portal-hint">{hint}</span> : null}
+    </div>
+  );
+}
+
 type Installment = { id?: string; name?: string; amount_cents: number; percent?: number | null; milestone: string; due_at?: string | null; status?: string };
 type PricingState = {
   project: Record<string, unknown>;
@@ -38,16 +77,14 @@ function Shell({ title, children, back }: { title: string; children: ReactNode; 
   return (
     <div className="portal-shell">
       <header className="portal-nav">
-        <Link to="/admin" className="brand" aria-label="BBL admin home">
-          <BblMark size={22} />
-          <span>bbl admin</span>
+        <Link to="/admin/projects" className="brand" aria-label="BBL admin home">
+          <BblWordmark height={22} variant="black" />
         </Link>
-        <nav className="portal-actions" aria-label="Admin">
-          <Link className="glass-pill" to="/admin">CRM</Link>
-          <Link className="glass-pill" to="/admin/projects">Projects</Link>
-          {back ? <Link className="glass-pill" to={back}>Back</Link> : null}
+        <nav className="portal-nav-links" aria-label="Admin">
+          {back ? <Link to={back}>← Back</Link> : null}
+          <Link to="/admin">CRM</Link>
+          <Link to="/admin/projects">Projects</Link>
           <button
-            className="glass-pill"
             type="button"
             onClick={() => {
               void api('/api/admin/logout', { method: 'POST', body: '{}' }).catch(() => undefined);
@@ -86,9 +123,9 @@ export function AdminLogin() {
   return (
     <div className="portal-shell">
       <div className="portal-login">
-        <p className="portal-kicker">Private administrator access</p>
-        <h1>BBL Admin</h1>
-        <p className="portal-lead">Sign in to open the CRM email dashboard, client portal, and private project links.</p>
+        <div className="brand"><BblWordmark height={26} variant="black" /></div>
+        <h1>Sign in</h1>
+        <p className="portal-lead">CRM, projects and private client links.</p>
         <form className="portal-card" onSubmit={onSubmit}>
           <div className="portal-field">
             <label htmlFor="admin-email">Email</label>
@@ -100,7 +137,7 @@ export function AdminLogin() {
           </div>
           {error ? <p className="portal-error" role="alert">{error}</p> : null}
           <div className="portal-actions">
-            <button className="solid-pill" type="submit">Enter dashboard</button>
+            <button className="solid-pill" type="submit">Sign in</button>
           </div>
         </form>
       </div>
@@ -160,39 +197,45 @@ export function AdminHome() {
 
   return (
     <Shell title="BBL Admin">
-      <p className="portal-kicker">Boutique Brand & Launch Studio</p>
+      <p className="portal-kicker">Client portal</p>
       <h1>Projects</h1>
-      <p className="portal-lead">Create a client, set pricing, then generate a private link. CRM email marketing lives at <Link to="/admin">/admin</Link>.</p>
+      <p className="portal-lead">Create a client, set the proposal, then share a private link.</p>
       <div className="portal-grid">
         <section className="portal-card">
-          <h2>Open a project</h2>
-          <table className="portal-table">
-            <thead>
-              <tr><th>Client</th><th>Project</th><th>Status</th><th></th></tr>
-            </thead>
-            <tbody>
-              {projects.map((project) => (
-                <tr key={String(project.id)}>
-                  <td>{String(project.company_name)}</td>
-                  <td>{String(project.name)}</td>
-                  <td>{String(project.status)}</td>
-                  <td>
-                    <Link className="glass-pill" to={`/admin/projects/${project.id}`}>Open</Link>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+          <h2>Projects</h2>
+          {projects.length ? (
+            <table className="portal-table">
+              <thead>
+                <tr><th>Client</th><th>Project</th><th>Status</th><th><span className="sr-only">Open</span></th></tr>
+              </thead>
+              <tbody>
+                {projects.map((project) => (
+                  <tr key={String(project.id)}>
+                    <td>{String(project.company_name)}</td>
+                    <td>{String(project.name)}</td>
+                    <td><span className="portal-pill">{humanize(project.status)}</span></td>
+                    <td>
+                      <Link className="glass-pill" to={`/admin/projects/${project.id}`}>Open</Link>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          ) : (
+            <p className="portal-muted">No projects yet. Create the first client on the right.</p>
+          )}
         </section>
         <form className="portal-card" onSubmit={createClient}>
-          <h2>Create a client</h2>
+          <h2>New client</h2>
           <div className="portal-field"><label htmlFor="company_name">Company</label><input id="company_name" name="company_name" required /></div>
-          <div className="portal-field"><label htmlFor="contact_name">Contact name</label><input id="contact_name" name="contact_name" required /></div>
+          <div className="portal-fields-2">
+            <div className="portal-field"><label htmlFor="contact_name">Contact name</label><input id="contact_name" name="contact_name" required /></div>
+            <div className="portal-field"><label htmlFor="title">Title</label><input id="title" name="title" /></div>
+          </div>
           <div className="portal-field"><label htmlFor="email">Email</label><input id="email" name="email" type="email" required /></div>
-          <div className="portal-field"><label htmlFor="title">Title</label><input id="title" name="title" /></div>
           <div className="portal-field"><label htmlFor="project_name">Project name</label><input id="project_name" name="project_name" required /></div>
           <div className="portal-field">
-            <label htmlFor="package_id">Package preset</label>
+            <label htmlFor="package_id">Package</label>
             <select id="package_id" name="package_id" defaultValue="pkg_website">
               {PACKAGE_PRESETS.filter((item) => item.id !== 'pkg_custom').map((item) => (
                 <option key={item.id} value={item.id}>{item.name}. {item.price_label}</option>
@@ -201,7 +244,7 @@ export function AdminHome() {
             </select>
           </div>
           {error ? <p className="portal-error" role="alert">{error}</p> : null}
-          <div className="portal-actions"><button className="solid-pill" type="submit">Create and set pricing</button></div>
+          <div className="portal-actions"><button className="solid-pill" type="submit">Create and set pricing →</button></div>
         </form>
       </div>
     </Shell>
@@ -244,20 +287,20 @@ export function AdminProject() {
   return (
     <Shell title="BBL project" back="/admin">
       <p className="portal-kicker">{String(project?.company_name || 'Project')}</p>
-      <h1>{String(project?.name || 'Loading')}</h1>
-      <p className="portal-lead">{String(project?.contact_name || '')} · {String(project?.email || '')} · {String(project?.status || '')}</p>
-      {message ? <p className="portal-ok">{message}</p> : null}
+      <h1>{String(project?.name || 'Loading…')}</h1>
+      <div className="portal-meta">
+        {project?.contact_name ? <span>{String(project.contact_name)}</span> : null}
+        {project?.email ? <span>{String(project.email)}</span> : null}
+        {project?.status ? <span className="portal-pill">{humanize(project.status)}</span> : null}
+      </div>
+      {message ? <p className="portal-ok" role="status">{message}</p> : null}
       <div className="portal-grid">
         <section className="portal-card">
           <h2>Private client link</h2>
-          <p className="portal-muted">Send this private preview link. Anyone with it can open the client preview; it does not include the client name or project id.</p>
+          <p className="portal-muted">Anyone with this link can open the client view. It doesn't show the client name or project id in the URL.</p>
           <div className="portal-field">
-            <label htmlFor="share-link">Share preview link</label>
-            <input id="share-link" readOnly value={active?.url || ''} placeholder="Generate a private link first" onFocus={(event) => event.currentTarget.select()} />
-          </div>
-          <div className="portal-field">
-            <label htmlFor="expires">Expiration date</label>
-            <input id="expires" type="date" value={expires} onChange={(event) => setExpires(event.target.value)} />
+            <label htmlFor="share-link">Link</label>
+            <input id="share-link" readOnly value={active?.url || ''} placeholder="No active link yet" onFocus={(event) => event.currentTarget.select()} />
           </div>
           <div className="portal-actions">
             <button
@@ -273,28 +316,51 @@ export function AdminProject() {
                 setMessage(await sharePreviewLink(url));
               }}
             >
-              Share Preview Link
+              {active?.url ? 'Share link' : 'Create & share link'}
             </button>
-            <button className="glass-pill" type="button" disabled={!active?.url} onClick={() => active?.url && navigator.clipboard.writeText(active.url).then(() => setMessage('Preview link copied.'))}>Copy Link</button>
-            <a className="glass-pill" href={active?.url || '#'} target="_blank" rel="noreferrer">Open Client Preview</a>
-            <button className="glass-pill" type="button" onClick={() => run(`/api/admin/projects/${projectId}/link`, { expiresAt: expires ? new Date(`${expires}T23:59:59.000Z`).toISOString() : undefined })}>Generate Private Link</button>
-            <button className="glass-pill" type="button" onClick={() => api(`/api/admin/projects/${projectId}/link`, { method: 'PATCH', body: JSON.stringify({ expiresAt: new Date(`${expires}T23:59:59.000Z`).toISOString() }) }).then(reload)}>Set Expiration Date</button>
-            <button className="glass-pill" type="button" onClick={() => run(`/api/admin/projects/${projectId}/link/regenerate`, { expiresAt: expires ? new Date(`${expires}T23:59:59.000Z`).toISOString() : undefined })}>Regenerate Link</button>
-            <button className="glass-pill" type="button" onClick={() => active && api(`/api/admin/tokens/${active.id}/revoke`, { method: 'POST', body: '{}' }).then(reload)}>Revoke Link</button>
-            <button className="glass-pill" type="button" onClick={() => run(`/api/admin/projects/${projectId}/invite`)}>Send Invitation Email</button>
+            <button className="glass-pill" type="button" disabled={!active?.url} onClick={() => active?.url && navigator.clipboard.writeText(active.url).then(() => setMessage('Link copied.'))}>Copy</button>
+            <a className="glass-pill" href={active?.url || '#'} target="_blank" rel="noreferrer" aria-disabled={!active?.url}>Open</a>
+            <button className="glass-pill" type="button" onClick={() => run(`/api/admin/projects/${projectId}/invite`)}>Email invitation</button>
           </div>
-          <ul className="portal-list">
-            {links.map((item) => (
-              <li key={item.id}><span>…{item.last4} · {item.status}</span><span>{item.expires_at ? new Date(item.expires_at).toLocaleDateString() : 'No expiry'}</span></li>
-            ))}
-          </ul>
+
+          <div className="portal-section">
+            <p className="portal-section-title">Link settings</p>
+            <div className="portal-fields-2">
+              <div className="portal-field">
+                <label htmlFor="expires">Expires on</label>
+                <input id="expires" type="date" value={expires} onChange={(event) => setExpires(event.target.value)} />
+              </div>
+            </div>
+            <div className="portal-actions">
+              <button className="glass-pill" type="button" disabled={!expires || !active} onClick={() => api(`/api/admin/projects/${projectId}/link`, { method: 'PATCH', body: JSON.stringify({ expiresAt: new Date(`${expires}T23:59:59.000Z`).toISOString() }) }).then(reload).then(() => setMessage('Expiration updated.'))}>Save expiration</button>
+              {!active ? (
+                <button className="glass-pill" type="button" onClick={() => run(`/api/admin/projects/${projectId}/link`, { expiresAt: expires ? new Date(`${expires}T23:59:59.000Z`).toISOString() : undefined })}>Generate link</button>
+              ) : null}
+              <button className="text-btn" type="button" onClick={() => run(`/api/admin/projects/${projectId}/link/regenerate`, { expiresAt: expires ? new Date(`${expires}T23:59:59.000Z`).toISOString() : undefined })}>Regenerate</button>
+              <button className="text-btn danger" type="button" disabled={!active} onClick={() => active && api(`/api/admin/tokens/${active.id}/revoke`, { method: 'POST', body: '{}' }).then(reload).then(() => setMessage('Link revoked.'))}>Revoke</button>
+            </div>
+          </div>
+
+          {links.length ? (
+            <div className="portal-section">
+              <p className="portal-section-title">Link history</p>
+              <ul className="portal-list">
+                {links.map((item) => (
+                  <li key={item.id}>
+                    <span>…{item.last4} <span className={`portal-pill ${item.status === 'active' ? 'good' : ''}`}>{humanize(item.status)}</span></span>
+                    <span className="portal-muted">{item.expires_at ? `Expires ${fmtDay(item.expires_at)}` : 'No expiry'}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ) : null}
         </section>
         <section className="portal-card">
-          <h2>Pricing and proposal</h2>
-          <p className="portal-muted">Set package, discounts, taxes, and payment plan before publishing.</p>
+          <h2>Proposal &amp; pricing</h2>
+          <p className="portal-muted">Set the package, price and payment plan, then publish to the client view.</p>
           <div className="portal-actions">
-            <Link className="solid-pill" to={`/admin/projects/${projectId}/pricing`}>Open pricing</Link>
-            <Link className="glass-pill" to={`/admin/projects/${projectId}/preview`}>Preview as Client</Link>
+            <Link className="solid-pill" to={`/admin/projects/${projectId}/pricing`}>Edit pricing</Link>
+            <Link className="glass-pill" to={`/admin/projects/${projectId}/preview`}>Preview as client</Link>
           </div>
         </section>
       </div>
@@ -418,60 +484,114 @@ export function AdminPricing() {
 
   return (
     <Shell title="BBL pricing" back={`/admin/projects/${projectId}`}>
-      <p className="portal-kicker">Per-project pricing</p>
-      <h1>Set the proposal</h1>
-      <p className="portal-lead">Choosing a preset fills the default price and deliverables. Everything stays editable before you publish.</p>
+      <p className="portal-kicker">Proposal</p>
+      <h1>Pricing</h1>
+      <p className="portal-lead">Picking a package fills the price and deliverables. Everything stays editable until you publish.</p>
       {error ? <p className="portal-error" role="alert">{error}</p> : null}
-      {message ? <p className="portal-ok">{message}</p> : null}
+      {message ? <p className="portal-ok" role="status">{message}</p> : null}
+      {state?.signed ? <p className="portal-banner">This proposal is signed. Price changes must go through a change order.</p> : null}
       <div className="portal-grid">
-        <form className="portal-card" onSubmit={(event) => { event.preventDefault(); save('draft'); }}>
-          <div className="portal-field">
-            <label htmlFor="package_id">Package name</label>
-            <select id="package_id" value={form.package_id} onChange={(event) => applyPreset(event.target.value)}>
-              {PACKAGE_PRESETS.map((item) => (
-                <option key={item.id} value={item.id}>{item.name}. {item.price_label}</option>
-              ))}
-            </select>
-          </div>
-          <div className="portal-field"><label htmlFor="base">Base price (cents)</label><input id="base" type="number" min="0" value={form.base_price_cents} onChange={(event) => setForm({ ...form, base_price_cents: Number(event.target.value) })} /></div>
-          <div className="portal-field"><label htmlFor="discount">Custom discount (cents)</label><input id="discount" type="number" min="0" value={form.discount_cents} onChange={(event) => setForm({ ...form, discount_cents: Number(event.target.value) })} /></div>
-          <div className="portal-field"><label htmlFor="additional">Additional services (label, dollars)</label><textarea id="additional" value={form.additional} onChange={(event) => setForm({ ...form, additional: event.target.value })} /></div>
-          <div className="portal-field"><label htmlFor="third">Third-party expenses (label, dollars)</label><textarea id="third" value={form.third} onChange={(event) => setForm({ ...form, third: event.target.value })} /></div>
-          <div className="portal-field"><label htmlFor="tax">Taxes when applicable (cents)</label><input id="tax" type="number" min="0" value={form.tax_cents} onChange={(event) => setForm({ ...form, tax_cents: Number(event.target.value) })} /></div>
-          <div className="portal-field"><label htmlFor="currency">Currency</label><input id="currency" value={form.currency} onChange={(event) => setForm({ ...form, currency: event.target.value })} /></div>
-          <div className="portal-field"><label htmlFor="expires">Proposal expiration date</label><input id="expires" type="date" value={form.proposal_expires_at} onChange={(event) => setForm({ ...form, proposal_expires_at: event.target.value })} /></div>
-          <div className="portal-field">
-            <label htmlFor="plan">Payment-plan type</label>
-            <select id="plan" value={form.payment_option} onChange={(event) => setForm({ ...form, payment_option: event.target.value })}>
-              <option value="full">Full payment. 100% before work begins</option>
-              <option value="two">Two payments. Deposit plus remaining balance</option>
-              <option value="three">Three payments. 50 / 25 / 25</option>
-              <option value="custom">Custom payment plan</option>
-            </select>
-          </div>
-          <div className="portal-field"><label htmlFor="deposit-pct">Deposit percent</label><input id="deposit-pct" type="number" min="1" max="99" value={form.deposit_percent} onChange={(event) => setForm({ ...form, deposit_percent: Number(event.target.value), deposit_mode: 'percent' })} /></div>
-          <div className="portal-field"><label htmlFor="deposit-amt">Deposit required (cents)</label><input id="deposit-amt" type="number" min="0" value={form.deposit_required_cents} onChange={(event) => setForm({ ...form, deposit_required_cents: Number(event.target.value), deposit_mode: 'amount' })} /></div>
-          <div className="portal-field"><label htmlFor="custom-rows">Custom installments (name, amount, milestone)</label><textarea id="custom-rows" value={form.customRows} onChange={(event) => setForm({ ...form, customRows: event.target.value })} /></div>
-          <div className="portal-field"><label htmlFor="deliverables">Deliverables</label><textarea id="deliverables" value={form.deliverables} onChange={(event) => setForm({ ...form, deliverables: event.target.value })} /></div>
-          <div className="portal-field"><label htmlFor="client-notes">Client-visible pricing notes</label><textarea id="client-notes" value={form.client_pricing_notes} onChange={(event) => setForm({ ...form, client_pricing_notes: event.target.value })} /></div>
-          <div className="portal-field"><label htmlFor="internal-notes">Internal notes</label><textarea id="internal-notes" value={form.internal_notes} onChange={(event) => setForm({ ...form, internal_notes: event.target.value })} /></div>
-          <div className="portal-actions">
-            <button className="glass-pill" type="submit">Save Draft</button>
-            <button className="solid-pill" type="button" onClick={() => save('publish')}>Publish to Client Portal</button>
-            <button className="glass-pill" type="button" onClick={() => state?.links.find((item) => item.url)?.url && sharePreviewLink(state.links.find((item) => item.url)!.url!).then(setMessage)}>Share Preview Link</button>
-            <Link className="glass-pill" to={`/admin/projects/${projectId}/preview`}>Preview as Client</Link>
-            <button className="glass-pill" type="button" onClick={() => state?.links.find((item) => item.url)?.url && navigator.clipboard.writeText(state.links.find((item) => item.url)!.url!)}>Copy Private Link</button>
-          </div>
+        <form className="portal-stack" onSubmit={(event) => { event.preventDefault(); save('draft'); }}>
+          <section className="portal-card">
+            <h2>Package &amp; price</h2>
+            <div className="portal-field">
+              <label htmlFor="package_id">Package</label>
+              <select id="package_id" value={form.package_id} onChange={(event) => applyPreset(event.target.value)}>
+                {PACKAGE_PRESETS.map((item) => (
+                  <option key={item.id} value={item.id}>{item.name}. {item.price_label}</option>
+                ))}
+              </select>
+            </div>
+            <div className="portal-fields-2">
+              <MoneyField id="base" label="Base price" cents={form.base_price_cents} onChange={(cents) => setForm({ ...form, base_price_cents: cents })} />
+              <MoneyField id="discount" label="Discount" cents={form.discount_cents} onChange={(cents) => setForm({ ...form, discount_cents: cents })} />
+              <MoneyField id="tax" label="Tax" cents={form.tax_cents} onChange={(cents) => setForm({ ...form, tax_cents: cents })} hint="Only when applicable" />
+              <div className="portal-field"><label htmlFor="currency">Currency</label><input id="currency" value={form.currency} onChange={(event) => setForm({ ...form, currency: event.target.value })} /></div>
+            </div>
+            <div className="portal-fields-2">
+              <div className="portal-field">
+                <label htmlFor="additional">Additional services</label>
+                <textarea id="additional" value={form.additional} onChange={(event) => setForm({ ...form, additional: event.target.value })} placeholder="Copywriting, 800" />
+                <span className="portal-hint">One per line: label, dollars</span>
+              </div>
+              <div className="portal-field">
+                <label htmlFor="third">Third-party expenses</label>
+                <textarea id="third" value={form.third} onChange={(event) => setForm({ ...form, third: event.target.value })} placeholder="Stock photography, 120" />
+                <span className="portal-hint">One per line: label, dollars</span>
+              </div>
+            </div>
+          </section>
+
+          <section className="portal-card">
+            <h2>Payment</h2>
+            <div className="portal-fields-2">
+              <div className="portal-field">
+                <label htmlFor="plan">Payment plan</label>
+                <select id="plan" value={form.payment_option} onChange={(event) => setForm({ ...form, payment_option: event.target.value })}>
+                  <option value="full">Full payment. 100% before work begins</option>
+                  <option value="two">Two payments. Deposit plus remaining balance</option>
+                  <option value="three">Three payments. 50 / 25 / 25</option>
+                  <option value="custom">Custom payment plan</option>
+                </select>
+              </div>
+              <div className="portal-field"><label htmlFor="expires">Proposal expires</label><input id="expires" type="date" value={form.proposal_expires_at} onChange={(event) => setForm({ ...form, proposal_expires_at: event.target.value })} /></div>
+              <div className="portal-field">
+                <label htmlFor="deposit-pct">Deposit %</label>
+                <input id="deposit-pct" type="number" min="1" max="99" value={form.deposit_percent} onChange={(event) => setForm({ ...form, deposit_percent: Number(event.target.value), deposit_mode: 'percent' })} />
+                <span className="portal-hint">{form.deposit_mode === 'percent' ? 'In use' : 'Set to use a percentage'}</span>
+              </div>
+              <MoneyField
+                id="deposit-amt"
+                label="Or fixed deposit"
+                cents={form.deposit_required_cents}
+                onChange={(cents) => setForm({ ...form, deposit_required_cents: cents, deposit_mode: 'amount' })}
+                hint={form.deposit_mode === 'amount' ? 'In use' : 'Set to use a fixed amount'}
+              />
+            </div>
+            <div className="portal-field">
+              <label htmlFor="custom-rows">Custom installments</label>
+              <textarea id="custom-rows" value={form.customRows} onChange={(event) => setForm({ ...form, customRows: event.target.value })} />
+              <span className="portal-hint">One per line: name, amount, milestone. Must add up to the total.</span>
+            </div>
+          </section>
+
+          <section className="portal-card">
+            <h2>Scope &amp; notes</h2>
+            <div className="portal-field">
+              <label htmlFor="deliverables">Deliverables</label>
+              <textarea id="deliverables" value={form.deliverables} onChange={(event) => setForm({ ...form, deliverables: event.target.value })} />
+              <span className="portal-hint">One per line. The client sees these.</span>
+            </div>
+            <div className="portal-field"><label htmlFor="client-notes">Note to client</label><textarea id="client-notes" value={form.client_pricing_notes} onChange={(event) => setForm({ ...form, client_pricing_notes: event.target.value })} /></div>
+            <div className="portal-field">
+              <label htmlFor="internal-notes">Internal notes</label>
+              <textarea id="internal-notes" value={form.internal_notes} onChange={(event) => setForm({ ...form, internal_notes: event.target.value })} />
+              <span className="portal-hint">Never shown to the client.</span>
+            </div>
+          </section>
+          <button type="submit" hidden>Save</button>
         </form>
-        <aside className="portal-card">
-          <h2>Contract summary</h2>
+
+        <aside className="portal-card portal-sticky">
+          <h2>Summary</h2>
+          <div className="portal-total">
+            <span>Contract total</span>
+            <strong>{money(total, form.currency)}</strong>
+          </div>
           <ul className="portal-list">
-            <li><span>Final contract total</span><strong>{money(total, form.currency)}</strong></li>
-            <li><span>Deposit required</span><strong>{form.deposit_mode === 'percent' ? `${form.deposit_percent}%` : money(form.deposit_required_cents, form.currency)}</strong></li>
+            <li><span>Deposit</span><strong>{form.deposit_mode === 'percent' ? `${form.deposit_percent}%` : money(form.deposit_required_cents, form.currency)}</strong></li>
             <li><span>Remaining balance</span><strong>{money(total - (form.deposit_mode === 'amount' ? form.deposit_required_cents : Math.round(total * form.deposit_percent / 100)), form.currency)}</strong></li>
           </ul>
-          <p className="portal-muted">Installments must equal the final total. Publishing fails if they do not. Internal notes stay off the client view.</p>
-          {state?.signed ? <p className="portal-error">This proposal is signed. Price changes must go through a change order.</p> : null}
+          <div className="portal-actions">
+            <button className="solid-pill accent" type="button" onClick={() => save('publish')}>Publish to client</button>
+            <button className="glass-pill" type="button" onClick={() => save('draft')}>Save draft</button>
+          </div>
+          <div className="portal-actions">
+            <Link className="text-btn" to={`/admin/projects/${projectId}/preview`}>Preview as client</Link>
+            <button className="text-btn" type="button" onClick={() => state?.links.find((item) => item.url)?.url && sharePreviewLink(state.links.find((item) => item.url)!.url!).then(setMessage)}>Share link</button>
+            <button className="text-btn" type="button" onClick={() => state?.links.find((item) => item.url)?.url && navigator.clipboard.writeText(state.links.find((item) => item.url)!.url!).then(() => setMessage('Link copied.'))}>Copy link</button>
+          </div>
+          <p className="portal-muted" style={{ marginTop: '1rem' }}>Installments must equal the total or publishing fails. Saving a draft doesn't notify the client.</p>
         </aside>
       </div>
     </Shell>
@@ -508,64 +628,96 @@ export function ClientPortal({ preview = false }: { preview?: boolean }) {
   return (
     <div className="portal-shell">
       <header className="portal-nav">
-        <span className="brand"><BblMark size={22} /><span>bbl</span></span>
-        <span className="portal-muted">Private client portal</span>
+        <span className="brand"><BblWordmark height={22} variant="black" /></span>
+        <span className="portal-tag">Private proposal</span>
       </header>
       <div className="portal-wrap">
-        {preview ? <p className="portal-banner">Preview as Client. This does not publish, change status, or send a notification.</p> : null}
+        {preview ? <p className="portal-banner">Client preview. Nothing is published, changed or sent from this view.</p> : null}
         {error ? <p className="portal-error" role="alert">{error}</p> : null}
-        <p className="portal-kicker">{String(data?.company || 'BBL')}</p>
+        <p className="portal-kicker">Prepared for {String(data?.company || 'you')}</p>
         <h1>{String(data?.projectName || 'Your proposal')}</h1>
         <p className="portal-lead">{String(data?.clientPricingNotes || 'A private proposal prepared for this engagement.')}</p>
         <div className="portal-grid">
-          <section className="portal-card">
-            <h2>Investment</h2>
-            <ul className="portal-list">
-              <li><span>Final contract total</span><strong>{money(Number(data?.total_cents), String(data?.currency || 'USD'))}</strong></li>
-              <li><span>Payment plan</span><strong>{String(data?.paymentOption || '')}</strong></li>
-              <li><span>Proposal expires</span><strong>{data?.expiresAt ? new Date(String(data.expiresAt)).toLocaleDateString() : 'Not set'}</strong></li>
-            </ul>
-            <h3 style={{ marginTop: '1.4rem' }}>Schedule</h3>
-            <ul className="portal-list">
-              {installments.map((item, index) => (
-                <li key={item.id || index}><span>{item.name || item.milestone}</span><strong>{money(item.amount_cents, String(data?.currency || 'USD'))}</strong></li>
-              ))}
-            </ul>
-            {!preview && data?.proposalAvailable ? (
-              <div className="portal-actions">
-                <button className="solid-pill" type="button" onClick={() => api('/api/portal/accept-proposal', { method: 'POST', body: '{}' }).then(() => window.location.reload())}>Accept this proposal</button>
-              </div>
-            ) : null}
-          </section>
-          <section className="portal-card">
-            <h2>Included</h2>
-            <ul className="portal-list">
-              {deliverables.map((item) => <li key={item}><span>{item}</span></li>)}
-            </ul>
+          <div className="portal-stack">
+            <section className="portal-card">
+              <h2>What's included</h2>
+              {deliverables.length ? (
+                <ul className="portal-checks">
+                  {deliverables.map((item) => <li key={item}>{item}</li>)}
+                </ul>
+              ) : (
+                <p className="portal-muted">The scope will appear here once the proposal is published.</p>
+              )}
+            </section>
+
             {previews.length ? (
-              <div>
-                <h3 style={{ marginTop: '1.4rem' }}>Private preview</h3>
-                <p className="portal-muted">This preview is for review only. It is not approved for public or commercial use.</p>
+              <section className="portal-card">
+                <h2>Private preview</h2>
+                <p className="portal-muted">For review only. Not approved for public or commercial use.</p>
                 {previews.map((item) => (
-                  <div key={item.id} style={{ marginTop: '1rem' }}>
-                    <p className="portal-muted">{item.title}</p>
-                    {item.imageUrl ? <img src={item.imageUrl} alt={item.title} style={{ width: '100%', borderRadius: '10px' }} /> : null}
-                    {item.siteUrl ? <a className="solid-pill" href={item.siteUrl} target="_blank" rel="noreferrer" style={{ marginTop: '.75rem' }}>Open website preview</a> : null}
+                  <div key={item.id} className="portal-preview">
+                    {item.imageUrl ? <img src={item.imageUrl} alt={item.title} /> : null}
+                    <p>
+                      {item.title}
+                      {item.siteUrl ? <> · <a href={item.siteUrl} target="_blank" rel="noreferrer">Open website preview</a></> : null}
+                    </p>
                   </div>
                 ))}
-              </div>
+              </section>
             ) : null}
+
             {changeOrders.length ? (
-              <div>
-                <h3>Change order</h3>
-                {changeOrders.map((item) => (
-                  <p key={item.id} className="portal-muted">{item.reason} · {money(item.additional_cents)}
-                    {!preview ? <button className="solid-pill" type="button" onClick={() => api(`/api/portal/change-orders/${item.id}/accept`, { method: 'POST', body: '{}' }).then(() => window.location.reload())}>Accept change order</button> : null}
-                  </p>
-                ))}
+              <section className="portal-card">
+                <h2>Change order</h2>
+                <ul className="portal-list">
+                  {changeOrders.map((item) => (
+                    <li key={item.id}>
+                      <span>{item.reason}</span>
+                      <span style={{ display: 'flex', alignItems: 'center', gap: '.75rem' }}>
+                        <strong>+{money(item.additional_cents)}</strong>
+                        {!preview ? <button className="solid-pill" type="button" onClick={() => api(`/api/portal/change-orders/${item.id}/accept`, { method: 'POST', body: '{}' }).then(() => window.location.reload())}>Accept</button> : null}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              </section>
+            ) : null}
+          </div>
+
+          <aside className="portal-card portal-sticky">
+            <h2>Investment</h2>
+            <div className="portal-total">
+              <span>Total</span>
+              <strong>{money(Number(data?.total_cents), String(data?.currency || 'USD'))}</strong>
+            </div>
+            <ul className="portal-list">
+              <li><span>Payment plan</span><strong>{PLAN_LABELS[String(data?.paymentOption || '')] || humanize(data?.paymentOption)}</strong></li>
+              <li><span>Offer valid until</span><strong>{fmtDay(data?.expiresAt)}</strong></li>
+            </ul>
+            {installments.length ? (
+              <>
+                <h3>Payment schedule</h3>
+                <ol className="portal-timeline">
+                  {installments.map((item, index) => (
+                    <li key={item.id || index} className={item.status === 'paid' ? 'paid' : undefined}>
+                      <span className="portal-step">{item.status === 'paid' ? '✓' : index + 1}</span>
+                      <span>
+                        {item.name || item.milestone}
+                        {item.milestone && item.name && item.milestone !== item.name ? <small>{item.milestone}</small> : null}
+                      </span>
+                      <strong>{money(item.amount_cents, String(data?.currency || 'USD'))}</strong>
+                    </li>
+                  ))}
+                </ol>
+              </>
+            ) : null}
+            {!preview && data?.proposalAvailable ? (
+              <div className="portal-actions">
+                <button className="solid-pill accent" style={{ width: '100%' }} type="button" onClick={() => api('/api/portal/accept-proposal', { method: 'POST', body: '{}' }).then(() => window.location.reload())}>Accept proposal</button>
               </div>
             ) : null}
-          </section>
+            <p className="portal-muted" style={{ marginTop: '1rem' }}>Questions? Email hello@bbl.studio.</p>
+          </aside>
         </div>
       </div>
     </div>
