@@ -2,6 +2,7 @@
   "framework": "vite",
   "buildCommand": "pnpm exec vite build --config vite.vercel.config.ts && cp out/index.html out/app.html && cp out/home.html out/index.html && rm -f out/studio.html",
   "outputDirectory": "out",
+  "trailingSlash": false,
   "redirects": [
     { "source": "/home.html", "destination": "/", "statusCode": 301 },
     { "source": "/index.html", "destination": "/", "statusCode": 301 },

@@ -20,6 +20,7 @@ export type VercelConfig = {
   redirects?: VercelRedirect[];
   rewrites?: VercelRewrite[];
   buildCommand?: string;
+  trailingSlash?: boolean;
 };
 
 export type RouteDecision =
@@ -74,6 +75,10 @@ export function resolvePublicRoute(
   files: ReadonlySet<string>,
 ): RouteDecision {
   const path = normalizePath(pathname);
+  if (config.trailingSlash === false && path.length > 1 && path.endsWith('/')) {
+    const search = pathname.includes('?') ? pathname.slice(pathname.indexOf('?')).split('#')[0] : '';
+    return { status: 308, kind: 'redirect', location: `${path.replace(/\/+$/, '')}${search}` };
+  }
   for (const redirect of config.redirects || []) {
     if (sourceMatches(redirect.source, path)) {
       return { status: redirectStatus(redirect), location: redirect.destination, kind: 'redirect' };

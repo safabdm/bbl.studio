@@ -28,6 +28,18 @@ describe('public marketing routes', () => {
     assert.deepEqual(route('/booking'), { status: 200, kind: 'rewrite', destination: '/book.html' });
   });
 
+  it('redirects trailing slashes before they can miss a route', () => {
+    assert.equal(config.trailingSlash, false);
+    assert.deepEqual(route('/booking/'), { status: 308, kind: 'redirect', location: '/booking' });
+    assert.deepEqual(route('/admin/'), { status: 308, kind: 'redirect', location: '/admin' });
+    assert.deepEqual(route('/client/'), { status: 308, kind: 'redirect', location: '/client' });
+    assert.deepEqual(route('/client/preview-token/'), { status: 308, kind: 'redirect', location: '/client/preview-token' });
+    assert.deepEqual(route('/unsubscribe/'), { status: 308, kind: 'redirect', location: '/unsubscribe' });
+    assert.deepEqual(route('/api/book/slots/'), { status: 308, kind: 'redirect', location: '/api/book/slots' });
+    assert.deepEqual(route('/booking/?when=next'), { status: 308, kind: 'redirect', location: '/booking?when=next' });
+    assert.deepEqual(route('/'), { status: 200, kind: 'file', file: 'index.html' });
+  });
+
   it('permanently redirects duplicate homepage and booking URLs', () => {
     assert.deepEqual(route('/home.html'), { status: 301, kind: 'redirect', location: '/' });
     assert.deepEqual(route('/index.html'), { status: 301, kind: 'redirect', location: '/' });
