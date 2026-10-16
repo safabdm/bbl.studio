@@ -13,13 +13,13 @@ const geistMono = Geist_Mono({
 });
 
 const title = 'Website Design in Orange County | BBL Studio';
-const description = 'BBLS is a boutique website design studio serving Orange County businesses. Distinctive websites designed to build credibility, generate inquiries, and support business growth.';
+const description = 'BBL is a boutique website design studio serving Orange County businesses. Distinctive websites designed to build credibility, generate inquiries, and support business growth.';
 
 export const metadata: Metadata = {
   metadataBase: new URL('https://www.bbl.studio'),
   title,
   description,
-  applicationName: 'BBLS',
+  applicationName: 'BBL',
   icons: {
     icon: [
       { url: '/favicon.ico?v=bbl-logo-20260924c', sizes: 'any' },
@@ -34,7 +34,7 @@ export const metadata: Metadata = {
     description,
     type: 'website',
     locale: 'en_US',
-    siteName: 'BBLS',
+    siteName: 'BBL',
     images: [
       {
         url: '/og.png',

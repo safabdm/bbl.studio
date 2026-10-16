@@ -24,7 +24,7 @@ export function loadEnv() {
 loadEnv();
 
 export function appOrigin() {
-  return (process.env.APP_ORIGIN || (process.env.VERCEL ? 'https://bbls.studio' : 'http://127.0.0.1:4173')).replace(/\/$/, '');
+  return (process.env.APP_ORIGIN || (process.env.VERCEL ? 'https://www.bbl.studio' : 'http://127.0.0.1:4173')).replace(/\/$/, '');
 }
 
 export function clientPortalUrl(token: string) {
@@ -32,5 +32,5 @@ export function clientPortalUrl(token: string) {
 }
 
 export function publicClientUrl(token: string) {
-  return `https://bbls.studio/client/${token}`;
+  return `https://www.bbl.studio/client/${token}`;
 }

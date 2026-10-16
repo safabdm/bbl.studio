@@ -33,7 +33,7 @@ export function portalEmail(opts: {
   extra?: string;
 }) {
   const origin = process.env.APP_ORIGIN || 'http://127.0.0.1:4173';
-  const subject = `BBLS project update: ${opts.projectName}`;
+  const subject = `BBL project update: ${opts.projectName}`;
   const body = [
     `Hello ${opts.clientName},`,
     '',
@@ -41,7 +41,7 @@ export function portalEmail(opts: {
     `Action required: ${opts.action}`,
     opts.extra || '',
     '',
-    `Open your private BBLS portal: ${origin}${opts.portalPath}`,
+    `Open your private BBL portal: ${origin}${opts.portalPath}`,
     'This link is intended only for the named client. Please do not forward it.',
     '',
     contact,

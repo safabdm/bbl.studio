@@ -166,8 +166,8 @@ def copy_footer(source, dest):
     dest_para = dest.sections[0].footer.paragraphs[0]
     dest_para.clear()
     set_run(
-        dest_para.add_run("BBLS — Boutique Brand & Launch Studio  |  Confidential planning document"),
-        "BBLS — Boutique Brand & Launch Studio  |  Confidential planning document",
+        dest_para.add_run("BBL — Boutique Brand & Launch Studio  |  Confidential planning document"),
+        "BBL — Boutique Brand & Launch Studio  |  Confidential planning document",
         size=9,
         color=MUTED,
     )
@@ -188,7 +188,7 @@ def build():
     copy_footer(source, doc)
 
     add_para(doc, "BUSINESS PLAN | 2026", size=9.5, bold=True, color=GOLD, space_after=10)
-    add_para(doc, "BBLS", size=34, bold=True, color=NAVY, space_after=2)
+    add_para(doc, "BBL", size=34, bold=True, color=NAVY, space_after=2)
     add_para(doc, "Boutique Brand & Launch Studio", size=18, color=BLUE, space_after=4)
     add_para(doc, "Premium Website Design Studio in Orange County", size=13, bold=True, color=NAVY, space_after=8)
     add_para(
@@ -201,12 +201,12 @@ def build():
     )
     add_para(doc, "WE DON’T SHAPE BODIES.\nWE BUILD BUSINESSES.", size=16, bold=True, color=NAVY, space_after=10)
     add_para(doc, "Prepared for internal planning, partner conversations, and studio execution", size=9.5, color=MUTED, space_after=2)
-    add_para(doc, "Orange County, California | bbls.studio", size=9.5, bold=True, color=BLUE, space_after=16)
+    add_para(doc, "Orange County, California | bbl.studio", size=9.5, bold=True, color=BLUE, space_after=16)
 
     add_h1(doc, "1. Executive Summary")
     add_body(
         doc,
-        "BBLS — Boutique Brand & Launch Studio is a boutique website design studio serving Orange County businesses. The studio combines clear website strategy, premium visual direction, and launch-ready execution to create websites that look distinctive and work with purpose.",
+        "BBL — Boutique Brand & Launch Studio is a boutique website design studio serving Orange County businesses. The studio combines clear website strategy, premium visual direction, and launch-ready execution to create websites that look distinctive and work with purpose.",
     )
     add_label(doc, "Primary public message")
     add_para(doc, "Website Design in Orange County", size=14, bold=True, color=NAVY, space_after=4)
@@ -220,39 +220,39 @@ def build():
     )
     add_body(
         doc,
-        "BBLS offers exactly three primary website packages: Simple Landing Page, starting at $3,000; Business Website, starting at $5,500; and Commercial Website, starting at $8,500. Brand Identity is available only as an optional add-on, starting at $3,500. Work beyond ten pages, or work that requires e-commerce, booking systems, memberships, multilingual sites, client portals, or advanced integrations, is scoped after consultation.",
+        "BBL offers exactly three primary website packages: Simple Landing Page, starting at $3,000; Business Website, starting at $5,500; and Commercial Website, starting at $8,500. Brand Identity is available only as an optional add-on, starting at $3,500. Work beyond ten pages, or work that requires e-commerce, booking systems, memberships, multilingual sites, client portals, or advanced integrations, is scoped after consultation.",
     )
     add_h2(doc, "Vision and Mission")
     add_body(doc, "Vision: Become a recognized boutique website design studio in Orange County for businesses that want a distinctive site built to create credibility, collect inquiries, and support growth.")
     add_body(doc, "Mission: Design and launch websites that present the offer clearly, support inquiries, and give the company a confident commercial presence.")
     add_h2(doc, "Strategic Objectives")
-    add_bullet(doc, "Establish BBLS as a boutique website design studio in Orange County.")
+    add_bullet(doc, "Establish BBL as a boutique website design studio in Orange County.")
     add_bullet(doc, "Sell from a clear three-package website offer, with Brand Identity available only as an add-on.")
     add_bullet(doc, "Keep public copy, schema, and proposals consistent with the approved language in this plan.")
     add_bullet(doc, "Use selected live work as proof, without invented results or unverified claims.")
     add_h2(doc, "Value Proposition")
-    add_body(doc, "BBLS gives a business one studio for website strategy, design, build, and launch. Clients do not need to coordinate a separate designer, developer, and launch resource for a standard commercial site.")
+    add_body(doc, "BBL gives a business one studio for website strategy, design, build, and launch. Clients do not need to coordinate a separate designer, developer, and launch resource for a standard commercial site.")
 
     add_h1(doc, "2. Company Description")
-    add_body(doc, "BBLS is an Orange County studio focused on premium website design. The work is design-led, commercial, and direct. The studio plans the site around the offer, the audience, and the action the business needs the visitor to take.")
-    add_body(doc, "BBLS is not a general digital-marketing agency, SEO retainer firm, or software product company. This plan covers project-based website design and optional brand work only.")
+    add_body(doc, "BBL is an Orange County studio focused on premium website design. The work is design-led, commercial, and direct. The studio plans the site around the offer, the audience, and the action the business needs the visitor to take.")
+    add_body(doc, "BBL is not a general digital-marketing agency, SEO retainer firm, or software product company. This plan covers project-based website design and optional brand work only.")
     add_h2(doc, "Studio Identity")
-    add_bullet(doc, "Name: BBLS — Boutique Brand & Launch Studio")
+    add_bullet(doc, "Name: BBL — Boutique Brand & Launch Studio")
     add_bullet(doc, "Positioning line: Premium Website Design Studio in Orange County")
-    add_bullet(doc, "Website: bbls.studio")
-    add_bullet(doc, "Email: hello@bbls.studio")
+    add_bullet(doc, "Website: bbl.studio")
+    add_bullet(doc, "Email: hello@bbl.studio")
     add_bullet(doc, "Phone: (949) 524-2324")
     add_h2(doc, "Brand Statement")
     add_para(doc, "We don’t shape bodies. We build businesses.", size=13, bold=True, color=NAVY, space_after=8)
-    add_body(doc, "The line marks BBLS as a commercial studio. The work is about identity, websites, and launch — not fitness, wellness, or body-focused brands as a category.")
+    add_body(doc, "The line marks BBL as a commercial studio. The work is about identity, websites, and launch — not fitness, wellness, or body-focused brands as a category.")
 
     add_h1(doc, "3. Market Positioning")
     add_quote(
         doc,
-        "While many Orange County competitors position website design as part of a broad digital-marketing or SEO service, BBLS offers a more focused boutique experience. BBLS combines premium visual direction, commercial website strategy, and launch-ready execution within clearly defined engagements.",
+        "While many Orange County competitors position website design as part of a broad digital-marketing or SEO service, BBL offers a more focused boutique experience. BBL combines premium visual direction, commercial website strategy, and launch-ready execution within clearly defined engagements.",
     )
-    add_body(doc, "BBLS sits between low-cost template vendors and large or full-service digital agencies. The studio competes on focused scope, editorial visual quality, conversion-minded structure, and a defined starting price. It does not compete on the lowest bid or on monthly SEO retainers.")
-    add_h2(doc, "What BBLS Sells")
+    add_body(doc, "BBL sits between low-cost template vendors and large or full-service digital agencies. The studio competes on focused scope, editorial visual quality, conversion-minded structure, and a defined starting price. It does not compete on the lowest bid or on monthly SEO retainers.")
+    add_h2(doc, "What BBL Sells")
     add_bullet(doc, "Simple Landing Page — one focused commercial page.")
     add_bullet(doc, "Business Website — a complete professional site of up to five pages.")
     add_bullet(doc, "Commercial Website — a larger, strategically structured site of six to ten pages.")
@@ -265,7 +265,7 @@ def build():
     add_h1(doc, "4. Competitive Landscape")
     add_body(
         doc,
-        "This section is based on publicly visible pages of two primary Orange County competitors, WebPlug OC (webplugoc.com) and OCWebPros (ocwebpros.com), with Imagine Monkey (imaginemonkey.com) used as a supporting copy and architecture reference. The research informed BBLS strategy only. Competitor wording, slogans, testimonials, statistics, and brand language were not copied. Competitor names are not BBLS clients, collaborators, endorsements, or partners.",
+        "This section is based on publicly visible pages of two primary Orange County competitors, WebPlug OC (webplugoc.com) and OCWebPros (ocwebpros.com), with Imagine Monkey (imaginemonkey.com) used as a supporting copy and architecture reference. The research informed BBL strategy only. Competitor wording, slogans, testimonials, statistics, and brand language were not copied. Competitor names are not BBL clients, collaborators, endorsements, or partners.",
     )
 
     add_h2(doc, "WebPlug OC")
@@ -280,10 +280,10 @@ def build():
     add_bullet(doc, "Local-market language")
     add_bullet(doc, "Emphasis on custom website development")
     add_bullet(doc, "Strong consultation CTA")
-    add_label(doc, "BBLS differentiation")
+    add_label(doc, "BBL differentiation")
     add_body(
         doc,
-        "BBLS should differentiate through a boutique engagement model, premium editorial design, stronger brand direction, focused service packages, transparent starting prices, and a more curated client experience.",
+        "BBL should differentiate through a boutique engagement model, premium editorial design, stronger brand direction, focused service packages, transparent starting prices, and a more curated client experience.",
     )
 
     add_h2(doc, "OCWebPros")
@@ -298,27 +298,27 @@ def build():
     add_bullet(doc, "Website and search-performance connection")
     add_bullet(doc, "Direct lead-generation language")
     add_bullet(doc, "Location-focused content structure")
-    add_label(doc, "BBLS differentiation")
+    add_label(doc, "BBL differentiation")
     add_body(
         doc,
-        "BBLS should compete through higher-end visual execution, a design-first process, carefully selected commercial projects, premium positioning, and websites that combine brand credibility with conversion strategy.",
+        "BBL should compete through higher-end visual execution, a design-first process, carefully selected commercial projects, premium positioning, and websites that combine brand credibility with conversion strategy.",
     )
 
     add_h2(doc, "Imagine Monkey — supporting reference")
     add_body(
         doc,
-        "Imagine Monkey presents itself as an Orange County web design company serving the county since 2011. Public pages emphasize handcrafted custom websites, performance, and a dedicated web-development service page. Service areas listed on the site include Costa Mesa, Newport Beach, Irvine, Huntington Beach, Santa Ana, Tustin, Orange, Laguna Niguel, and Laguna Beach. Named package prices are not publicly listed. The site is useful as an architecture and longevity reference, not as a model for BBLS voice.",
+        "Imagine Monkey presents itself as an Orange County web design company serving the county since 2011. Public pages emphasize handcrafted custom websites, performance, and a dedicated web-development service page. Service areas listed on the site include Costa Mesa, Newport Beach, Irvine, Huntington Beach, Santa Ana, Tustin, Orange, Laguna Niguel, and Laguna Beach. Named package prices are not publicly listed. The site is useful as an architecture and longevity reference, not as a model for BBL voice.",
     )
 
     add_h2(doc, "Competitive Positioning Summary")
     add_quote(
         doc,
-        "While many Orange County competitors position website design as part of a broad digital-marketing or SEO service, BBLS offers a more focused boutique experience. BBLS combines premium visual direction, commercial website strategy, and launch-ready execution within clearly defined engagements.",
+        "While many Orange County competitors position website design as part of a broad digital-marketing or SEO service, BBL offers a more focused boutique experience. BBL combines premium visual direction, commercial website strategy, and launch-ready execution within clearly defined engagements.",
     )
     add_body(doc, "The comparison below uses only facts that can be verified from each competitor’s public website. Details that are not published are marked “Not publicly listed.” Competitor prices were not estimated.")
     add_table(
         doc,
-        ["Category", "WebPlug OC", "OCWebPros", "BBLS"],
+        ["Category", "WebPlug OC", "OCWebPros", "BBL"],
         [
             [
                 "Primary positioning",
@@ -363,7 +363,7 @@ def build():
                 "Focused packages, transparent starting prices, and premium editorial execution",
             ],
             [
-                "BBLS differentiation opportunity",
+                "BBL differentiation opportunity",
                 "Stay boutique and editorial rather than becoming a full-service development shop",
                 "Stay design-first and curated rather than competing as a local-SEO volume shop",
                 "Own the premium, clearly priced website engagement",
@@ -374,7 +374,7 @@ def build():
     )
 
     add_h1(doc, "5. Target Market")
-    add_body(doc, "BBLS works with founders and established businesses that need a polished website to look credible, collect inquiries, and support growth.")
+    add_body(doc, "BBL works with founders and established businesses that need a polished website to look credible, collect inquiries, and support growth.")
     add_h2(doc, "Primary Clients")
     add_bullet(doc, "Founders and small businesses that need one focused, professional page.")
     add_bullet(doc, "Established businesses that need a complete and credible online presence.")
@@ -387,7 +387,7 @@ def build():
     add_body(doc, "The studio serves Orange County businesses, including Irvine, Newport Beach, Costa Mesa, Laguna Beach, and Tustin. This plan does not claim a public street office in those cities. Delivery does not depend on the client being local.")
 
     add_h1(doc, "6. Service Structure")
-    add_body(doc, "From a focused landing page to a complete commercial website, every BBLS engagement is built around a clear offer, thoughtful user experience, and a confident digital presence. Each package is a starting point. Final pricing depends on page count, content requirements, integrations, functionality, timeline, and project complexity.")
+    add_body(doc, "From a focused landing page to a complete commercial website, every BBL engagement is built around a clear offer, thoughtful user experience, and a confident digital presence. Each package is a starting point. Final pricing depends on page count, content requirements, integrations, functionality, timeline, and project complexity.")
     add_h2(doc, "Simple Landing Page — Starting at $3,000")
     add_body(doc, "One focused page designed to present your offer clearly and guide visitors toward the next action.")
     add_bullet(doc, "One custom-designed landing page")
@@ -421,7 +421,7 @@ def build():
     add_bullet(doc, "Launch support")
     add_bullet(doc, "Up to three revision rounds")
     add_h2(doc, "Brand Identity Add-on — Starting at $3,500")
-    add_body(doc, "When the website needs a stronger visual foundation, BBLS can create a focused identity system covering logo, color, typography, and visual direction. Brand Identity is not a primary package.")
+    add_body(doc, "When the website needs a stronger visual foundation, BBL can create a focused identity system covering logo, color, typography, and visual direction. Brand Identity is not a primary package.")
     add_bullet(doc, "Logo system")
     add_bullet(doc, "Color palette")
     add_bullet(doc, "Typography system")
@@ -447,7 +447,7 @@ def build():
     )
 
     add_h1(doc, "8. Delivery Model")
-    add_body(doc, "BBLS uses a four-stage process. Timing depends on scope, content readiness, access, and approvals.")
+    add_body(doc, "BBL uses a four-stage process. Timing depends on scope, content readiness, access, and approvals.")
     add_h3(doc, "01 Discover")
     add_body(doc, "Clarify the offer, audience, goals, page count, required materials, and launch target.")
     add_h3(doc, "02 Define")
@@ -460,8 +460,8 @@ def build():
     add_body(doc, "Focused landing-page launches may finish in 14 days when scope, content, and approvals are ready. Broader website work typically takes two to four weeks. Larger or custom work is scheduled after the scope is confirmed.")
 
     add_h1(doc, "9. Marketing Strategy")
-    add_body(doc, "Small by design. Focused by nature. BBLS provides direct collaboration and thoughtful execution without the layers of a traditional agency.")
-    add_h2(doc, "Why BBLS")
+    add_body(doc, "Small by design. Focused by nature. BBL provides direct collaboration and thoughtful execution without the layers of a traditional agency.")
+    add_h2(doc, "Why BBL")
     add_bullet(doc, "Boutique attention")
     add_bullet(doc, "Premium visual direction")
     add_bullet(doc, "Clear commercial strategy")
@@ -475,14 +475,14 @@ def build():
     add_bullet(doc, "Use “Start a Project” as the primary CTA and “View Selected Work” as the secondary CTA.")
     add_bullet(doc, "Lead with Website Design in Orange County, then name Irvine, Newport Beach, Costa Mesa, Laguna Beach, and Tustin only where the studio genuinely works.")
     add_bullet(doc, "Show live work only: Raysan IP, 7 Stud Farm, and IP Law Nerds.")
-    add_bullet(doc, "Collect inquiries through hello@bbls.studio and (949) 524-2324.")
+    add_bullet(doc, "Collect inquiries through hello@bbl.studio and (949) 524-2324.")
     add_h2(doc, "What Marketing Will Not Do")
     add_bullet(doc, "Promise rankings, leads, revenue, or conversion improvements.")
     add_bullet(doc, "Claim awards, “best,” or “number one” status.")
-    add_bullet(doc, "Present BBLS as a general digital-marketing or SEO retainer agency.")
+    add_bullet(doc, "Present BBL as a general digital-marketing or SEO retainer agency.")
 
     add_h1(doc, "10. SEO and GEO Strategy")
-    add_body(doc, "Competitors win Orange County search by pairing a county-level keyword with service depth, city coverage, FAQs, and local proof. BBLS should follow the architecture, not the voice.")
+    add_body(doc, "Competitors win Orange County search by pairing a county-level keyword with service depth, city coverage, FAQs, and local proof. BBL should follow the architecture, not the voice.")
     add_h2(doc, "On-page priorities")
     add_bullet(doc, "Primary keyword: website design Orange County.")
     add_bullet(doc, "Homepage H1 remains “Website Design in Orange County.”")
@@ -490,19 +490,19 @@ def build():
     add_bullet(doc, "Keep one H1, unique titles, unique descriptions, and canonical URLs on every public page.")
     add_bullet(doc, "Align JSON-LD with visible packages and prices. Do not publish Website Care offers.")
     add_h2(doc, "GEO and AI-answer copy")
-    add_body(doc, "What is BBLS? BBLS is a boutique website design studio serving businesses in Orange County, California.")
-    add_body(doc, "What website services does BBLS offer? BBLS offers Simple Landing Pages, Business Websites, Commercial Websites, and optional Brand Identity services.")
-    add_body(doc, "How much does a BBLS website cost? BBLS landing pages start at $3,000, business websites start at $5,500, and commercial websites start at $8,500. Final pricing depends on project scope and functionality.")
-    add_body(doc, "Does BBLS provide website design in Orange County? Yes. BBLS provides premium website design services for businesses throughout Orange County.")
+    add_body(doc, "What is BBL? BBL is a boutique website design studio serving businesses in Orange County, California.")
+    add_body(doc, "What website services does BBL offer? BBL offers Simple Landing Pages, Business Websites, Commercial Websites, and optional Brand Identity services.")
+    add_body(doc, "How much does a BBL website cost? BBL landing pages start at $3,000, business websites start at $5,500, and commercial websites start at $8,500. Final pricing depends on project scope and functionality.")
+    add_body(doc, "Does BBL provide website design in Orange County? Yes. BBL provides premium website design services for businesses throughout Orange County.")
     add_h2(doc, "Authority work outside the website")
     add_body(doc, "Search visibility also depends on Google Business Profile, Search Console, consistent name/phone/email, reviews, and relevant local mentions. Those items are owner actions. This plan does not create directory listings or reviews.")
 
     add_h1(doc, "11. Sales Strategy")
     add_body(doc, "Sales begin with a focused conversation: what the business is building, what the website needs to do, and which package is the closest fit.")
     add_h2(doc, "Lead Sources")
-    add_bullet(doc, "bbls.studio, with website design in Orange County as the primary public message.")
+    add_bullet(doc, "bbl.studio, with website design in Orange County as the primary public message.")
     add_bullet(doc, "Direct outreach and referrals in Orange County.")
-    add_bullet(doc, "Inbound email to hello@bbls.studio and calls to (949) 524-2324.")
+    add_bullet(doc, "Inbound email to hello@bbl.studio and calls to (949) 524-2324.")
     add_h2(doc, "Sales Motion")
     add_bullet(doc, "Qualify page count, content readiness, integrations, and timeline.")
     add_bullet(doc, "Map the work to Simple Landing Page, Business Website, or Commercial Website.")
@@ -555,7 +555,7 @@ def build():
     add_bullet(doc, "Keep Brand Identity attached to website work rather than sold as a stand-alone primary offer.")
 
     add_h1(doc, "14. Website and Marketing Copy")
-    add_body(doc, "Public and proposal language should stay consistent with this plan and with bbls.studio.")
+    add_body(doc, "Public and proposal language should stay consistent with this plan and with bbl.studio.")
     add_h2(doc, "Homepage")
     add_bullet(doc, "H1: Website Design in Orange County")
     add_bullet(doc, "Subheadline: Distinctive websites designed to build credibility, generate inquiries, and support business growth.")
@@ -563,17 +563,17 @@ def build():
     add_bullet(doc, "Secondary CTA: View Selected Work")
     add_bullet(doc, "Brand statement: We don’t shape bodies. We build businesses.")
     add_h2(doc, "Positioning")
-    add_body(doc, "BBLS is a boutique website design studio serving Orange County businesses. We combine clear website strategy, premium visual direction, and launch-ready execution to create websites that look distinctive and work with purpose.")
+    add_body(doc, "BBL is a boutique website design studio serving Orange County businesses. We combine clear website strategy, premium visual direction, and launch-ready execution to create websites that look distinctive and work with purpose.")
     add_h2(doc, "Service introduction")
-    add_body(doc, "From a focused landing page to a complete commercial website, every BBLS engagement is built around a clear offer, thoughtful user experience, and a confident digital presence.")
+    add_body(doc, "From a focused landing page to a complete commercial website, every BBL engagement is built around a clear offer, thoughtful user experience, and a confident digital presence.")
     add_h2(doc, "Package lines")
     add_bullet(doc, "Simple Landing Page, starting at $3,000. One focused page designed to present your offer clearly and guide visitors toward the next action.")
     add_bullet(doc, "Business Website, starting at $5,500. A complete professional website designed to establish credibility, explain your services, and generate qualified inquiries.")
     add_bullet(doc, "Commercial Website, starting at $8,500. A larger, strategically structured website for businesses that need stronger content architecture, customer journeys, and conversion-focused functionality.")
-    add_bullet(doc, "Brand Identity add-on, starting at $3,500. When the website needs a stronger visual foundation, BBLS can create a focused identity system covering logo, color, typography, and visual direction.")
+    add_bullet(doc, "Brand Identity add-on, starting at $3,500. When the website needs a stronger visual foundation, BBL can create a focused identity system covering logo, color, typography, and visual direction.")
     add_h2(doc, "Contact")
     add_bullet(doc, "Ready to build a more distinctive business?")
-    add_bullet(doc, "hello@bbls.studio")
+    add_bullet(doc, "hello@bbl.studio")
     add_bullet(doc, "(949) 524-2324")
 
     add_h1(doc, "15. 90-Day Action Plan")

@@ -33,7 +33,7 @@ import { processResendWebhook } from '../api/resend-webhook';
 try {
   seedIfNeeded();
 } catch (error) {
-  console.error('BBLS seed skipped', error);
+  console.error('BBL seed skipped', error);
 }
 
 const CLIENT_COOKIE = 'bbls_client_session';
@@ -273,7 +273,7 @@ app.post('/api/portal/request-code', async (c) => {
       portalPath: '/client',
       extra: `Your one-time code is logged for local development only and is never placed in the URL.`,
     });
-    logEmail('verification_code', client.email, 'BBLS verification code', `Local development code: ${code}`);
+    logEmail('verification_code', client.email, 'BBL verification code', `Local development code: ${code}`);
   }
   return c.json({ ok: true, message: 'If this link is valid, a verification code was sent.' });
 });
@@ -362,7 +362,7 @@ app.get('/api/portal/proposal.pdf', (c) => {
   const p = bundle.project;
   const path = writeTextPdf(
     `${session.subject_id}/proposal.pdf`,
-    'BBLS Proposal',
+    'BBL Proposal',
     [
       String(p.company_name),
       String(p.name),
@@ -411,7 +411,7 @@ app.post('/api/portal/accept-agreement', async (c) => {
   });
   const ip = clientIp(c.req.header('x-forwarded-for') || c.req.header('x-real-ip'));
   const auditId = audit(session.subject_id, 'client', 'agreement_accepted', { version: agreement.version, hash: agreement.content_hash });
-  const pdfPath = writeTextPdf(`${session.subject_id}/agreement-v${agreement.version}.pdf`, 'BBLS Signed Agreement', [
+  const pdfPath = writeTextPdf(`${session.subject_id}/agreement-v${agreement.version}.pdf`, 'BBL Signed Agreement', [
     AGREEMENT_NOTICE,
     `Version ${agreement.version}`,
     `Hash ${agreement.content_hash}`,
@@ -485,7 +485,7 @@ app.post('/api/portal/checkout', async (c) => {
       price_data: {
         currency: 'usd',
         unit_amount: installment.amount_cents,
-        product_data: { name: `BBLS · ${installment.milestone}` },
+        product_data: { name: `BBL · ${installment.milestone}` },
       },
     }],
     metadata: { projectId: session.subject_id, installmentId: installment.id },
@@ -497,7 +497,7 @@ app.post('/api/portal/checkout', async (c) => {
 app.get('/api/portal/checkout/mock/:id', (c) => {
   const checkout = mockCheckouts.get(c.req.param('id'));
   if (!checkout) return c.text('This test checkout is no longer available.', 404);
-  return c.html(`<!doctype html><html><head><meta charset="utf-8"><meta name="robots" content="noindex,nofollow"><title>BBLS Test Checkout</title>
+  return c.html(`<!doctype html><html><head><meta charset="utf-8"><meta name="robots" content="noindex,nofollow"><title>BBL Test Checkout</title>
     <style>body{font-family:Inter,sans-serif;background:#0a0a0a;color:#fff;display:grid;place-items:center;min-height:100vh;margin:0}main{width:min(26rem,92vw);border:1px solid rgba(255,255,255,.15);border-radius:16px;padding:2rem;background:rgba(255,255,255,.08)}button,a{min-height:44px;display:inline-flex;align-items:center;justify-content:center;border-radius:99px;padding:.7rem 1rem}button{width:100%;border:0;background:#fff;color:#0a0a0a;font-weight:600}p{color:#cfcfcf}</style></head>
     <body><main><p style="color:#d4b483">STRIPE TEST MODE MOCK</p><h1>Pay ${dollars(checkout.amount)}</h1><p>No live charges. Confirming this page records a verified local test payment through the same webhook-style ledger used for Stripe events.</p>
     <form method="post"><button type="submit">Pay with test card 4242</button></form></main></body></html>`);
@@ -628,7 +628,7 @@ app.post('/api/portal/download/:releaseId', (c) => {
   const session = requireClient(c);
   if (!session) return c.json({ ok: false }, 401);
   const release = row<{ id: string; file_path: string; released_at: string | null; label: string }>(`SELECT * FROM file_releases WHERE id = ? AND project_id = ?`, [c.req.param('releaseId'), session.subject_id]);
-  if (!release?.released_at) return c.json({ ok: false, message: 'Final files are locked until BBLS releases them.' }, 403);
+  if (!release?.released_at) return c.json({ ok: false, message: 'Final files are locked until BBL releases them.' }, 403);
   const token = randomToken();
   run(`INSERT INTO download_tokens (id, file_release_id, token_hash, expires_at) VALUES (?, ?, ?, ?)`, [
     id('dl_'), release.id, sha256(token), new Date(Date.now() + 2 * 60 * 1000).toISOString(),

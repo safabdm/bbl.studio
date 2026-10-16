@@ -37,7 +37,7 @@ export function organizationNode() {
     ],
     hasOfferCatalog: {
       '@type': 'OfferCatalog',
-      name: 'BBLS website engagements',
+      name: 'BBL website engagements',
       itemListElement: PUBLIC_PROJECT_OFFERS.map((offer) => ({
         '@type': 'Offer',
         priceCurrency: 'USD',
@@ -58,7 +58,7 @@ export function websiteNode() {
     '@type': 'WebSite',
     '@id': `${SITE_URL}/#website`,
     url: `${SITE_URL}/`,
-    name: 'BBLS',
+    name: 'BBL',
     publisher: { '@id': ORG_ID },
     inLanguage: 'en-US',
   };

@@ -44,7 +44,7 @@ export function SiteFrame({ children }: { children: React.ReactNode }) {
       <ScrollVideo />
       <div className="site-layer">
         <nav className="glass-nav" aria-label="Primary">
-          <Link to="/" className="brand" onClick={() => setOpen(false)}><BblsMark size={26} /> bbls</Link>
+          <Link to="/" className="brand" onClick={() => setOpen(false)}><BblsMark size={26} /> bbl</Link>
           <div className={`nav-links${open ? ' is-open' : ''}`}>
             {links.map((link) => (
               <NavLink key={link.to} to={link.to} onClick={() => setOpen(false)}>
@@ -56,12 +56,12 @@ export function SiteFrame({ children }: { children: React.ReactNode }) {
             <button type="button" className="nav-menu" aria-expanded={open} aria-controls="mobile-nav" onClick={() => setOpen((value) => !value)}>
               {open ? 'Close' : 'Menu'}
             </button>
-            <a href={PHONE_HREF} className="nav-cta" aria-label={`Call BBLS at ${PHONE}`}>Call {PHONE}</a>
+            <a href={PHONE_HREF} className="nav-cta" aria-label={`Call BBL at ${PHONE}`}>Call {PHONE}</a>
           </div>
         </nav>
         <div id="content">{children}</div>
         <footer className="site-footer">
-          <Link to="/" className="footer-brand"><BblsMark size={20} /> bbls</Link>
+          <Link to="/" className="footer-brand"><BblsMark size={20} /> bbl</Link>
           <p>{STUDIO_NAME}</p>
           <div className="footer-contacts">
             <Link to="/orange-county-web-design">Services</Link>

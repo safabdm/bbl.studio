@@ -11,7 +11,7 @@ type LinkRecord = { id: string; last4?: string; status: string; expires_at: stri
 async function sharePreviewLink(url: string) {
   try {
     if (navigator.share) {
-      await navigator.share({ title: 'BBLS private preview', text: 'Open this private BBLS preview. Do not forward it.', url });
+      await navigator.share({ title: 'BBL private preview', text: 'Open this private BBL preview. Do not forward it.', url });
       return 'Preview link opened in share sheet.';
     }
   } catch {
@@ -38,9 +38,9 @@ function Shell({ title, children, back }: { title: string; children: ReactNode; 
   return (
     <div className="portal-shell">
       <header className="portal-nav">
-        <Link to="/admin" className="brand" aria-label="BBLS admin home">
+        <Link to="/admin" className="brand" aria-label="BBL admin home">
           <BblsMark size={22} />
-          <span>bbls admin</span>
+          <span>bbl admin</span>
         </Link>
         <nav className="portal-actions" aria-label="Admin">
           <Link className="glass-pill" to="/admin">CRM</Link>
@@ -66,7 +66,7 @@ function Shell({ title, children, back }: { title: string; children: ReactNode; 
 export function AdminLogin() {
   const navigate = useNavigate();
   const [error, setError] = useState('');
-  usePrivateIndexing('BBLS Admin');
+  usePrivateIndexing('BBL Admin');
   async function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const form = new FormData(event.currentTarget);
@@ -87,7 +87,7 @@ export function AdminLogin() {
     <div className="portal-shell">
       <div className="portal-login">
         <p className="portal-kicker">Private administrator access</p>
-        <h1>BBLS Admin</h1>
+        <h1>BBL Admin</h1>
         <p className="portal-lead">Sign in to open the CRM email dashboard, client portal, and private project links.</p>
         <form className="portal-card" onSubmit={onSubmit}>
           <div className="portal-field">
@@ -159,7 +159,7 @@ export function AdminHome() {
   }
 
   return (
-    <Shell title="BBLS Admin">
+    <Shell title="BBL Admin">
       <p className="portal-kicker">Boutique Brand & Launch Studio</p>
       <h1>Projects</h1>
       <p className="portal-lead">Create a client, set pricing, then generate a private link. CRM email marketing lives at <Link to="/admin">/admin</Link>.</p>
@@ -242,7 +242,7 @@ export function AdminProject() {
   }
 
   return (
-    <Shell title="BBLS project" back="/admin">
+    <Shell title="BBL project" back="/admin">
       <p className="portal-kicker">{String(project?.company_name || 'Project')}</p>
       <h1>{String(project?.name || 'Loading')}</h1>
       <p className="portal-lead">{String(project?.contact_name || '')} · {String(project?.email || '')} · {String(project?.status || '')}</p>
@@ -417,7 +417,7 @@ export function AdminPricing() {
   }
 
   return (
-    <Shell title="BBLS pricing" back={`/admin/projects/${projectId}`}>
+    <Shell title="BBL pricing" back={`/admin/projects/${projectId}`}>
       <p className="portal-kicker">Per-project pricing</p>
       <h1>Set the proposal</h1>
       <p className="portal-lead">Choosing a preset fills the default price and deliverables. Everything stays editable before you publish.</p>
@@ -482,7 +482,7 @@ export function ClientPortal({ preview = false }: { preview?: boolean }) {
   const { token = '', projectId = '' } = useParams();
   const [data, setData] = useState<Record<string, unknown> | null>(null);
   const [error, setError] = useState('');
-  usePrivateIndexing('BBLS Client Portal');
+  usePrivateIndexing('BBL Client Portal');
 
   useEffect(() => {
     async function load() {
@@ -508,13 +508,13 @@ export function ClientPortal({ preview = false }: { preview?: boolean }) {
   return (
     <div className="portal-shell">
       <header className="portal-nav">
-        <span className="brand"><BblsMark size={22} /><span>bbls</span></span>
+        <span className="brand"><BblsMark size={22} /><span>bbl</span></span>
         <span className="portal-muted">Private client portal</span>
       </header>
       <div className="portal-wrap">
         {preview ? <p className="portal-banner">Preview as Client. This does not publish, change status, or send a notification.</p> : null}
         {error ? <p className="portal-error" role="alert">{error}</p> : null}
-        <p className="portal-kicker">{String(data?.company || 'BBLS')}</p>
+        <p className="portal-kicker">{String(data?.company || 'BBL')}</p>
         <h1>{String(data?.projectName || 'Your proposal')}</h1>
         <p className="portal-lead">{String(data?.clientPricingNotes || 'A private proposal prepared for this engagement.')}</p>
         <div className="portal-grid">

@@ -100,7 +100,7 @@ class PdfWriter:
         self.page = self.doc.new_page(width=self.page_w, height=self.page_h)
         self.page_no += 1
         self.y = self.top
-        footer = "BBLS — Boutique Brand & Launch Studio  |  Confidential planning document"
+        footer = "BBL — Boutique Brand & Launch Studio  |  Confidential planning document"
         self.page.insert_text((self.left, self.page_h - 0.42 * 72), footer, fontsize=8, fontfile=FONT, color=MUTED)
         self.page.insert_text((self.page_w - self.right - 20, self.page_h - 0.42 * 72), str(self.page_no), fontsize=8, fontfile=FONT, color=MUTED)
 

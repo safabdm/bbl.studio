@@ -35,7 +35,7 @@ export function seedIfNeeded() {
     id: adminId,
     email: (process.env.ADMIN_EMAIL || 'admin@bbls.studio').toLowerCase(),
     password_hash: hashPassword(process.env.ADMIN_PASSWORD || 'S@f@1371'),
-    name: process.env.ADMIN_NAME || 'BBLS Studio',
+    name: process.env.ADMIN_NAME || 'BBL Studio',
     created_at: created,
   });
 
@@ -118,7 +118,7 @@ export function seedIfNeeded() {
     id: id('agr_'),
     project_id: projectId,
     version: 1,
-    title: 'BBLS Service Agreement (template)',
+    title: 'BBL Service Agreement (template)',
     body_json: content,
     content_hash: sha256(content),
     legal_status: 'template_requires_attorney_review',
@@ -128,7 +128,7 @@ export function seedIfNeeded() {
   const fullPlan = id('plan_');
   const splitPlan = id('plan_');
   const simplePlan = id('plan_');
-  const refund = 'PLACEHOLDER: Refundability language must be attorney-reviewed before production use. For this local sample, payments are marked non-refundable after processor confirmation unless BBLS agrees otherwise in writing.';
+  const refund = 'PLACEHOLDER: Refundability language must be attorney-reviewed before production use. For this local sample, payments are marked non-refundable after processor confirmation unless BBL agrees otherwise in writing.';
   insert('payment_plans', { id: fullPlan, project_id: projectId, name: 'Pay in full', kind: 'full', refund_language: refund });
   insert('payment_plans', { id: splitPlan, project_id: projectId, name: 'Three-part split', kind: 'split', refund_language: refund });
   insert('payment_plans', { id: simplePlan, project_id: projectId, name: 'Two-part split', kind: 'split', refund_language: refund });
@@ -149,7 +149,7 @@ export function seedIfNeeded() {
   insert('previews', { id: id('prv_'), project_id: projectId, version: 1, kind: 'website', title: 'Private website preview', file_path: null, website_path: sitePath, revoked: 0, created_at: created });
 
   const lockedPath = join(paths.uploads, `${projectId}/final-brand-notes.txt`);
-  writeFileSync(lockedPath, 'Fictional final brand notes. Locked until BBLS releases files.');
+  writeFileSync(lockedPath, 'Fictional final brand notes. Locked until BBL releases files.');
   insert('file_releases', { id: id('rel_'), project_id: projectId, deliverable_id: null, file_path: lockedPath, label: 'Final brand notes', released_at: null, released_by: null });
 
   const snapshot = {
@@ -216,7 +216,7 @@ export function seedIfNeeded() {
     action: 'Review the private proposal',
     portalPath: `/client/${activeToken}`,
   });
-  console.log('\nBBLS portal sample links written to data/local-access.json\n', access);
+  console.log('\nBBL portal sample links written to data/local-access.json\n', access);
   return access;
 }
 

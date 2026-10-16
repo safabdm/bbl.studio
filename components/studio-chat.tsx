@@ -106,10 +106,10 @@ export function StudioChat({
             <BblsMark size={44} />
           </span>
           <span className="chat-card-copy">
-            <strong>Plan your website with BBLS.</strong>
+            <strong>Plan your website with BBL.</strong>
             <small>Choose a scope, compare starting prices, or prepare for kickoff.</small>
             <span className="chat-card-cta">
-              Ask BBLS <ArrowUpRight size={14} aria-hidden="true" />
+              Ask BBL <ArrowUpRight size={14} aria-hidden="true" />
             </span>
           </span>
         </button>
@@ -120,7 +120,7 @@ export function StudioChat({
             <BblsMark size={28} />
           </div>
           <div>
-            <h2 id={titleId}>Ask BBLS</h2>
+            <h2 id={titleId}>Ask BBL</h2>
             <p>Website scope and starting price guide</p>
           </div>
           <button type="button" className="chat-close" aria-label="Close chat" onClick={() => onOpenChange(false)}>
@@ -154,7 +154,7 @@ export function StudioChat({
             submitQuestion(value);
           }}
         >
-          <label className="sr-only" htmlFor={inputId}>Ask BBLS a question</label>
+          <label className="sr-only" htmlFor={inputId}>Ask BBL a question</label>
           <input
             ref={inputRef}
             id={inputId}
@@ -168,7 +168,7 @@ export function StudioChat({
             <Send size={16} aria-hidden="true" />
           </button>
         </form>
-        <a className="chat-call" href={PHONE_HREF} aria-label="Call BBLS at (949) 524-2324">
+        <a className="chat-call" href={PHONE_HREF} aria-label="Call BBL at (949) 524-2324">
           Or call (949) 524-2324
         </a>
       </dialog>
