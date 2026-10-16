@@ -6,7 +6,7 @@ export function organizationNode() {
     '@type': ['Organization', 'ProfessionalService'],
     '@id': ORG_ID,
     name: STUDIO_NAME,
-    alternateName: ['BBLS', 'Boutique Brand & Launch Studio'],
+    alternateName: ['BBL Studio', 'Boutique Brand & Launch Studio'],
     url: `${SITE_URL}/`,
     image: `${SITE_URL}/og.png`,
     logo: `${SITE_URL}/apple-touch-icon.png`,
@@ -37,7 +37,7 @@ export function organizationNode() {
     ],
     hasOfferCatalog: {
       '@type': 'OfferCatalog',
-      name: 'BBLS website engagements',
+      name: 'BBL website engagements',
       itemListElement: PUBLIC_PROJECT_OFFERS.map((offer) => ({
         '@type': 'Offer',
         priceCurrency: 'USD',
@@ -58,7 +58,7 @@ export function websiteNode() {
     '@type': 'WebSite',
     '@id': `${SITE_URL}/#website`,
     url: `${SITE_URL}/`,
-    name: 'BBLS',
+    name: 'BBL',
     publisher: { '@id': ORG_ID },
     inLanguage: 'en-US',
   };

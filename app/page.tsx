@@ -1,6 +1,6 @@
 'use client';
 
-import { BblWordmark } from '@/components/bbls-mark';
+import { BblWordmark } from '@/components/bbl-mark';
 import { PRICE_DISCLAIMER, PUBLIC_PROJECT_OFFERS } from '@/lib/offers';
 import {
   CTA_PRIMARY,

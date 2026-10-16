@@ -210,7 +210,7 @@ export async function handleCrmSendTest(
 ): Promise<CrmJsonResult> {
   const denied = adminOk(isAdmin);
   if (denied) return denied;
-  const to = String(body.to || env.ADMIN_EMAIL || env.BBLS_EMAIL || 'hello@bbl.studio');
+  const to = String(body.to || env.ADMIN_EMAIL || env.BBL_EMAIL || env.BBLS_EMAIL || 'hello@bbl.studio');
   const result = sendTestDryRun(to, String(body.subject || ''), String(body.body || ''));
   return { status: 200, body: { ...result, safety: safetySnapshot(env) } };
 }

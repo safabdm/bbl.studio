@@ -1,6 +1,6 @@
 'use client';
 
-import { BblWordmark } from '@/components/bbls-mark';
+import { BblWordmark } from '@/components/bbl-mark';
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 

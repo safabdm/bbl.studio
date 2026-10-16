@@ -12,7 +12,7 @@ export const ADMIN_COOKIE = 'bbls_admin_session';
  * Hosted runtimes (Vercel / NODE_ENV=production) must never fall back to these
  * and must never accept them even if mis-copied into project env.
  */
-const DEV_ADMIN_EMAIL = 'admin@bbls.studio';
+const DEV_ADMIN_EMAIL = 'hello@bbl.studio';
 const DEV_ADMIN_PASSWORD = 'S@f@1371';
 const DEV_SESSION_SECRET = 'bbls-local-dev-session-secret-not-for-production';
 
@@ -65,7 +65,7 @@ export function adminPassword(env: AdminAuthEnv = process.env): string {
 }
 
 export function adminName(env: AdminAuthEnv = process.env): string {
-  return trim(env.ADMIN_NAME) || 'BBLS Studio';
+  return trim(env.ADMIN_NAME) || 'BBL Studio';
 }
 
 function safeEqual(left: string, right: string) {

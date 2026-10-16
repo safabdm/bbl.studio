@@ -16,7 +16,7 @@ export const localTypedSignatureAdapter: ESignAdapter = {
     return {
       provider: 'local-typed-signature',
       envelopeId: `local_${input.agreementVersionId}`,
-      status: 'captured_in_bbls_audit_log',
+      status: 'captured_in_bbl_audit_log',
     };
   },
 };

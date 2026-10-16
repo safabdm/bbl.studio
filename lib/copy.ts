@@ -33,29 +33,29 @@ export const SERVICE_LEDES = {
   landing: 'One focused page designed to present your offer clearly and guide visitors toward the next action.',
   business: 'A complete professional website designed to establish credibility, explain your services, and generate qualified inquiries.',
   commercial: 'A larger, strategically structured website for businesses that need stronger content architecture, customer journeys, and conversion focused functionality.',
-  brand: 'When the website needs a stronger visual foundation, BBLS can create a focused identity system covering logo, color, typography, and visual direction.',
+  brand: 'When the website needs a stronger visual foundation, BBL can create a focused identity system covering logo, color, typography, and visual direction.',
 } as const;
 
 export const GEO_ANSWERS = [
   {
-    q: 'What is BBLS?',
-    a: 'BBLS is a boutique website design studio serving businesses in Orange County, California.',
+    q: 'What is BBL?',
+    a: 'BBL is a boutique website design studio serving businesses in Orange County, California.',
   },
   {
-    q: 'What website services does BBLS offer?',
+    q: 'What website services does BBL offer?',
     a: 'BBL offers Simple Landing Pages, Business Websites, Commercial Websites, Brand Identity, and AI-assisted design.',
   },
   {
-    q: 'How much does a BBLS website cost?',
-    a: 'BBLS landing pages start at $3,000, business websites start at $5,500, and commercial websites start at $8,500. Final pricing depends on project scope and functionality.',
+    q: 'How much does a BBL website cost?',
+    a: 'BBL landing pages start at $3,000, business websites start at $5,500, and commercial websites start at $8,500. Final pricing depends on project scope and functionality.',
   },
   {
-    q: 'Does BBLS provide website design in Orange County?',
-    a: 'Yes. BBLS provides premium website design services for businesses throughout Orange County.',
+    q: 'Does BBL provide website design in Orange County?',
+    a: 'Yes. BBL provides premium website design services for businesses throughout Orange County.',
   },
 ] as const;
 
 export const LOCAL_AREAS = ['Irvine', 'Newport Beach', 'Costa Mesa', 'Laguna Beach', 'Tustin'] as const;
 
 export const LOCAL_NOTE =
-  'BBLS works with businesses in Irvine, Newport Beach, Costa Mesa, Laguna Beach, and Tustin. The studio does not list a public street office on these city pages.';
+  'BBL works with businesses in Irvine, Newport Beach, Costa Mesa, Laguna Beach, and Tustin. The studio does not list a public street office on these city pages.';

@@ -381,7 +381,7 @@ export function registerPricingRoutes(app: Hono) {
       preset.base_price_cents, preset.proposal_expires_at, created, Math.round(preset.base_price_cents * 0.5), Math.round(preset.base_price_cents * 0.5), preset.client_pricing_notes,
     ]);
     const agreement = JSON.stringify({ notice: AGREEMENT_NOTICE, sections: agreementSections() });
-    run(`INSERT INTO agreement_versions (id, project_id, version, title, body_json, content_hash, legal_status, created_at) VALUES (?, ?, 1, 'BBLS Service Agreement (template)', ?, ?, 'template_requires_attorney_review', ?)`, [
+    run(`INSERT INTO agreement_versions (id, project_id, version, title, body_json, content_hash, legal_status, created_at) VALUES (?, ?, 1, 'BBL Service Agreement (template)', ?, ?, 'template_requires_attorney_review', ?)`, [
       id('agr_'), projectId, agreement, sha256(agreement), created,
     ]);
     savePricing(projectId, preset, true);
@@ -490,7 +490,7 @@ export function registerPricingRoutes(app: Hono) {
       to: client.email,
       clientName: client.contact_name,
       projectName: client.name,
-      action: 'Open your private BBLS portal',
+      action: 'Open your private BBL portal',
       portalPath: latest.url.replace(appOrigin(), ''),
       extra: 'This is a logged local invitation. No real email is sent in development.',
     });

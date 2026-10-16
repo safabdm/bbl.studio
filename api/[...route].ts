@@ -189,7 +189,7 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
       const email = String(body.email).trim().toLowerCase();
       if (!/^\S+@\S+\.\S+$/.test(email)) return send(res, 400, { ok: false, message: 'Please enter a valid email address.' });
       const key = process.env.STRIPE_SECRET_KEY || '';
-      if (!key.startsWith('sk_')) return send(res, 503, { ok: false, message: 'Secure deposit checkout is being connected. Please call BBLS to start your project.' });
+      if (!key.startsWith('sk_')) return send(res, 503, { ok: false, message: 'Secure deposit checkout is being connected. Please call BBL to start your project.' });
       const stripe = new Stripe(key);
       const proto = String(req.headers['x-forwarded-proto'] || 'https').split(',')[0].trim();
       const host = String(req.headers['x-forwarded-host'] || req.headers.host || 'www.bbl.studio').split(',')[0].trim();
@@ -198,7 +198,7 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
       const session = await stripe.checkout.sessions.create({
         mode: 'payment',
         customer_email: email,
-        line_items: [{ quantity: 1, price_data: { currency: 'usd', unit_amount: selected.depositCents, product_data: { name: `BBLS 20% Project Deposit: ${selected.name}` } } }],
+        line_items: [{ quantity: 1, price_data: { currency: 'usd', unit_amount: selected.depositCents, product_data: { name: `BBL 20% Project Deposit: ${selected.name}` } } }],
         metadata: {
           offer_id: offerId,
           contact_name: String(body.name).slice(0, 120),
@@ -211,7 +211,7 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
         success_url: `${origin}/?deposit=success#start-project`,
         cancel_url: `${origin}/?deposit=cancelled#start-project`,
       });
-      if (!session.url) return send(res, 500, { ok: false, message: 'Secure checkout could not be opened. Please call BBLS.' });
+      if (!session.url) return send(res, 500, { ok: false, message: 'Secure checkout could not be opened. Please call BBL.' });
       return send(res, 200, { ok: true, url: session.url });
     }
 

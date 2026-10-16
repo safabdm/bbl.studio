@@ -1,6 +1,6 @@
 'use client';
 
-import { BblsMark } from '@/components/bbls-mark';
+import { BblMark } from '@/components/bbl-mark';
 import { answerStudioQuestion } from '@/lib/studio-answers';
 import { ArrowUpRight, Send, X } from 'lucide-react';
 import { useEffect, useId, useRef, useState } from 'react';
@@ -54,7 +54,7 @@ export function StudioChat({
     }
     if (!open && dialog.open) {
       dialog.close();
-      document.getElementById('bbls-estimate-trigger')?.focus();
+      document.getElementById('bbl-estimate-trigger')?.focus();
     }
   }, [open]);
 
@@ -95,32 +95,32 @@ export function StudioChat({
       {!open && (
         <button
           type="button"
-          id="bbls-estimate-trigger"
+          id="bbl-estimate-trigger"
           className="chat-card-launcher"
           onClick={() => onOpenChange(true)}
           aria-haspopup="dialog"
           aria-expanded={open}
-          aria-controls="bbls-studio-chat"
+          aria-controls="bbl-studio-chat"
         >
           <span className="contact-photo" aria-hidden="true">
-            <BblsMark size={44} />
+            <BblMark size={44} />
           </span>
           <span className="chat-card-copy">
-            <strong>Plan your website with BBLS.</strong>
+            <strong>Plan your website with BBL.</strong>
             <small>Choose a scope, compare starting prices, or prepare for kickoff.</small>
             <span className="chat-card-cta">
-              Ask BBLS <ArrowUpRight size={14} aria-hidden="true" />
+              Ask BBL <ArrowUpRight size={14} aria-hidden="true" />
             </span>
           </span>
         </button>
       )}
-      <dialog ref={dialogRef} id="bbls-studio-chat" className="studio-chat" aria-labelledby={titleId}>
+      <dialog ref={dialogRef} id="bbl-studio-chat" className="studio-chat" aria-labelledby={titleId}>
         <div className="chat-head">
           <div className="chat-head-mark" aria-hidden="true">
-            <BblsMark size={28} />
+            <BblMark size={28} />
           </div>
           <div>
-            <h2 id={titleId}>Ask BBLS</h2>
+            <h2 id={titleId}>Ask BBL</h2>
             <p>Website scope and starting price guide</p>
           </div>
           <button type="button" className="chat-close" aria-label="Close chat" onClick={() => onOpenChange(false)}>
@@ -154,7 +154,7 @@ export function StudioChat({
             submitQuestion(value);
           }}
         >
-          <label className="sr-only" htmlFor={inputId}>Ask BBLS a question</label>
+          <label className="sr-only" htmlFor={inputId}>Ask BBL a question</label>
           <input
             ref={inputRef}
             id={inputId}
@@ -168,7 +168,7 @@ export function StudioChat({
             <Send size={16} aria-hidden="true" />
           </button>
         </form>
-        <a className="chat-call" href={PHONE_HREF} aria-label="Call BBLS at (949) 524-2324">
+        <a className="chat-call" href={PHONE_HREF} aria-label="Call BBL at (949) 524-2324">
           Or call (949) 524-2324
         </a>
       </dialog>

@@ -25,7 +25,7 @@ async function attach(server: ViteDevServer | { middlewares: ViteDevServer['midd
 
 export function portalApiPlugin(): Plugin {
   return {
-    name: 'bbls-portal-api',
+    name: 'bbl-portal-api',
     configureServer(server) {
       return attach(server);
     },

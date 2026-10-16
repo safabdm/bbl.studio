@@ -22,15 +22,15 @@ export function answerStudioQuestion(question: string, history: string[] = []) {
   }
 
   if (/llc|ein|filing|legal|tax|accounting|formation|retainer|website care|essential care|growth care|priority care|monthly support/.test(q)) {
-    return 'BBLS specializes in website strategy, design, build, and launch, with Brand Identity available as an optional add on. Tell me what the website needs to accomplish and I will point you to the right scope.';
+    return 'BBL specializes in website strategy, design, build, and launch, with Brand Identity available as an optional add on. Tell me what the website needs to accomplish and I will point you to the right scope.';
   }
 
   if (/^(hello|hi|hey)\b|good morning|good afternoon/.test(q)) {
     return 'Hello. I can help you choose between a Simple Landing Page, Business Website, or Commercial Website. What does your site need to do?';
   }
 
-  if (/what is bbls|who is bbls|who are you|about|studio/.test(q) && !/website|package|price|cost/.test(q)) {
-    return 'BBLS is a boutique website design studio serving Orange County businesses. We plan, design, build, and launch custom websites around a clear offer and customer journey.';
+  if (/what is bbls?|who is bbls?|who are you|about|studio/.test(q) && !/website|package|price|cost/.test(q)) {
+    return 'BBL is a boutique website design studio serving Orange County businesses. We plan, design, build, and launch custom websites around a clear offer and customer journey.';
   }
 
   if (/ai|artificial intelligence|faster design|design faster/.test(q)) {
@@ -62,11 +62,11 @@ export function answerStudioQuestion(question: string, history: string[] = []) {
   }
 
   if (/seo|google|search|found|rank|orange county/.test(q) && /seo|google|search|found|rank|visible|visibility/.test(q)) {
-    return close('Every BBLS website includes an on page SEO foundation: page titles, headings, content structure, and analytics. Commercial Website also includes conversion tracking. Rankings are never guaranteed.');
+    return close('Every BBL website includes an on page SEO foundation: page titles, headings, content structure, and analytics. Commercial Website also includes conversion tracking. Rankings are never guaranteed.');
   }
 
   if (/lead|inquir|convert|conversion|sales|customers|grow|growth|trust|credib/.test(q)) {
-    return close('A BBLS site is planned around the offer and the next action, so visitors can understand the business, trust what they see, and know how to inquire. Lead volume and rankings are not guaranteed.');
+    return close('A BBL site is planned around the offer and the next action, so visitors can understand the business, trust what they see, and know how to inquire. Lead volume and rankings are not guaranteed.');
   }
 
   if (/how long|timing|timeline|14 day|weeks|fast|quickly/.test(q)) {
@@ -78,7 +78,7 @@ export function answerStudioQuestion(question: string, history: string[] = []) {
   }
 
   if (/process|how you work|discover|define|design|deliver/.test(q)) {
-    return close('The process is Discover, Define, Design, and Deliver. BBLS clarifies the offer, confirms the scope and structure, designs and builds the pages, then launches and hands off the finished website.');
+    return close('The process is Discover, Define, Design, and Deliver. BBL clarifies the offer, confirms the scope and structure, designs and builds the pages, then launches and hands off the finished website.');
   }
 
   if (/work|portfolio|raysan|stud farm|iplaw|examples|case/.test(q)) {
@@ -86,15 +86,15 @@ export function answerStudioQuestion(question: string, history: string[] = []) {
   }
 
   if (/why|different|boutique|template|agency/.test(q)) {
-    return close('BBLS stays intentionally focused: direct collaboration, custom responsive design, premium visual direction, and a clearly defined website scope without unnecessary agency layers.');
+    return close('BBL stays intentionally focused: direct collaboration, custom responsive design, premium visual direction, and a clearly defined website scope without unnecessary agency layers.');
   }
 
   if (/where|location|irvine|newport|costa mesa|laguna|tustin|los angeles|orange county|based|oc\b/.test(q)) {
-    return close('BBLS serves businesses across Orange County, including Irvine, Newport Beach, Costa Mesa, Laguna Beach, and Tustin. Projects can be handled locally or remotely.');
+    return close('BBL serves businesses across Orange County, including Irvine, Newport Beach, Costa Mesa, Laguna Beach, and Tustin. Projects can be handled locally or remotely.');
   }
 
   if (/call|phone|number/.test(q)) {
-    return `Call BBLS at ${PHONE}, or email ${EMAIL}. A short conversation about the offer and page count is enough to begin.`;
+    return `Call BBL at ${PHONE}, or email ${EMAIL}. A short conversation about the offer and page count is enough to begin.`;
   }
 
   if (/custom|ecommerce|e-commerce|booking|membership|portal|multilingual/.test(context)) {

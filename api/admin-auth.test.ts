@@ -10,7 +10,7 @@ import {
   signAdminToken,
 } from './admin-auth';
 
-const DEV_EMAIL = 'admin@bbls.studio';
+const DEV_EMAIL = 'hello@bbl.studio';
 const DEV_PASSWORD = 'S@f@1371';
 const DEV_SESSION = 'bbls-local-dev-session-secret-not-for-production';
 
