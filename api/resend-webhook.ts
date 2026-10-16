@@ -3,8 +3,13 @@
  * Verifies Svix signatures, enforces idempotency, applies delivery/bounce/
  * complaint/reply status onto the CRM sync snapshot, and optionally forwards
  * the raw body when LEAD_AGENT_RESEND_WEBHOOK_URL is set (Mac is usually offline).
+ *
+ * IMPORTANT: This file is a Vercel serverless entry at POST /api/resend-webhook.
+ * It MUST export a default handler — otherwise Production returns
+ * FUNCTION_INVOCATION_FAILED and the catch-all never sees the request.
  */
 import { createHmac, timingSafeEqual } from 'node:crypto';
+import type { IncomingMessage, ServerResponse } from 'node:http';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { resolveProjectRoot } from '../server/project-root.js';
@@ -278,4 +283,61 @@ export async function processResendWebhook(opts: {
       ? 'Webhook verified, applied to CRM snapshot, and forwarded.'
       : 'Webhook verified and applied to CRM snapshot. Optional LEAD_AGENT_RESEND_WEBHOOK_URL not set (Mac outbound-only).',
   };
+}
+
+function readRawBody(req: IncomingMessage) {
+  return new Promise<string>((resolveBody) => {
+    const chunks: Buffer[] = [];
+    req.on('data', (chunk) => {
+      chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(String(chunk)));
+    });
+    req.on('end', () => resolveBody(Buffer.concat(chunks).toString('utf8')));
+    req.on('error', () => resolveBody(''));
+  });
+}
+
+/** Vercel serverless entry — required so /api/resend-webhook does not 500. */
+export default async function handler(req: IncomingMessage, res: ServerResponse) {
+  res.setHeader('Content-Type', 'application/json');
+  res.setHeader('X-Robots-Tag', 'noindex, nofollow');
+
+  if ((req.method || '').toUpperCase() !== 'POST') {
+    res.statusCode = 405;
+    res.end(JSON.stringify({ ok: false, message: 'Use POST for Resend webhooks.' }));
+    return;
+  }
+
+  try {
+    const body = await readRawBody(req);
+    const result = await processResendWebhook({
+      body,
+      headers: {
+        'svix-id': req.headers['svix-id'],
+        'svix-timestamp': req.headers['svix-timestamp'],
+        'svix-signature': req.headers['svix-signature'],
+      },
+    });
+    res.statusCode = result.status;
+    res.end(
+      JSON.stringify({
+        ok: result.ok,
+        duplicate: result.duplicate,
+        forwarded: result.forwarded,
+        stored: result.stored,
+        applied_to_crm: result.applied_to_crm,
+        matched_leads: result.matched_leads,
+        event_id: result.event_id,
+        type: result.type,
+        message: result.message,
+      }),
+    );
+  } catch (error) {
+    res.statusCode = 500;
+    res.end(
+      JSON.stringify({
+        ok: false,
+        message: error instanceof Error ? error.message : 'Resend webhook handler failed.',
+      }),
+    );
+  }
 }
