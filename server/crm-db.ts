@@ -19,6 +19,7 @@ export type CrmDbEnv = {
   CRM_DATABASE_URL?: string;
   DATABASE_URL?: string;
   VERCEL?: string;
+  AWS_LAMBDA_FUNCTION_NAME?: string;
   /** Test-only in-memory durable backend. */
   CRM_DATABASE_MEMORY?: string;
 };
@@ -47,9 +48,24 @@ export function isDurableDbConfigured(env: CrmDbEnv = process.env): boolean {
   return Boolean(crmDatabaseUrl(env)) || isMemoryDb(env);
 }
 
-/** On Vercel, durable DB is required — /tmp is not used. */
+/**
+ * True on Vercel / AWS Lambda / when cwd is the serverless task root.
+ * Do not rely on VERCEL alone — some bundles evaluate before platform env is
+ * visible, and ENOENT mkdir '/var/task/data' is the failure mode when FS writes slip through.
+ */
+export function isServerlessRuntime(env: CrmDbEnv = process.env): boolean {
+  if (env.VERCEL || env.AWS_LAMBDA_FUNCTION_NAME) return true;
+  try {
+    const cwd = process.cwd();
+    return cwd === '/var/task' || cwd.startsWith('/var/task/');
+  } catch {
+    return false;
+  }
+}
+
+/** On serverless, durable DB is required — local ./data and /tmp CRM stores are disabled. */
 export function requiresDurableDb(env: CrmDbEnv = process.env): boolean {
-  return Boolean(env.VERCEL);
+  return isServerlessRuntime(env);
 }
 
 function memoryBank(env: CrmDbEnv): MemoryDb {
