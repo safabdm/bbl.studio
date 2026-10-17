@@ -165,7 +165,7 @@ export function AdminHome() {
   const [projects, setProjects] = useState<Record<string, unknown>[]>([]);
   const [error, setError] = useState('');
   const [query, setQuery] = useState('');
-  const [showForm, setShowForm] = useState(true);
+  const [showForm, setShowForm] = useState(false);
   usePrivateIndexing('BBL Client Portal');
 
   useEffect(() => {
@@ -234,11 +234,11 @@ export function AdminHome() {
           />
         </div>
         <button className="crm-btn" type="button" onClick={() => setShowForm(true)}>
-          New Client
+          + New client
         </button>
       </div>
 
-      <div className="crm-grid-2 crm-portal-layout">
+      <div className="crm-portal-layout">
         <section className="crm-panel">
           <div className="crm-panel-head">
             <h2>Projects <span className="crm-count">{filtered.length}</span></h2>
@@ -253,18 +253,18 @@ export function AdminHome() {
                     <th>Package</th>
                     <th>Status</th>
                     <th>Last updated</th>
-                    <th>Actions</th>
+                    <th className="crm-col-action"><span className="sr-only">Actions</span></th>
                   </tr>
                 </thead>
                 <tbody>
                   {filtered.map((project) => (
                     <tr key={asCell(project.id, '')}>
-                      <td>{asCell(project.company_name)}</td>
+                      <td className="crm-strong">{asCell(project.company_name)}</td>
                       <td>{asCell(project.name)}</td>
                       <td>{asCell(project.package_name)}</td>
                       <td><span className="crm-pill muted">{humanize(project.status)}</span></td>
                       <td className="crm-col-date">{fmtDay(project.updated_at || project.created_at)}</td>
-                      <td>
+                      <td className="crm-col-action">
                         <Link className="crm-btn-secondary" to={`/admin/projects/${asCell(project.id, '')}`}>Open</Link>
                       </td>
                     </tr>
@@ -274,15 +274,17 @@ export function AdminHome() {
             </div>
           ) : (
             <p className="crm-muted crm-pad">
-              {projects.length ? 'No projects match this search.' : 'No projects yet. Create the first client on the right.'}
+              {projects.length ? 'No projects match this search.' : 'No projects yet. Use New Client to create the first one.'}
             </p>
           )}
         </section>
 
         {showForm ? (
-          <form className="crm-panel" onSubmit={createClient}>
-            <div className="crm-panel-head">
-              <h2>New Client</h2>
+          <div className="crm-drawer-backdrop" role="presentation" onClick={() => setShowForm(false)}>
+          <form className="crm-drawer" role="dialog" aria-modal="true" aria-labelledby="new-client-title" onSubmit={createClient} onClick={(event) => event.stopPropagation()}>
+            <div className="crm-drawer-head">
+              <h2 id="new-client-title">New client</h2>
+              <button type="button" className="crm-icon-btn" onClick={() => setShowForm(false)} aria-label="Close">×</button>
             </div>
             <div className="crm-field"><label htmlFor="company_name">Company</label><input id="company_name" name="company_name" required /></div>
             <div className="crm-field-row">
@@ -301,10 +303,12 @@ export function AdminHome() {
               </select>
             </div>
             {error ? <p className="crm-error" role="alert">{error}</p> : null}
-            <div className="crm-actions">
+            <div className="crm-actions end">
+              <button className="crm-btn-ghost" type="button" onClick={() => setShowForm(false)}>Cancel</button>
               <button className="crm-btn" type="submit">Create and set pricing →</button>
             </div>
           </form>
+          </div>
         ) : null}
       </div>
     </AdminPortalBody>

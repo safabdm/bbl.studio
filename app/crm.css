@@ -48,6 +48,9 @@
 .crm-portal-back{margin:0 0 .75rem}
 .crm-portal-layout{align-items:start}
 .crm-portal-layout>.crm-panel{margin-top:1rem}
+.crm-strong{font-weight:500}
+.crm-col-action{width:1%;white-space:nowrap;text-align:right}
+.crm-drawer>.crm-field:first-of-type{margin-top:1.25rem}
 
 /* Panels */
 .crm-panel{margin-top:1rem;border:1px solid var(--c-line);border-radius:12px;background:var(--c-panel);padding:1.1rem 1.25rem;box-shadow:0 1px 2px rgba(20,20,20,.04)}
@@ -104,8 +107,9 @@
 .crm-tabs button.active .crm-count{background:var(--c-line-2);color:var(--c-text)}
 .crm-filters{display:flex;flex-wrap:wrap;gap:.5rem}
 .crm-filters input,.crm-filters select,.crm-field input,.crm-field select,.crm-field textarea{
-  min-height:36px;border:1px solid var(--c-line-2);border-radius:8px;background:var(--c-bg);color:var(--c-text);padding:.45rem .7rem;font:inherit;font-size:.86rem
+  min-height:38px;border:1px solid var(--c-line-2);border-radius:8px;background:#fff;color:var(--c-text);padding:.45rem .7rem;font:inherit;font-size:.9rem
 }
+.crm-field select,.crm-filters select{appearance:none;padding-right:2rem;background:#fff url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M1 1l4 4 4-4' fill='none' stroke='%2355554f' stroke-width='1.5'/%3E%3C/svg%3E") no-repeat right .75rem center}
 .crm-filters input{width:14rem}
 .crm-filters input:focus,.crm-filters select:focus,.crm-field input:focus,.crm-field select:focus,.crm-field textarea:focus{outline:none;border-color:rgba(229,72,42,.55);box-shadow:0 0 0 3px rgba(229,72,42,.15)}
 .crm-field{display:flex;flex-direction:column;gap:.3rem;margin-top:.85rem;min-width:0}
