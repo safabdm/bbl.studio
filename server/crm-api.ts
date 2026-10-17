@@ -121,7 +121,19 @@ export async function handleCrmCampaigns(isAdmin: boolean, env = process.env): P
   if (denied) return denied;
   const remote = await fetchCampaigns(env);
   const history = await fetchEmailHistory(env);
-  const localDrafts = listDrafts(env);
+  let drafts: Awaited<ReturnType<typeof listDrafts>> = [];
+  try {
+    drafts = await listDrafts(env);
+  } catch (err) {
+    return {
+      status: 503,
+      body: {
+        ok: false,
+        message: err instanceof Error ? err.message : 'Could not load campaign drafts.',
+        templates: listTemplates(),
+      },
+    };
+  }
   return {
     status: 200,
     body: {
@@ -132,7 +144,7 @@ export async function handleCrmCampaigns(isAdmin: boolean, env = process.env): P
       message: remote.message,
       campaigns: remote.data,
       email_history: history.data,
-      drafts: localDrafts,
+      drafts,
       templates: listTemplates(),
     },
   };
@@ -189,18 +201,28 @@ export async function handleCrmSaveDraft(
 ): Promise<CrmJsonResult> {
   const denied = adminOk(isAdmin);
   if (denied) return denied;
-  const draft = saveDraft(
-    {
-      id: body.id,
-      name: String(body.name || 'Untitled campaign'),
-      subject: String(body.subject || ''),
-      body: String(body.body || ''),
-      template_id: body.template_id ?? null,
-      recipient_ids: body.recipient_ids || [],
-    },
-    env,
-  );
-  return { status: 200, body: { ok: true, source: 'local_draft', draft } };
+  try {
+    const draft = await saveDraft(
+      {
+        id: body.id,
+        name: String(body.name || 'Untitled campaign'),
+        subject: String(body.subject || ''),
+        body: String(body.body || ''),
+        template_id: body.template_id ?? null,
+        recipient_ids: body.recipient_ids || [],
+      },
+      env,
+    );
+    return { status: 200, body: { ok: true, source: 'durable_draft', draft } };
+  } catch (err) {
+    return {
+      status: 503,
+      body: {
+        ok: false,
+        message: err instanceof Error ? err.message : 'Could not save campaign draft.',
+      },
+    };
+  }
 }
 
 export async function handleCrmSendTest(
@@ -227,7 +249,7 @@ export async function handleCrmSendCampaign(
     const remote = await fetchLeads('', env);
     leads = remote.data || [];
   }
-  const result = executeManualSend(body, leads, env);
+  const result = await executeManualSend(body, leads, env);
   return {
     status: result.ok ? 200 : 400,
     body: { ...result, safety: safetySnapshot(env) },

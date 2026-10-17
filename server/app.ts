@@ -686,7 +686,11 @@ app.get('/api/admin/me', (c) => {
 
 app.get('/api/admin/projects', (c) => {
   if (!requireAdmin(c)) return c.json({ ok: false }, 401);
-  const list = rows(`SELECT p.*, c.company_name, c.contact_name, c.email FROM projects p JOIN clients c ON c.id = p.client_id ORDER BY p.created_at DESC`);
+  const list = rows(`SELECT p.*, c.company_name, c.contact_name, c.email, pkg.name as package_name
+    FROM projects p
+    JOIN clients c ON c.id = p.client_id
+    LEFT JOIN packages pkg ON pkg.id = p.package_id
+    ORDER BY p.created_at DESC`);
   return c.json({ ok: true, projects: list });
 });
 

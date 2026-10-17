@@ -19,6 +19,7 @@ import type {
   EmailTemplate,
   PersonalizedPreview,
 } from '../server/crm-types';
+import { AdminHome, AdminPricing, AdminProject } from './portal-screens';
 import './crm.css';
 import './portal.css';
 
@@ -1362,6 +1363,9 @@ export function CrmDashboard() {
         <Route path="bookings" element={<BookingsPage />} />
         <Route path="analytics" element={<AnalyticsPage />} />
         <Route path="settings" element={<SettingsPage />} />
+        <Route path="projects" element={<AdminHome />} />
+        <Route path="projects/:projectId" element={<AdminProject />} />
+        <Route path="projects/:projectId/pricing" element={<AdminPricing />} />
         <Route path="*" element={<OverviewPage />} />
       </Routes>
     </CrmShell>

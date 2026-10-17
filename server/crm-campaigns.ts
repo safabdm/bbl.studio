@@ -14,7 +14,15 @@ import {
   isDryRun,
   maySendLive,
   validateManualSendGate,
+  type SafetyEnv,
 } from './crm-safety.js';
+import {
+  dbReadKv,
+  dbWriteKv,
+  isDurableDbConfigured,
+  requiresDurableDb,
+  type CrmDbEnv,
+} from './crm-db.js';
 import { resolveProjectRoot } from './project-root.js';
 
 function projectRoot() {
@@ -60,12 +68,35 @@ export const DEFAULT_TEMPLATES: EmailTemplate[] = [
 const previewSessions = new Map<string, { recipient_ids: string[]; created_at: number; subject: string; body: string }>();
 const PREVIEW_TTL_MS = 2 * 60 * 60 * 1000;
 
-function draftsPath(env: NodeJS.ProcessEnv = process.env) {
-  return resolve(projectRoot(), env.CRM_DRAFTS_PATH || './data/crm-campaign-drafts.json');
+const DRAFTS_KV_KEY = 'campaign_drafts';
+const SEND_LOG_KV_KEY = 'campaign_send_log';
+
+export type CampaignStoreEnv = CrmDbEnv &
+  SafetyEnv & {
+    CRM_DRAFTS_PATH?: string;
+    CRM_SEND_LOG_PATH?: string;
+    VERCEL?: string;
+  };
+
+function draftsPath(env: CampaignStoreEnv = process.env) {
+  if (env.CRM_DRAFTS_PATH) return resolve(env.CRM_DRAFTS_PATH);
+  return resolve(projectRoot(), './data/crm-campaign-drafts.json');
 }
 
-function sendLogPath(env: NodeJS.ProcessEnv = process.env) {
-  return resolve(projectRoot(), env.CRM_SEND_LOG_PATH || './data/crm-send-log.json');
+function sendLogPath(env: CampaignStoreEnv = process.env) {
+  if (env.CRM_SEND_LOG_PATH) return resolve(env.CRM_SEND_LOG_PATH);
+  return resolve(projectRoot(), './data/crm-send-log.json');
+}
+
+function assertLocalFsAllowed(env: CampaignStoreEnv, label: string) {
+  if (requiresDurableDb(env) && !isDurableDbConfigured(env)) {
+    throw new Error(
+      `${label} requires CRM_DATABASE_URL on Vercel. Local ./data is not writable in serverless.`,
+    );
+  }
+  if (requiresDurableDb(env)) {
+    throw new Error(`${label} must use durable Postgres on Vercel — refusing local filesystem write.`);
+  }
 }
 
 function readJsonFile<T>(path: string, fallback: T): T {
@@ -146,15 +177,23 @@ export function clearPreviewSessions() {
   previewSessions.clear();
 }
 
-export function listDrafts(env: NodeJS.ProcessEnv = process.env): CampaignDraft[] {
+export async function listDrafts(env: CampaignStoreEnv = process.env): Promise<CampaignDraft[]> {
+  if (isDurableDbConfigured(env)) {
+    const drafts = await dbReadKv<CampaignDraft[]>(DRAFTS_KV_KEY, [], env);
+    return Array.isArray(drafts) ? drafts : [];
+  }
+  if (requiresDurableDb(env)) {
+    // No durable DB on Vercel — surface empty drafts, never mkdir /var/task/data.
+    return [];
+  }
   return readJsonFile<CampaignDraft[]>(draftsPath(env), []);
 }
 
-export function saveDraft(
+export async function saveDraft(
   input: Omit<CampaignDraft, 'id' | 'created_at' | 'updated_at'> & { id?: string },
-  env: NodeJS.ProcessEnv = process.env,
-): CampaignDraft {
-  const drafts = listDrafts(env);
+  env: CampaignStoreEnv = process.env,
+): Promise<CampaignDraft> {
+  const drafts = await listDrafts(env);
   const now = new Date().toISOString();
   const existing = input.id ? drafts.find((d) => d.id === input.id) : undefined;
   const draft: CampaignDraft = {
@@ -168,14 +207,40 @@ export function saveDraft(
     updated_at: now,
   };
   const next = existing ? drafts.map((d) => (d.id === draft.id ? draft : d)) : [draft, ...drafts];
+
+  if (isDurableDbConfigured(env)) {
+    await dbWriteKv(DRAFTS_KV_KEY, next, env);
+    return draft;
+  }
+  assertLocalFsAllowed(env, 'Campaign drafts');
   writeJsonFile(draftsPath(env), next);
   return draft;
 }
 
-function appendSendLog(entry: Record<string, unknown>, env: NodeJS.ProcessEnv = process.env) {
+async function appendSendLog(entry: Record<string, unknown>, env: CampaignStoreEnv = process.env) {
+  if (isDurableDbConfigured(env)) {
+    const log = await dbReadKv<Record<string, unknown>[]>(SEND_LOG_KV_KEY, [], env);
+    const next = [entry, ...(Array.isArray(log) ? log : [])].slice(0, 200);
+    await dbWriteKv(SEND_LOG_KV_KEY, next, env);
+    return;
+  }
+  if (requiresDurableDb(env)) {
+    // Dry-run still succeeds without durable log when misconfigured — avoid ENOENT in UI.
+    return;
+  }
+  assertLocalFsAllowed(env, 'Campaign send log');
   const log = readJsonFile<Record<string, unknown>[]>(sendLogPath(env), []);
   log.unshift(entry);
   writeJsonFile(sendLogPath(env), log.slice(0, 200));
+}
+
+export async function listSendLog(env: CampaignStoreEnv = process.env): Promise<Record<string, unknown>[]> {
+  if (isDurableDbConfigured(env)) {
+    const log = await dbReadKv<Record<string, unknown>[]>(SEND_LOG_KV_KEY, [], env);
+    return Array.isArray(log) ? log : [];
+  }
+  if (requiresDurableDb(env)) return [];
+  return readJsonFile<Record<string, unknown>[]>(sendLogPath(env), []);
 }
 
 /**
@@ -183,12 +248,12 @@ function appendSendLog(entry: Record<string, unknown>, env: NodeJS.ProcessEnv = 
  * Live ESP send requires MANUAL_SEND_LIVE_ENABLED=true, EMAIL_DRY_RUN=false,
  * confirm_live, plus the select → preview → confirm gate.
  */
-export function executeManualSend(
+export async function executeManualSend(
   request: ManualSendRequest,
   leads: CrmLead[],
-  env: NodeJS.ProcessEnv = process.env,
+  env: CampaignStoreEnv = process.env,
   opts?: { liveSender?: (payload: { to: string; subject: string; text: string }) => Promise<boolean> },
-): ManualSendResult {
+): Promise<ManualSendResult> {
   const gate = validateManualSendGate({
     recipient_ids: request.recipient_ids,
     preview_token: request.preview_token,
@@ -240,7 +305,7 @@ export function executeManualSend(
   const live = maySendLive({ confirm_live: request.confirm_live }, env);
 
   if (!live) {
-    appendSendLog(
+    await appendSendLog(
       {
         id: campaignId,
         dry_run: true,
