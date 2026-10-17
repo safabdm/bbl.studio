@@ -293,6 +293,7 @@ const NAV: Array<{ group: string; items: Array<{ to: string; label: string; end?
     items: [
       { to: '/admin/campaigns', label: 'Campaigns' },
       { to: '/admin/analytics', label: 'Analytics' },
+      { to: '/admin/automation', label: 'Automation' },
     ],
   },
   {
@@ -1291,6 +1292,265 @@ function AnalyticsPage() {
 }
 
 /* ------------------------------------------------------------------ */
+/* Automation (discovery)                                              */
+/* ------------------------------------------------------------------ */
+
+type DiscoveryDash = {
+  ok?: boolean;
+  message?: string;
+  live_email_send?: boolean;
+  config?: {
+    places_configured?: boolean;
+    discovery_enabled?: boolean;
+    max_per_run?: number;
+    cron_secret_configured?: boolean;
+  };
+  automation?: {
+    paused?: boolean;
+    paused_reason?: string | null;
+    last_run_at?: string | null;
+    last_success_at?: string | null;
+    total_discovered?: number;
+    total_qualified?: number;
+    total_needs_email?: number;
+  };
+  counts?: {
+    total?: number;
+    qualified?: number;
+    needs_email?: number;
+    discovered?: number;
+  };
+  enrichment?: {
+    attempted?: number;
+    found_public?: number;
+    not_found?: number;
+    last_run_at?: string | null;
+  };
+  recent_runs?: Array<{
+    id: string;
+    status: string;
+    trigger: string;
+    started_at: string;
+    finished_at?: string | null;
+    discovered: number;
+    qualified: number;
+    message: string;
+    fail_closed?: boolean;
+  }>;
+  qualified_preview?: Array<{
+    id: string;
+    business_name: string;
+    city?: string | null;
+    category?: string | null;
+    website?: string | null;
+    score_total: number;
+    public_email?: string | null;
+    fit_summary?: string;
+    source_url?: string | null;
+    status: string;
+  }>;
+};
+
+function AutomationPage() {
+  const [data, setData] = useState<DiscoveryDash | null>(null);
+  const [error, setError] = useState('');
+  const [busy, setBusy] = useState('');
+  const [note, setNote] = useState('');
+
+  const load = useCallback(() => {
+    void api<DiscoveryDash>('/api/admin/crm/discovery')
+      .then((d) => {
+        setData(d);
+        setError('');
+      })
+      .catch((err) => setError(err instanceof Error ? err.message : 'Could not load automation.'));
+  }, []);
+
+  useEffect(load, [load]);
+
+  const act = async (label: string, path: string, body?: Record<string, unknown>) => {
+    setBusy(label);
+    setNote('');
+    try {
+      const res = await api<DiscoveryDash & { message?: string; run?: { message?: string } }>(path, {
+        method: 'POST',
+        body: JSON.stringify(body || {}),
+      });
+      setNote(res.message || res.run?.message || `${label} done.`);
+      load();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : `${label} failed.`);
+    } finally {
+      setBusy('');
+    }
+  };
+
+  const counts = data?.counts;
+  const auto = data?.automation;
+  const cfg = data?.config;
+  const runs = data?.recent_runs || [];
+  const qualified = data?.qualified_preview || [];
+
+  return (
+    <>
+      <PageHeader
+        title="Automation"
+        description="Discover and qualify local businesses for owner review. Live outreach email stays off."
+        actions={
+          <>
+            <button
+              type="button"
+              className="crm-btn"
+              disabled={Boolean(busy)}
+              onClick={() => void act('Run discovery', '/api/admin/crm/discovery/run', { ignore_pause: true, max_results: cfg?.max_per_run || 8 })}
+            >
+              {busy === 'Run discovery' ? 'Running…' : 'Run Discovery Now'}
+            </button>
+            {auto?.paused ? (
+              <button type="button" className="crm-btn-secondary" disabled={Boolean(busy)} onClick={() => void act('Resume', '/api/admin/crm/discovery/resume')}>
+                Resume
+              </button>
+            ) : (
+              <button type="button" className="crm-btn-secondary" disabled={Boolean(busy)} onClick={() => void act('Pause', '/api/admin/crm/discovery/pause', { reason: 'Paused from Automation UI' })}>
+                Pause
+              </button>
+            )}
+          </>
+        }
+      />
+
+      {error ? <p className="crm-error">{error}</p> : null}
+      {note ? <p className="crm-ok">{note}</p> : null}
+
+      <div className="crm-banner warn">
+        <strong>Live email send: OFF.</strong> Discovery only writes Neon rows and scores from public evidence. Owner approval is required before any outreach.
+      </div>
+
+      <div className="crm-grid-2">
+        <section className="crm-panel">
+          <div className="crm-panel-head"><h2>Status</h2></div>
+          <div className="crm-checks">
+            <CheckRow ok={cfg?.places_configured === true} label="Google Places" value={cfg?.places_configured ? 'Configured' : 'Missing key — fail closed'} />
+            <CheckRow ok={cfg?.discovery_enabled === true} label="Discovery enabled" value={cfg?.discovery_enabled ? 'On' : 'Off / blocked'} />
+            <CheckRow ok={auto?.paused !== true} label="Scheduler" value={auto?.paused ? `Paused${auto.paused_reason ? `: ${auto.paused_reason}` : ''}` : 'Active'} />
+            <CheckRow ok={cfg?.cron_secret_configured === true} label="Cron secret" value={cfg?.cron_secret_configured ? 'Set' : 'Missing'} />
+            <CheckRow ok={data?.live_email_send !== true} label="Live email send" value="Off" />
+            <CheckRow ok={Boolean(auto?.last_run_at)} label="Last run" value={`${fmtDate(auto?.last_run_at, true)} · ${fmtRelative(auto?.last_run_at)}`} />
+          </div>
+          {data?.message ? <p className="crm-muted crm-pad">{data.message}</p> : null}
+        </section>
+        <section className="crm-panel">
+          <div className="crm-panel-head"><h2>Real counts</h2></div>
+          {!data ? (
+            <p className="crm-muted">Loading…</p>
+          ) : (
+            <ul className="crm-funnel" style={{ gridTemplateColumns: 'repeat(4, minmax(0, 1fr))' }}>
+              <li><span className="crm-funnel-label">Discovered</span><strong>{counts?.total ?? 0}</strong></li>
+              <li><span className="crm-funnel-label">Qualified</span><strong>{counts?.qualified ?? 0}</strong></li>
+              <li><span className="crm-funnel-label">Needs email</span><strong>{counts?.needs_email ?? 0}</strong></li>
+              <li><span className="crm-funnel-label">Enrich found</span><strong>{data.enrichment?.found_public ?? 0}</strong></li>
+            </ul>
+          )}
+          <p className="crm-muted crm-pad">Zeros mean empty Neon tables — never demo fixtures.</p>
+        </section>
+      </div>
+
+      <section className="crm-panel">
+        <div className="crm-panel-head">
+          <h2>Logs</h2>
+          <button type="button" className="crm-btn-ghost" onClick={load}>Refresh</button>
+        </div>
+        {!runs.length ? (
+          <Empty title="No discovery runs yet">When Places is configured, cron or Run Discovery Now writes real run logs here.</Empty>
+        ) : (
+          <div className="crm-table-wrap">
+            <table className="crm-table">
+              <thead>
+                <tr>
+                  <th>When</th>
+                  <th>Trigger</th>
+                  <th>Status</th>
+                  <th className="num">New</th>
+                  <th className="num">Qualified</th>
+                  <th>Message</th>
+                </tr>
+              </thead>
+              <tbody>
+                {runs.map((run) => (
+                  <tr key={run.id}>
+                    <td>{fmtDate(run.started_at, true)}</td>
+                    <td>{run.trigger}</td>
+                    <td><span className={`crm-pill ${run.status === 'completed' ? 'good' : run.fail_closed || run.status === 'skipped' || run.status === 'paused' ? 'warn' : run.status === 'failed' ? 'muted' : 'accent'}`}>{run.status}</span></td>
+                    <td className="num">{run.discovered}</td>
+                    <td className="num">{run.qualified}</td>
+                    <td>{run.message}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </section>
+
+      <section className="crm-panel">
+        <div className="crm-panel-head">
+          <h2>Review qualified</h2>
+          <button
+            type="button"
+            className="crm-btn-secondary"
+            disabled={Boolean(busy) || !counts?.needs_email}
+            onClick={() => void act('Enrich emails', '/api/admin/crm/discovery/enrich', { limit: 10 })}
+          >
+            Enrich public emails
+          </button>
+        </div>
+        {!qualified.length ? (
+          <Empty title="No qualified opportunities">Qualified leads appear after a real discovery cycle scores public evidence above threshold.</Empty>
+        ) : (
+          <div className="crm-table-wrap">
+            <table className="crm-table">
+              <thead>
+                <tr>
+                  <th>Business</th>
+                  <th>City</th>
+                  <th>Category</th>
+                  <th className="num">Score</th>
+                  <th>Email</th>
+                  <th>Source</th>
+                </tr>
+              </thead>
+              <tbody>
+                {qualified.map((lead) => (
+                  <tr key={lead.id}>
+                    <td>
+                      <strong>{lead.business_name}</strong>
+                      {lead.fit_summary ? <div className="crm-sub">{lead.fit_summary}</div> : null}
+                    </td>
+                    <td>{asText(lead.city, '—')}</td>
+                    <td>{asText(lead.category, '—')}</td>
+                    <td className="num">{lead.score_total}</td>
+                    <td>{asText(lead.public_email, '—')}</td>
+                    <td>
+                      {lead.source_url ? (
+                        <a className="crm-link" href={lead.source_url} target="_blank" rel="noreferrer">Places</a>
+                      ) : lead.website ? (
+                        <a className="crm-link" href={lead.website} target="_blank" rel="noreferrer">Site</a>
+                      ) : (
+                        '—'
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </section>
+    </>
+  );
+}
+
+/* ------------------------------------------------------------------ */
 /* Settings                                                            */
 /* ------------------------------------------------------------------ */
 
@@ -1362,6 +1622,7 @@ export function CrmDashboard() {
         <Route path="inbox" element={<InboxPage />} />
         <Route path="bookings" element={<BookingsPage />} />
         <Route path="analytics" element={<AnalyticsPage />} />
+        <Route path="automation" element={<AutomationPage />} />
         <Route path="settings" element={<SettingsPage />} />
         <Route path="projects" element={<AdminHome />} />
         <Route path="projects/:projectId" element={<AdminProject />} />
