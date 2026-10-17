@@ -32,6 +32,9 @@ import { authorizeCrmSync } from './crm-sync-auth.js';
 async function loadCrmApi() {
   return import('../server/crm-api.js');
 }
+async function loadCrmDiscoveryApi() {
+  return import('../server/crm-discovery-api.js');
+}
 async function loadResendWebhook() {
   return import('./resend-webhook.js');
 }
@@ -130,6 +133,16 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
       const store = getCalendar();
       if (!store) return send(res, 200, { ok: true, sent: 0, checked: 0, emailConfigured: Boolean(process.env.RESEND_API_KEY) });
       return send(res, 200, { ok: true, ...(await sendDueReminders(store)) });
+    }
+
+    if (matches(path, '/api/crm/discovery/cron') && method === 'GET') {
+      const { handleDiscoveryCron } = await loadCrmDiscoveryApi();
+      const result = await handleDiscoveryCron({
+        authorization: Array.isArray(req.headers.authorization)
+          ? req.headers.authorization[0]
+          : req.headers.authorization,
+      });
+      return send(res, result.status, result.body);
     }
 
     if (matches(path, '/api/book/slots') && method === 'GET') {
@@ -405,6 +418,56 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
       const body = await readJsonUnknown(req);
       const { handleCrmSendCampaign } = await loadCrmApi();
       const result = await handleCrmSendCampaign(admin, body as never);
+      return send(res, result.status, result.body);
+    }
+
+    if (matches(path, '/api/admin/crm/discovery') && method === 'GET') {
+      if (!admin) return send(res, 401, { ok: false, message: 'Sign in required.' });
+      const { handleDiscoveryStatus } = await loadCrmDiscoveryApi();
+      const result = await handleDiscoveryStatus(admin);
+      return send(res, result.status, result.body);
+    }
+    if (matches(path, '/api/admin/crm/discovery/run') && method === 'POST') {
+      if (!admin) return send(res, 401, { ok: false, message: 'Sign in required.' });
+      const body = await readJsonUnknown(req);
+      const { handleDiscoveryRun } = await loadCrmDiscoveryApi();
+      const result = await handleDiscoveryRun(admin, body as never);
+      return send(res, result.status, result.body);
+    }
+    if (matches(path, '/api/admin/crm/discovery/pause') && method === 'POST') {
+      if (!admin) return send(res, 401, { ok: false, message: 'Sign in required.' });
+      const body = await readJsonUnknown(req);
+      const { handleDiscoveryPause } = await loadCrmDiscoveryApi();
+      const result = await handleDiscoveryPause(admin, body as never);
+      return send(res, result.status, result.body);
+    }
+    if (matches(path, '/api/admin/crm/discovery/resume') && method === 'POST') {
+      if (!admin) return send(res, 401, { ok: false, message: 'Sign in required.' });
+      const { handleDiscoveryResume } = await loadCrmDiscoveryApi();
+      const result = await handleDiscoveryResume(admin);
+      return send(res, result.status, result.body);
+    }
+    if (matches(path, '/api/admin/crm/discovery/logs') && method === 'GET') {
+      if (!admin) return send(res, 401, { ok: false, message: 'Sign in required.' });
+      const url = new URL(req.url || '/', 'https://www.bbl.studio');
+      const limit = Number(url.searchParams.get('limit') || '20');
+      const { handleDiscoveryLogs } = await loadCrmDiscoveryApi();
+      const result = await handleDiscoveryLogs(admin, limit);
+      return send(res, result.status, result.body);
+    }
+    if (matches(path, '/api/admin/crm/discovery/qualified') && method === 'GET') {
+      if (!admin) return send(res, 401, { ok: false, message: 'Sign in required.' });
+      const url = new URL(req.url || '/', 'https://www.bbl.studio');
+      const limit = Number(url.searchParams.get('limit') || '50');
+      const { handleDiscoveryQualified } = await loadCrmDiscoveryApi();
+      const result = await handleDiscoveryQualified(admin, limit);
+      return send(res, result.status, result.body);
+    }
+    if (matches(path, '/api/admin/crm/discovery/enrich') && method === 'POST') {
+      if (!admin) return send(res, 401, { ok: false, message: 'Sign in required.' });
+      const body = await readJsonUnknown(req);
+      const { handleDiscoveryEnrich } = await loadCrmDiscoveryApi();
+      const result = await handleDiscoveryEnrich(admin, body as never);
       return send(res, result.status, result.body);
     }
 

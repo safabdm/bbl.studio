@@ -112,6 +112,7 @@
     }
   ],
   "crons": [
-    { "path": "/api/book/reminders", "schedule": "0 16 * * *" }
+    { "path": "/api/book/reminders", "schedule": "0 16 * * *" },
+    { "path": "/api/crm/discovery/cron", "schedule": "0 15 * * *" }
   ]
 }

@@ -28,6 +28,16 @@ import {
   handleCrmSyncIngest,
   handleCrmSyncStatus,
 } from './crm-api';
+import {
+  handleDiscoveryCron,
+  handleDiscoveryEnrich,
+  handleDiscoveryLogs,
+  handleDiscoveryPause,
+  handleDiscoveryQualified,
+  handleDiscoveryResume,
+  handleDiscoveryRun,
+  handleDiscoveryStatus,
+} from './crm-discovery-api';
 import { processResendWebhook } from '../api/resend-webhook';
 
 try {
@@ -867,6 +877,54 @@ app.post('/api/admin/crm/send-test', async (c) => {
 app.post('/api/admin/crm/send', async (c) => {
   const body = await c.req.json().catch(() => ({}));
   const result = await handleCrmSendCampaign(Boolean(requireAdmin(c)), body);
+  return c.json(result.body, result.status);
+});
+
+/** Discovery automation — prepare opportunities only; live email stays OFF. */
+app.get('/api/admin/crm/discovery', async (c) => {
+  const result = await handleDiscoveryStatus(Boolean(requireAdmin(c)));
+  return c.json(result.body, result.status);
+});
+
+app.post('/api/admin/crm/discovery/run', async (c) => {
+  const body = await c.req.json().catch(() => ({}));
+  const result = await handleDiscoveryRun(Boolean(requireAdmin(c)), body);
+  return c.json(result.body, result.status);
+});
+
+app.post('/api/admin/crm/discovery/pause', async (c) => {
+  const body = await c.req.json().catch(() => ({}));
+  const result = await handleDiscoveryPause(Boolean(requireAdmin(c)), body);
+  return c.json(result.body, result.status);
+});
+
+app.post('/api/admin/crm/discovery/resume', async (c) => {
+  const result = await handleDiscoveryResume(Boolean(requireAdmin(c)));
+  return c.json(result.body, result.status);
+});
+
+app.get('/api/admin/crm/discovery/logs', async (c) => {
+  const url = new URL(c.req.url);
+  const limit = Number(url.searchParams.get('limit') || '20');
+  const result = await handleDiscoveryLogs(Boolean(requireAdmin(c)), limit);
+  return c.json(result.body, result.status);
+});
+
+app.get('/api/admin/crm/discovery/qualified', async (c) => {
+  const url = new URL(c.req.url);
+  const limit = Number(url.searchParams.get('limit') || '50');
+  const result = await handleDiscoveryQualified(Boolean(requireAdmin(c)), limit);
+  return c.json(result.body, result.status);
+});
+
+app.post('/api/admin/crm/discovery/enrich', async (c) => {
+  const body = await c.req.json().catch(() => ({}));
+  const result = await handleDiscoveryEnrich(Boolean(requireAdmin(c)), body);
+  return c.json(result.body, result.status);
+});
+
+app.get('/api/crm/discovery/cron', async (c) => {
+  const result = await handleDiscoveryCron({ authorization: c.req.header('authorization') });
   return c.json(result.body, result.status);
 });
 

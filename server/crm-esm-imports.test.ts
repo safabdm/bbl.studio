@@ -30,6 +30,13 @@ const CRM_ESM_GRAPH = [
   'server/crm-webhook-apply.ts',
   'server/crm-safety.ts',
   'server/crm-types.ts',
+  'server/crm-discovery-api.ts',
+  'server/crm-discovery-runner.ts',
+  'server/crm-discovery-store.ts',
+  'server/crm-discovery-places.ts',
+  'server/crm-discovery-qualify.ts',
+  'server/crm-discovery-enrich.ts',
+  'server/crm-discovery-types.ts',
   'server/project-root.ts',
   'api/resend-webhook.ts',
 ] as const;
