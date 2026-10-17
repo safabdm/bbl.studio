@@ -27,8 +27,14 @@ const PLAN_LABELS: Record<string, string> = {
   custom: 'Custom schedule',
 };
 
+function asCell(value: unknown, fallback = '—') {
+  if (value == null) return fallback;
+  if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') return String(value);
+  return fallback;
+}
+
 function humanize(value: unknown) {
-  const text = String(value || '').replace(/_/g, ' ').trim();
+  const text = asCell(value, '').replace(/_/g, ' ').trim();
   return text ? text.charAt(0).toUpperCase() + text.slice(1) : '—';
 }
 
@@ -72,30 +78,20 @@ type PricingState = {
   changeOrders: { id: string; reason: string; additional_cents: number; status: string }[];
 };
 
-function Shell({ title, children, back }: { title: string; children: ReactNode; back?: string }) {
+/**
+ * Admin project pages render inside CrmShell (shared left CRM sidebar).
+ * No duplicate top nav — back links live in-page when needed.
+ */
+function AdminPortalBody({ title, children, back }: { title: string; children: ReactNode; back?: string }) {
   usePrivateIndexing(title);
   return (
-    <div className="portal-shell">
-      <header className="portal-nav">
-        <Link to="/admin/projects" className="brand" aria-label="BBL admin home">
-          <BblWordmark height={22} variant="black" />
-        </Link>
-        <nav className="portal-nav-links" aria-label="Admin">
-          {back ? <Link to={back}>← Back</Link> : null}
-          <Link to="/admin">CRM</Link>
-          <Link to="/admin/projects">Projects</Link>
-          <button
-            type="button"
-            onClick={() => {
-              void api('/api/admin/logout', { method: 'POST', body: '{}' }).catch(() => undefined);
-              window.location.replace('/admin/login');
-            }}
-          >
-            Log out
-          </button>
-        </nav>
-      </header>
-      <div className="portal-wrap">{children}</div>
+    <div className="crm-portal-body">
+      {back ? (
+        <p className="crm-portal-back">
+          <Link to={back} className="crm-link">← Back</Link>
+        </p>
+      ) : null}
+      {children}
     </div>
   );
 }
@@ -168,11 +164,33 @@ export function AdminHome() {
   const navigate = useNavigate();
   const [projects, setProjects] = useState<Record<string, unknown>[]>([]);
   const [error, setError] = useState('');
+  const [query, setQuery] = useState('');
+  const [showForm, setShowForm] = useState(true);
+  usePrivateIndexing('BBL Client Portal');
+
   useEffect(() => {
     api<{ projects: Record<string, unknown>[] }>('/api/admin/projects')
       .then((data) => setProjects(data.projects || []))
       .catch(() => window.location.replace('/admin/login'));
   }, [navigate]);
+
+  const filtered = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    if (!q) return projects;
+    return projects.filter((project) => {
+      const hay = [
+        project.company_name,
+        project.name,
+        project.package_name,
+        project.contact_name,
+        project.email,
+        project.status,
+      ]
+        .map((v) => asCell(v, '').toLowerCase())
+        .join(' ');
+      return hay.includes(q);
+    });
+  }, [projects, query]);
 
   async function createClient(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -196,58 +214,100 @@ export function AdminHome() {
   }
 
   return (
-    <Shell title="BBL Admin">
-      <p className="portal-kicker">Client portal</p>
-      <h1>Projects</h1>
-      <p className="portal-lead">Create a client, set the proposal, then share a private link.</p>
-      <div className="portal-grid">
-        <section className="portal-card">
-          <h2>Projects</h2>
-          {projects.length ? (
-            <table className="portal-table">
-              <thead>
-                <tr><th>Client</th><th>Project</th><th>Status</th><th><span className="sr-only">Open</span></th></tr>
-              </thead>
-              <tbody>
-                {projects.map((project) => (
-                  <tr key={String(project.id)}>
-                    <td>{String(project.company_name)}</td>
-                    <td>{String(project.name)}</td>
-                    <td><span className="portal-pill">{humanize(project.status)}</span></td>
-                    <td>
-                      <Link className="glass-pill" to={`/admin/projects/${project.id}`}>Open</Link>
-                    </td>
+    <AdminPortalBody title="BBL Client Portal">
+      <div className="crm-page-head">
+        <div>
+          <p className="crm-kicker">Studio</p>
+          <h1>Client Portal</h1>
+          <p className="crm-lead">Manage clients, projects, and proposals from one place.</p>
+        </div>
+      </div>
+
+      <div className="crm-toolbar">
+        <div className="crm-filters">
+          <input
+            type="search"
+            placeholder="Search clients or projects…"
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+            aria-label="Search clients or projects"
+          />
+        </div>
+        <button className="crm-btn" type="button" onClick={() => setShowForm(true)}>
+          New Client
+        </button>
+      </div>
+
+      <div className="crm-grid-2 crm-portal-layout">
+        <section className="crm-panel">
+          <div className="crm-panel-head">
+            <h2>Projects <span className="crm-count">{filtered.length}</span></h2>
+          </div>
+          {filtered.length ? (
+            <div className="crm-table-wrap flush">
+              <table className="crm-table">
+                <thead>
+                  <tr>
+                    <th>Client</th>
+                    <th>Project</th>
+                    <th>Package</th>
+                    <th>Status</th>
+                    <th>Last updated</th>
+                    <th>Actions</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {filtered.map((project) => (
+                    <tr key={asCell(project.id, '')}>
+                      <td>{asCell(project.company_name)}</td>
+                      <td>{asCell(project.name)}</td>
+                      <td>{asCell(project.package_name)}</td>
+                      <td><span className="crm-pill muted">{humanize(project.status)}</span></td>
+                      <td className="crm-col-date">{fmtDay(project.updated_at || project.created_at)}</td>
+                      <td>
+                        <Link className="crm-btn-secondary" to={`/admin/projects/${asCell(project.id, '')}`}>Open</Link>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           ) : (
-            <p className="portal-muted">No projects yet. Create the first client on the right.</p>
+            <p className="crm-muted crm-pad">
+              {projects.length ? 'No projects match this search.' : 'No projects yet. Create the first client on the right.'}
+            </p>
           )}
         </section>
-        <form className="portal-card" onSubmit={createClient}>
-          <h2>New client</h2>
-          <div className="portal-field"><label htmlFor="company_name">Company</label><input id="company_name" name="company_name" required /></div>
-          <div className="portal-fields-2">
-            <div className="portal-field"><label htmlFor="contact_name">Contact name</label><input id="contact_name" name="contact_name" required /></div>
-            <div className="portal-field"><label htmlFor="title">Title</label><input id="title" name="title" /></div>
-          </div>
-          <div className="portal-field"><label htmlFor="email">Email</label><input id="email" name="email" type="email" required /></div>
-          <div className="portal-field"><label htmlFor="project_name">Project name</label><input id="project_name" name="project_name" required /></div>
-          <div className="portal-field">
-            <label htmlFor="package_id">Package</label>
-            <select id="package_id" name="package_id" defaultValue="pkg_website">
-              {PACKAGE_PRESETS.filter((item) => item.id !== 'pkg_custom').map((item) => (
-                <option key={item.id} value={item.id}>{item.name}. {item.price_label}</option>
-              ))}
-              <option value="pkg_custom">Custom Project</option>
-            </select>
-          </div>
-          {error ? <p className="portal-error" role="alert">{error}</p> : null}
-          <div className="portal-actions"><button className="solid-pill" type="submit">Create and set pricing →</button></div>
-        </form>
+
+        {showForm ? (
+          <form className="crm-panel" onSubmit={createClient}>
+            <div className="crm-panel-head">
+              <h2>New Client</h2>
+            </div>
+            <div className="crm-field"><label htmlFor="company_name">Company</label><input id="company_name" name="company_name" required /></div>
+            <div className="crm-field-row">
+              <div className="crm-field"><label htmlFor="contact_name">Contact name</label><input id="contact_name" name="contact_name" required /></div>
+              <div className="crm-field"><label htmlFor="title">Title</label><input id="title" name="title" /></div>
+            </div>
+            <div className="crm-field"><label htmlFor="email">Email</label><input id="email" name="email" type="email" required /></div>
+            <div className="crm-field"><label htmlFor="project_name">Project name</label><input id="project_name" name="project_name" required /></div>
+            <div className="crm-field">
+              <label htmlFor="package_id">Package</label>
+              <select id="package_id" name="package_id" defaultValue="pkg_website">
+                {PACKAGE_PRESETS.filter((item) => item.id !== 'pkg_custom').map((item) => (
+                  <option key={item.id} value={item.id}>{item.name}. {item.price_label}</option>
+                ))}
+                <option value="pkg_custom">Custom Project</option>
+              </select>
+            </div>
+            {error ? <p className="crm-error" role="alert">{error}</p> : null}
+            <div className="crm-actions">
+              <button className="crm-btn" type="submit">Create and set pricing →</button>
+            </div>
+          </form>
+        ) : null}
       </div>
-    </Shell>
+    </AdminPortalBody>
   );
 }
 
@@ -285,8 +345,8 @@ export function AdminProject() {
   }
 
   return (
-    <Shell title="BBL project" back="/admin">
-      <p className="portal-kicker">{String(project?.company_name || 'Project')}</p>
+    <AdminPortalBody title="BBL project" back="/admin/projects">
+      <p className="crm-kicker">{String(project?.company_name || 'Project')}</p>
       <h1>{String(project?.name || 'Loading…')}</h1>
       <div className="portal-meta">
         {project?.contact_name ? <span>{String(project.contact_name)}</span> : null}
@@ -364,7 +424,7 @@ export function AdminProject() {
           </div>
         </section>
       </div>
-    </Shell>
+    </AdminPortalBody>
   );
 }
 
@@ -483,8 +543,8 @@ export function AdminPricing() {
   }
 
   return (
-    <Shell title="BBL pricing" back={`/admin/projects/${projectId}`}>
-      <p className="portal-kicker">Proposal</p>
+    <AdminPortalBody title="BBL pricing" back={`/admin/projects/${projectId}`}>
+      <p className="crm-kicker">Proposal</p>
       <h1>Pricing</h1>
       <p className="portal-lead">Picking a package fills the price and deliverables. Everything stays editable until you publish.</p>
       {error ? <p className="portal-error" role="alert">{error}</p> : null}
@@ -594,7 +654,7 @@ export function AdminPricing() {
           <p className="portal-muted" style={{ marginTop: '1rem' }}>Installments must equal the total or publishing fails. Saving a draft doesn't notify the client.</p>
         </aside>
       </div>
-    </Shell>
+    </AdminPortalBody>
   );
 }
 

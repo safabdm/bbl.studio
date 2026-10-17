@@ -276,6 +276,9 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
             company_name: 'Northshore Botanica',
             contact_name: 'Elena Voss',
             email: 'elena@northshore-botanica.example',
+            package_name: 'Brand & Website',
+            updated_at: '2026-10-10T12:00:00.000Z',
+            created_at: '2026-10-10T12:00:00.000Z',
           },
         ],
       });

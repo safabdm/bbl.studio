@@ -2,15 +2,19 @@ import assert from 'node:assert/strict';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { after, before, describe, it } from 'node:test';
+import { after, before, beforeEach, describe, it } from 'node:test';
 import {
   buildPreviews,
   clearPreviewSessions,
   createPreviewToken,
   executeManualSend,
+  listDrafts,
+  listSendLog,
   personalize,
+  saveDraft,
   sendTestDryRun,
 } from './crm-campaigns.ts';
+import { resetCrmDbClient, resetMemoryCrmDb } from './crm-db.ts';
 import type { CrmLead } from './crm-types.ts';
 
 const dir = mkdtempSync(join(tmpdir(), 'bbls-crm-'));
@@ -20,6 +24,20 @@ const env = {
   EMAIL_OUTREACH_ENABLED: 'false',
   EMAIL_DRY_RUN: 'true',
   MANUAL_SEND_LIVE_ENABLED: 'false',
+};
+
+const durableEnv = {
+  ...env,
+  CRM_DATABASE_URL: 'memory://crm',
+  CRM_DATABASE_MEMORY: '1',
+  VERCEL: '1',
+};
+
+const vercelNoDbEnv = {
+  EMAIL_OUTREACH_ENABLED: 'false',
+  EMAIL_DRY_RUN: 'true',
+  MANUAL_SEND_LIVE_ENABLED: 'false',
+  VERCEL: '1',
 };
 
 const leads: CrmLead[] = [
@@ -52,6 +70,12 @@ before(() => {
   clearPreviewSessions();
 });
 
+beforeEach(() => {
+  resetCrmDbClient();
+  resetMemoryCrmDb(durableEnv);
+  clearPreviewSessions();
+});
+
 after(() => {
   clearPreviewSessions();
   rmSync(dir, { recursive: true, force: true });
@@ -72,8 +96,8 @@ describe('personalization + preview', () => {
 });
 
 describe('dry-run send path', () => {
-  it('blocks send without preview + confirm', () => {
-    const result = executeManualSend(
+  it('blocks send without preview + confirm', async () => {
+    const result = await executeManualSend(
       {
         campaign_name: 'Test',
         subject: 'Hi',
@@ -90,11 +114,11 @@ describe('dry-run send path', () => {
     assert.equal(result.live, false);
   });
 
-  it('dry-runs after select → preview → confirm and never marks live', () => {
+  it('dry-runs after select → preview → confirm and never marks live', async () => {
     const subject = 'Hello {{business_name}}';
     const body = 'Note for {{contact_name}}';
     const token = createPreviewToken([3, 21], subject, body);
-    const result = executeManualSend(
+    const result = await executeManualSend(
       {
         campaign_name: 'Dry run campaign',
         subject,
@@ -121,5 +145,82 @@ describe('dry-run send path', () => {
     assert.equal(result.ok, true);
     assert.equal(result.dry_run, true);
     assert.match(result.message, /Nothing was sent/);
+  });
+});
+
+describe('durable campaign drafts (Neon / memory)', () => {
+  it('persists drafts without touching local ./data', async () => {
+    const saved = await saveDraft(
+      {
+        name: 'Spring outreach',
+        subject: 'Hello {{business_name}}',
+        body: 'Body',
+        template_id: 'tpl_intro',
+        recipient_ids: [3],
+      },
+      durableEnv,
+    );
+    assert.match(saved.id, /^draft_/);
+    const listed = await listDrafts(durableEnv);
+    assert.equal(listed.length, 1);
+    assert.equal(listed[0]?.name, 'Spring outreach');
+    assert.deepEqual(listed[0]?.recipient_ids, [3]);
+  });
+
+  it('updates an existing draft by id', async () => {
+    const first = await saveDraft(
+      { name: 'A', subject: 'S', body: 'B', recipient_ids: [3] },
+      durableEnv,
+    );
+    const second = await saveDraft(
+      { id: first.id, name: 'B', subject: 'S2', body: 'B2', recipient_ids: [3, 21] },
+      durableEnv,
+    );
+    assert.equal(second.id, first.id);
+    assert.equal(second.name, 'B');
+    const listed = await listDrafts(durableEnv);
+    assert.equal(listed.length, 1);
+    assert.equal(listed[0]?.subject, 'S2');
+  });
+
+  it('logs dry-run sends into durable send log', async () => {
+    const subject = 'Hello';
+    const body = 'Body';
+    const token = createPreviewToken([3], subject, body);
+    const result = await executeManualSend(
+      {
+        campaign_name: 'Logged dry-run',
+        subject,
+        body,
+        recipient_ids: [3],
+        preview_token: token,
+        confirmed: true,
+      },
+      leads,
+      durableEnv,
+    );
+    assert.equal(result.ok, true);
+    const log = await listSendLog(durableEnv);
+    assert.equal(log.length, 1);
+    assert.equal(log[0]?.dry_run, true);
+    assert.equal(log[0]?.live, false);
+  });
+
+  it('refuses filesystem drafts on Vercel without CRM_DATABASE_URL (no ENOENT mkdir)', async () => {
+    await assert.rejects(
+      () =>
+        saveDraft(
+          { name: 'Nope', subject: 'S', body: 'B', recipient_ids: [] },
+          vercelNoDbEnv,
+        ),
+      (err: unknown) => {
+        assert.ok(err instanceof Error);
+        assert.match(err.message, /CRM_DATABASE_URL|durable/i);
+        assert.doesNotMatch(err.message, /ENOENT|mkdir/i);
+        return true;
+      },
+    );
+    const empty = await listDrafts(vercelNoDbEnv);
+    assert.deepEqual(empty, []);
   });
 });

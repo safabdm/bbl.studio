@@ -28,6 +28,7 @@ type Sql = NeonQueryFunction<false, false>;
 type MemoryDb = {
   snapshot: CrmSyncSnapshot | null;
   events: Set<string>;
+  kv: Map<string, unknown>;
   ready: boolean;
 };
 
@@ -55,7 +56,7 @@ function memoryBank(env: CrmDbEnv): MemoryDb {
   const key = crmDatabaseUrl(env) || 'memory://crm';
   let bank = memoryBanks.get(key);
   if (!bank) {
-    bank = { snapshot: null, events: new Set(), ready: false };
+    bank = { snapshot: null, events: new Set(), kv: new Map(), ready: false };
     memoryBanks.set(key, bank);
   }
   return bank;
@@ -103,7 +104,48 @@ export async function ensureCrmSchema(env: CrmDbEnv = process.env): Promise<void
       created_at TIMESTAMPTZ NOT NULL DEFAULT now()
     )
   `;
+  await sql`
+    CREATE TABLE IF NOT EXISTS crm_kv (
+      key TEXT PRIMARY KEY,
+      value JSONB NOT NULL,
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+    )
+  `;
   schemaReady = true;
+}
+
+/** Durable JSON blob helpers — campaign drafts, send logs, etc. Never use local ./data on Vercel. */
+export async function dbReadKv<T>(key: string, fallback: T, env: CrmDbEnv = process.env): Promise<T> {
+  await ensureCrmSchema(env);
+  if (isMemoryDb(env)) {
+    const bank = memoryBank(env);
+    if (!bank.kv.has(key)) return fallback;
+    return structuredClone(bank.kv.get(key)) as T;
+  }
+  const sql = getSql(env);
+  const rows = await sql`
+    SELECT value FROM crm_kv WHERE key = ${key} LIMIT 1
+  `;
+  const row = rows[0] as { value?: T } | undefined;
+  if (row?.value === undefined || row?.value === null) return fallback;
+  return row.value;
+}
+
+export async function dbWriteKv(key: string, value: unknown, env: CrmDbEnv = process.env): Promise<void> {
+  await ensureCrmSchema(env);
+  if (isMemoryDb(env)) {
+    memoryBank(env).kv.set(key, structuredClone(value));
+    return;
+  }
+  const sql = getSql(env);
+  const payload = JSON.stringify(value);
+  await sql`
+    INSERT INTO crm_kv (key, value, updated_at)
+    VALUES (${key}, ${payload}::jsonb, now())
+    ON CONFLICT (key) DO UPDATE SET
+      value = EXCLUDED.value,
+      updated_at = now()
+  `;
 }
 
 export async function dbReadSnapshot(env: CrmDbEnv = process.env): Promise<CrmSyncSnapshot | null> {

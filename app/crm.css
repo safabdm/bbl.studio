@@ -34,8 +34,20 @@
 .crm-page-head{display:flex;align-items:flex-end;justify-content:space-between;gap:1rem;flex-wrap:wrap}
 .crm-shell h1,.crm-shell h2,.crm-shell h3{text-shadow:none;max-width:none}
 .crm-page-head h1{margin:0;font-size:1.65rem;font-weight:500;letter-spacing:-.03em}
+.crm-kicker{margin:0;color:var(--c-faint);font-size:.72rem;font-weight:500;letter-spacing:.1em;text-transform:uppercase}
 .crm-lead{max-width:44rem;margin:.35rem 0 0;color:var(--c-dim);line-height:1.5}
 .crm-head-actions{display:flex;gap:.5rem;flex-wrap:wrap}
+
+/* Client Portal pages inside CrmShell — portal tokens + no duplicate chrome */
+.crm-portal-body{
+  --p-bg:var(--c-bg);--p-panel:var(--c-panel);--p-line:var(--c-line);--p-line-2:var(--c-line-2);
+  --p-text:var(--c-text);--p-dim:var(--c-dim);--p-faint:var(--c-faint);--p-tint:var(--c-tint);
+  --p-accent:var(--c-accent);--p-accent-ink:var(--c-accent-ink);--p-accent-bg:var(--c-accent-bg);
+  --p-good:var(--c-good);--p-good-bg:var(--c-good-bg);--p-bad:var(--c-bad);
+}
+.crm-portal-back{margin:0 0 .75rem}
+.crm-portal-layout{align-items:start}
+.crm-portal-layout>.crm-panel{margin-top:1rem}
 
 /* Panels */
 .crm-panel{margin-top:1rem;border:1px solid var(--c-line);border-radius:12px;background:var(--c-panel);padding:1.1rem 1.25rem;box-shadow:0 1px 2px rgba(20,20,20,.04)}

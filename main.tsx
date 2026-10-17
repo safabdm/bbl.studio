@@ -5,9 +5,6 @@ import Home from './app/page';
 import './app/globals.css';
 
 const AdminLogin = lazy(() => import('./app/portal-screens').then((module) => ({ default: module.AdminLogin })));
-const AdminHome = lazy(() => import('./app/portal-screens').then((module) => ({ default: module.AdminHome })));
-const AdminProject = lazy(() => import('./app/portal-screens').then((module) => ({ default: module.AdminProject })));
-const AdminPricing = lazy(() => import('./app/portal-screens').then((module) => ({ default: module.AdminPricing })));
 const ClientPortal = lazy(() => import('./app/portal-screens').then((module) => ({ default: module.ClientPortal })));
 const RequireAdmin = lazy(() => import('./app/portal-screens').then((module) => ({ default: module.RequireAdmin })));
 const CrmDashboard = lazy(() => import('./app/crm-dashboard').then((module) => ({ default: module.CrmDashboard })));
@@ -32,10 +29,9 @@ createRoot(document.getElementById('root')!).render(
         <Route path="/" element={<Home />} />
         <Route path="/unsubscribe" element={<Suspense fallback={<PortalFallback />}><UnsubscribePage /></Suspense>} />
         <Route path="/admin/login" element={<Suspense fallback={<PortalFallback />}><AdminLogin /></Suspense>} />
-        <Route path="/admin/projects" element={<PortalGate><AdminHome /></PortalGate>} />
-        <Route path="/admin/projects/:projectId" element={<PortalGate><AdminProject /></PortalGate>} />
-        <Route path="/admin/projects/:projectId/pricing" element={<PortalGate><AdminPricing /></PortalGate>} />
+        {/* Admin preview stays outside CrmShell — it mirrors the public client view. */}
         <Route path="/admin/projects/:projectId/preview" element={<PortalGate><ClientPortal preview /></PortalGate>} />
+        {/* CRM + Client Portal share CrmShell (sidebar). Nested under /admin/*. */}
         <Route path="/admin/*" element={<PortalGate><CrmDashboard /></PortalGate>} />
         <Route path="/client/:token" element={<Suspense fallback={<PortalFallback />}><ClientPortal /></Suspense>} />
       </Routes>
