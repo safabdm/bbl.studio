@@ -96,13 +96,11 @@ type PlacesTextSearchResponse = {
   error?: { message?: string; status?: string };
 };
 
+type AddressComponent = { longText?: string; shortText?: string; types?: string[] };
+
 function cityFromAddress(
   formatted: string | undefined,
-  components: PlacesTextSearchResponse['places'] extends (infer P)[] | undefined
-    ? P extends { addressComponents?: infer C }
-      ? C
-      : never
-    : never,
+  components?: AddressComponent[] | null,
 ): string | null {
   if (Array.isArray(components)) {
     const locality = components.find((c) => c.types?.includes('locality'));

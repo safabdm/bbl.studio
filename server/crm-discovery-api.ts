@@ -5,6 +5,7 @@
 import type { CrmJsonResult } from './crm-api.js';
 import { listDiscoveredLeads, listDiscoveryRuns } from './crm-discovery-store.js';
 import {
+  discoverySafetyEnv,
   getDiscoveryDashboard,
   pauseDiscovery,
   resumeDiscovery,
@@ -66,7 +67,7 @@ export async function handleDiscoveryRun(
       run,
       automation: dash.automation,
       counts: dash.counts,
-      safety: { ...safetySnapshot(env), FOLLOWUPS_LIVE: false, live_email_send: false },
+      safety: { ...safetySnapshot(discoverySafetyEnv(env)), FOLLOWUPS_LIVE: false, live_email_send: false },
       message: run.message,
     },
   };

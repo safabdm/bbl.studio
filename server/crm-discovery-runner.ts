@@ -29,14 +29,25 @@ import {
   writeAutomationState,
 } from './crm-discovery-store.js';
 import type { DiscoveryRunLog } from './crm-discovery-types.js';
-import { safetySnapshot } from './crm-safety.js';
+import { safetySnapshot, type SafetyEnv } from './crm-safety.js';
 
-export type DiscoveryRunnerEnv = CrmDbEnv & PlacesEnv & {
-  CRON_SECRET?: string;
-  DISCOVERY_CITY_LIMIT?: string;
-  DISCOVERY_CATEGORY_LIMIT?: string;
-  DISCOVERY_ENRICH_ON_RUN?: string;
-};
+export type DiscoveryRunnerEnv = CrmDbEnv &
+  PlacesEnv &
+  SafetyEnv & {
+    CRON_SECRET?: string;
+    DISCOVERY_CITY_LIMIT?: string;
+    DISCOVERY_CATEGORY_LIMIT?: string;
+    DISCOVERY_ENRICH_ON_RUN?: string;
+  };
+
+/** Narrow to SafetyEnv — DiscoveryRunnerEnv is a wide intersection TypeScript won't assign directly. */
+export function discoverySafetyEnv(env: DiscoveryRunnerEnv): SafetyEnv {
+  return {
+    EMAIL_OUTREACH_ENABLED: env.EMAIL_OUTREACH_ENABLED,
+    EMAIL_DRY_RUN: env.EMAIL_DRY_RUN,
+    MANUAL_SEND_LIVE_ENABLED: env.MANUAL_SEND_LIVE_ENABLED,
+  };
+}
 
 export type RunDiscoveryOpts = {
   trigger: DiscoveryRunLog['trigger'];
@@ -108,7 +119,7 @@ export async function getDiscoveryDashboard(env: DiscoveryRunnerEnv = process.en
   return {
     ok: true as const,
     live_email_send: false,
-    safety: { ...safetySnapshot(env), FOLLOWUPS_LIVE: false },
+    safety: { ...safetySnapshot(discoverySafetyEnv(env)), FOLLOWUPS_LIVE: false },
     config: {
       places_configured: places,
       discovery_enabled: enabled,

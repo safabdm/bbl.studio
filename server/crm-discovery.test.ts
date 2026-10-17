@@ -1,18 +1,28 @@
 import assert from 'node:assert/strict';
 import { afterEach, describe, it } from 'node:test';
-import { resetCrmDbClient, resetMemoryCrmDb } from './crm-db.ts';
+import { resetCrmDbClient, resetMemoryCrmDb } from './crm-db.js';
 import {
   handleDiscoveryCron,
   handleDiscoveryPause,
   handleDiscoveryResume,
   handleDiscoveryRun,
   handleDiscoveryStatus,
-} from './crm-discovery-api.ts';
-import { buildSearchQueries, isDiscoveryEnabled, isPlacesConfigured, maxPerRun } from './crm-discovery-places.ts';
-import { buildDiscoveredLead, scoreCandidate, type WebsiteEvidence } from './crm-discovery-qualify.ts';
-import { runDiscoveryCycle } from './crm-discovery-runner.ts';
-import { countDiscoveredLeads, listDiscoveredLeads, resetDiscoveryDbClient, resetMemoryDiscovery } from './crm-discovery-store.ts';
-import type { PlacesCandidate } from './crm-discovery-places.ts';
+} from './crm-discovery-api.js';
+import {
+  buildSearchQueries,
+  isDiscoveryEnabled,
+  isPlacesConfigured,
+  maxPerRun,
+  type PlacesCandidate,
+} from './crm-discovery-places.js';
+import { buildDiscoveredLead, scoreCandidate, type WebsiteEvidence } from './crm-discovery-qualify.js';
+import { runDiscoveryCycle } from './crm-discovery-runner.js';
+import {
+  countDiscoveredLeads,
+  listDiscoveredLeads,
+  resetDiscoveryDbClient,
+  resetMemoryDiscovery,
+} from './crm-discovery-store.js';
 
 const memEnv = {
   CRM_DATABASE_URL: 'memory://crm',
