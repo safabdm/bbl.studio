@@ -1,17 +1,33 @@
 {
   "framework": "vite",
-  "buildCommand": "pnpm exec vite build --config vite.vercel.config.ts && cp out/index.html out/app.html && cp out/home.html out/index.html",
+  "buildCommand": "pnpm exec vite build --config vite.vercel.config.ts && cp out/index.html out/app.html && cp out/home.html out/index.html && rm -f out/studio.html",
   "outputDirectory": "out",
+  "trailingSlash": false,
+  "redirects": [
+    { "source": "/home.html", "destination": "/", "statusCode": 301 },
+    { "source": "/index.html", "destination": "/", "statusCode": 301 },
+    { "source": "/book", "destination": "/booking", "statusCode": 301 },
+    { "source": "/book.html", "destination": "/booking", "statusCode": 301 }
+  ],
   "rewrites": [
     { "source": "/api/:path*", "destination": "/api/[...route]" },
     { "source": "/", "destination": "/home.html" },
-    { "source": "/book", "destination": "/book.html" },
     { "source": "/booking", "destination": "/book.html" },
-    { "source": "/((?!api/|assets/|work/|brand/|.*\\..*).*)", "destination": "/app.html" }
+    { "source": "/admin", "destination": "/app.html" },
+    { "source": "/admin/:path*", "destination": "/app.html" },
+    { "source": "/client", "destination": "/app.html" },
+    { "source": "/client/:path*", "destination": "/app.html" },
+    { "source": "/unsubscribe", "destination": "/app.html" }
   ],
   "headers": [
     {
-      "source": "/(.*)",
+      "source": "/",
+      "headers": [
+        { "key": "X-Robots-Tag", "value": "index, follow, max-image-preview:large, max-snippet:-1" }
+      ]
+    },
+    {
+      "source": "/booking",
       "headers": [
         { "key": "X-Robots-Tag", "value": "index, follow, max-image-preview:large, max-snippet:-1" }
       ]
@@ -41,25 +57,55 @@
       ]
     },
     {
-      "source": "/admin(.*)",
+      "source": "/admin",
       "headers": [
         { "key": "X-Robots-Tag", "value": "noindex, nofollow" }
       ]
     },
     {
-      "source": "/client(.*)",
+      "source": "/admin/:path*",
       "headers": [
         { "key": "X-Robots-Tag", "value": "noindex, nofollow" }
       ]
     },
     {
-      "source": "/api/(.*)",
+      "source": "/client",
+      "headers": [
+        { "key": "X-Robots-Tag", "value": "noindex, nofollow" }
+      ]
+    },
+    {
+      "source": "/client/:path*",
+      "headers": [
+        { "key": "X-Robots-Tag", "value": "noindex, nofollow" }
+      ]
+    },
+    {
+      "source": "/api/:path*",
       "headers": [
         { "key": "X-Robots-Tag", "value": "noindex, nofollow" }
       ]
     },
     {
       "source": "/unsubscribe",
+      "headers": [
+        { "key": "X-Robots-Tag", "value": "noindex, nofollow" }
+      ]
+    },
+    {
+      "source": "/app.html",
+      "headers": [
+        { "key": "X-Robots-Tag", "value": "noindex, nofollow" }
+      ]
+    },
+    {
+      "source": "/404.html",
+      "headers": [
+        { "key": "X-Robots-Tag", "value": "noindex, nofollow" }
+      ]
+    },
+    {
+      "source": "/studio.html",
       "headers": [
         { "key": "X-Robots-Tag", "value": "noindex, nofollow" }
       ]
