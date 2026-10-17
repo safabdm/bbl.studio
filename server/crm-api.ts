@@ -31,6 +31,15 @@ function adminOk(isAdmin: boolean): CrmJsonResult | null {
   return { status: 401, body: { ok: false, message: 'Sign in required.' } };
 }
 
+/** Never leak raw serverless FS failures (ENOENT mkdir '/var/task/data') into the CRM UI. */
+function storageFailureMessage(err: unknown, fallback: string): string {
+  const raw = err instanceof Error ? err.message : String(err || '');
+  if (/ENOENT|EACCES|EROFS|\/var\/task/i.test(raw)) {
+    return 'Campaign storage unavailable on this host. CRM_DATABASE_URL (Neon) is required for drafts.';
+  }
+  return raw || fallback;
+}
+
 export async function handleCrmOverview(isAdmin: boolean, env = process.env): Promise<CrmJsonResult> {
   const denied = adminOk(isAdmin);
   if (denied) return denied;
@@ -129,7 +138,7 @@ export async function handleCrmCampaigns(isAdmin: boolean, env = process.env): P
       status: 503,
       body: {
         ok: false,
-        message: err instanceof Error ? err.message : 'Could not load campaign drafts.',
+        message: storageFailureMessage(err, 'Could not load campaign drafts.'),
         templates: listTemplates(),
       },
     };
@@ -219,7 +228,7 @@ export async function handleCrmSaveDraft(
       status: 503,
       body: {
         ok: false,
-        message: err instanceof Error ? err.message : 'Could not save campaign draft.',
+        message: storageFailureMessage(err, 'Could not save campaign draft.'),
       },
     };
   }

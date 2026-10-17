@@ -89,13 +89,13 @@ function sendLogPath(env: CampaignStoreEnv = process.env) {
 }
 
 function assertLocalFsAllowed(env: CampaignStoreEnv, label: string) {
-  if (requiresDurableDb(env) && !isDurableDbConfigured(env)) {
-    throw new Error(
-      `${label} requires CRM_DATABASE_URL on Vercel. Local ./data is not writable in serverless.`,
-    );
-  }
+  // Hard gate: never create ./data under /var/task (or any serverless root).
   if (requiresDurableDb(env)) {
-    throw new Error(`${label} must use durable Postgres on Vercel — refusing local filesystem write.`);
+    throw new Error(
+      isDurableDbConfigured(env)
+        ? `${label} must use durable Postgres on serverless — refusing local filesystem write.`
+        : `${label} requires CRM_DATABASE_URL on serverless. Local ./data is not writable there.`,
+    );
   }
 }
 
@@ -108,9 +108,21 @@ function readJsonFile<T>(path: string, fallback: T): T {
   }
 }
 
-function writeJsonFile(path: string, value: unknown) {
-  mkdirSync(dirname(path), { recursive: true });
-  writeFileSync(path, `${JSON.stringify(value, null, 2)}\n`, 'utf8');
+function writeJsonFile(path: string, value: unknown, env: CampaignStoreEnv = process.env) {
+  assertLocalFsAllowed(env, 'Campaign local store');
+  try {
+    mkdirSync(dirname(path), { recursive: true });
+    writeFileSync(path, `${JSON.stringify(value, null, 2)}\n`, 'utf8');
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    // Never surface raw ENOENT mkdir '/var/task/data' to the CRM UI.
+    if (/ENOENT|EACCES|EROFS|mkdir/i.test(message)) {
+      throw new Error(
+        'Campaign storage is not writable on this host. Configure CRM_DATABASE_URL (Neon) for drafts.',
+      );
+    }
+    throw err;
+  }
 }
 
 export function listTemplates() {
@@ -213,7 +225,7 @@ export async function saveDraft(
     return draft;
   }
   assertLocalFsAllowed(env, 'Campaign drafts');
-  writeJsonFile(draftsPath(env), next);
+  writeJsonFile(draftsPath(env), next, env);
   return draft;
 }
 
@@ -231,7 +243,7 @@ async function appendSendLog(entry: Record<string, unknown>, env: CampaignStoreE
   assertLocalFsAllowed(env, 'Campaign send log');
   const log = readJsonFile<Record<string, unknown>[]>(sendLogPath(env), []);
   log.unshift(entry);
-  writeJsonFile(sendLogPath(env), log.slice(0, 200));
+  writeJsonFile(sendLogPath(env), log.slice(0, 200), env);
 }
 
 export async function listSendLog(env: CampaignStoreEnv = process.env): Promise<Record<string, unknown>[]> {

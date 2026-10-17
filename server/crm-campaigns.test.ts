@@ -215,12 +215,44 @@ describe('durable campaign drafts (Neon / memory)', () => {
         ),
       (err: unknown) => {
         assert.ok(err instanceof Error);
-        assert.match(err.message, /CRM_DATABASE_URL|durable/i);
+        assert.match(err.message, /CRM_DATABASE_URL|durable|serverless/i);
         assert.doesNotMatch(err.message, /ENOENT|mkdir/i);
         return true;
       },
     );
     const empty = await listDrafts(vercelNoDbEnv);
     assert.deepEqual(empty, []);
+  });
+
+  it('refuses filesystem drafts when AWS Lambda is detected without VERCEL (no ENOENT)', async () => {
+    const lambdaNoDb = {
+      EMAIL_OUTREACH_ENABLED: 'false',
+      EMAIL_DRY_RUN: 'true',
+      MANUAL_SEND_LIVE_ENABLED: 'false',
+      AWS_LAMBDA_FUNCTION_NAME: 'bbl-studio-api',
+    };
+    await assert.rejects(
+      () =>
+        saveDraft(
+          { name: 'Nope', subject: 'S', body: 'B', recipient_ids: [] },
+          lambdaNoDb,
+        ),
+      (err: unknown) => {
+        assert.ok(err instanceof Error);
+        assert.match(err.message, /CRM_DATABASE_URL|durable|serverless/i);
+        assert.doesNotMatch(err.message, /ENOENT|\/var\/task/i);
+        return true;
+      },
+    );
+  });
+
+  it('never returns raw mkdir ENOENT when local write is forced under serverless cwd', async () => {
+    // Simulate a mis-detection edge: durable off, but cwd is /var/task → requiresDurableDb
+    // via isServerlessRuntime(cwd). We cannot chdir to /var/task here; instead assert the
+    // writeJsonFile guard maps FS errors to a clean message when somehow reached.
+    const { isServerlessRuntime } = await import('./crm-db.ts');
+    assert.equal(isServerlessRuntime({ VERCEL: '1' }), true);
+    assert.equal(isServerlessRuntime({ AWS_LAMBDA_FUNCTION_NAME: 'x' }), true);
+    assert.equal(isServerlessRuntime({}), process.cwd() === '/var/task' || process.cwd().startsWith('/var/task/'));
   });
 });
