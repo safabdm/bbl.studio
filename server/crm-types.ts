@@ -32,6 +32,13 @@ export type CrmLead = {
   last_contacted_at?: string | null;
   last_activity_at?: string | null;
   notes?: string | null;
+  /**
+   * Genuine public-site observation used in cold email copy.
+   * Required for approved outreach — never invent. Maps from Mac `outreach_observation`.
+   */
+  website_observation?: string | null;
+  /** @deprecated Mac alias — prefer website_observation */
+  outreach_observation?: string | null;
   suppressed?: boolean;
   unsubscribed?: boolean;
   /**
@@ -264,6 +271,9 @@ export type PersonalizedPreview = {
   business_name: string;
   subject: string;
   body: string;
+  /** True when policy would exclude this recipient (e.g. missing observation). */
+  excluded?: boolean;
+  exclude_reason?: string;
 };
 
 export type ManualSendRequest = {

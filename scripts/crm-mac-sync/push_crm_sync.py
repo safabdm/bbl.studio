@@ -180,6 +180,17 @@ def _fetch_leads_from(conn: sqlite3.Connection, table: str) -> list[dict[str, An
                 or d.get("updated_at")
                 or None,
                 "notes": d.get("notes") or d.get("review_notes"),
+                # Genuine public-site note for cold email — never invent on the website.
+                "website_observation": (
+                    d.get("website_observation")
+                    or d.get("outreach_observation")
+                    or None
+                ),
+                "outreach_observation": (
+                    d.get("outreach_observation")
+                    or d.get("website_observation")
+                    or None
+                ),
                 "suppressed": bool(d.get("suppressed") or d.get("is_suppressed") or d.get("opted_out")),
                 "unsubscribed": bool(d.get("unsubscribed") or d.get("is_unsubscribed") or d.get("opted_out")),
                 "email_accepted": accepted,

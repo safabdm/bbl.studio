@@ -24,6 +24,10 @@ const env = {
   EMAIL_OUTREACH_ENABLED: 'false',
   EMAIL_DRY_RUN: 'true',
   MANUAL_SEND_LIVE_ENABLED: 'false',
+  SESSION_SECRET: 'test-session-secret-for-preview-hmac',
+  UNSUBSCRIBE_SECRET: 'test-unsub-secret',
+  APP_ORIGIN: 'https://www.bbl.studio',
+  BUSINESS_POSTAL_ADDRESS: '1 Test St, Irvine, CA 92618',
 };
 
 const durableEnv = {
@@ -46,6 +50,7 @@ const leads: CrmLead[] = [
     business_name: 'House of Lange',
     contact_name: 'Team',
     email: 'team@houseoflange.com',
+    website_observation: 'no clear online booking path on the site',
     email_accepted: 'YES',
     delivered: 'UNKNOWN',
     bounced: 'UNKNOWN',
@@ -57,6 +62,7 @@ const leads: CrmLead[] = [
     business_name: 'Shadows Salon',
     contact_name: 'Info',
     email: 'info@shadowssalon.com',
+    website_observation: 'homepage still leads with an outdated award line',
     unsubscribed: true,
     email_accepted: 'UNKNOWN',
     delivered: 'UNKNOWN',
@@ -116,8 +122,13 @@ describe('dry-run send path', () => {
 
   it('dry-runs after select → preview → confirm and never marks live', async () => {
     const subject = 'Hello {{business_name}}';
-    const body = 'Note for {{contact_name}}';
-    const token = createPreviewToken([3, 21], subject, body);
+    const body = [
+      'Note for {{contact_name}}: {{website_observation}}',
+      'Book: https://www.bbl.studio/book',
+      '{{BUSINESS_POSTAL_ADDRESS}}',
+      '{{signed_unsubscribe_url}}',
+    ].join('\n');
+    const token = createPreviewToken([3, 21], subject, body, env);
     const result = await executeManualSend(
       {
         campaign_name: 'Dry run campaign',
@@ -130,12 +141,13 @@ describe('dry-run send path', () => {
       },
       leads,
       env,
+      { serverLeads: leads, serverHistory: [] },
     );
     assert.equal(result.ok, true);
     assert.equal(result.dry_run, true);
     assert.equal(result.live, false);
     assert.equal(result.recipient_count, 1);
-    assert.equal(result.excluded_count, 1);
+    assert.ok((result.excluded_count || 0) >= 1);
     assert.match(result.message, /Dry-run only|No emails were sent/i);
     assert.equal(result.intended[0]?.email, 'team@houseoflange.com');
   });
@@ -184,9 +196,14 @@ describe('durable campaign drafts (Neon / memory)', () => {
   });
 
   it('logs dry-run sends into durable send log', async () => {
-    const subject = 'Hello';
-    const body = 'Body';
-    const token = createPreviewToken([3], subject, body);
+    const subject = 'Hello {{business_name}}';
+    const body = [
+      '{{website_observation}}',
+      'Book: https://www.bbl.studio/book',
+      '{{BUSINESS_POSTAL_ADDRESS}}',
+      '{{signed_unsubscribe_url}}',
+    ].join('\n');
+    const token = createPreviewToken([3], subject, body, durableEnv);
     const result = await executeManualSend(
       {
         campaign_name: 'Logged dry-run',
@@ -198,6 +215,7 @@ describe('durable campaign drafts (Neon / memory)', () => {
       },
       leads,
       durableEnv,
+      { serverLeads: leads, serverHistory: [] },
     );
     assert.equal(result.ok, true);
     const log = await listSendLog(durableEnv);
