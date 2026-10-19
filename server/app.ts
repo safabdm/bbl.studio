@@ -220,7 +220,8 @@ app.get('/api/unsubscribe', async (c) => {
 });
 
 app.post('/api/unsubscribe', async (c) => {
-  const body = await c.req.json<{ email?: string; lead_id?: string | number; token?: string }>().catch(() => ({}));
+  type UnsubscribeBody = { email?: string; lead_id?: string | number; token?: string };
+  const body = await c.req.json<UnsubscribeBody>().catch((): UnsubscribeBody => ({}));
   const result = await processUnsubscribeDurable({
     email: body.email ?? c.req.query('email'),
     lead_id: body.lead_id ?? c.req.query('lead_id'),

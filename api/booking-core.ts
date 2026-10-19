@@ -324,7 +324,7 @@ type GoogleEvent = {
   summary?: string;
   created?: string;
   start?: { dateTime?: string; date?: string; timeZone?: string };
-  end?: { dateTime?: string; date?: string };
+  end?: { dateTime?: string; date?: string; timeZone?: string };
   attendees?: { email?: string; displayName?: string }[];
   extendedProperties?: { private?: Record<string, string> };
 };

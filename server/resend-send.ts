@@ -20,6 +20,7 @@ import {
   listUnsubscribeHeaders,
   personalizeLead,
   policyBlocksSend,
+  type Exclusion,
   type PolicyEnv,
 } from './outreach-policy.js';
 import {
@@ -95,7 +96,7 @@ export function wasContactedWithinWindow(
     if (status === 'DRY_RUN_SENT') continue;
     if (!['SENT', 'ACCEPTED', 'DELIVERED', 'QUEUED'].includes(status) && row.accepted !== 'YES') {
       // Still treat any non-dry-run history with a sent_at as a contact.
-      if (!row.sent_at && row.accepted !== 'YES') continue;
+      if (!row.sent_at) continue;
     }
     const sentAt = row.sent_at ? Date.parse(String(row.sent_at)) : NaN;
     if (!Number.isFinite(sentAt)) {
@@ -317,16 +318,19 @@ export async function executeApprovedManualSend(
   const { included: withObs, excluded: obsExcluded } = filterObservationRequired(leads, request.recipient_ids);
   const { included, excluded: safetyExcluded } = filterSendableRecipients(withObs, request.recipient_ids);
 
-  const excluded = [...obsExcluded, ...safetyExcluded];
+  const excluded: Exclusion[] = [
+    ...obsExcluded,
+    ...safetyExcluded.map((row) => ({ id: row.id, reason: row.reason })),
+  ];
   const afterDedupe: CrmLead[] = [];
   for (const lead of included as CrmLead[]) {
     const email = String(lead.email || '');
     if (await isEmailDurablySuppressed(email, env)) {
-      excluded.push({ id: lead.id, reason: 'suppressed' });
+      excluded.push({ id: lead.id, reason: 'suppressed', email });
       continue;
     }
     if (wasContactedWithinWindow(email, history, now)) {
-      excluded.push({ id: lead.id, reason: 'contacted_within_30d' });
+      excluded.push({ id: lead.id, reason: 'contacted_within_30d', email });
       continue;
     }
     afterDedupe.push(lead);
@@ -338,7 +342,7 @@ export async function executeApprovedManualSend(
     const overflow = batch.slice(cap);
     batch = batch.slice(0, cap);
     for (const lead of overflow) {
-      excluded.push({ id: lead.id, reason: 'batch_cap', email: lead.email });
+      excluded.push({ id: lead.id, reason: 'batch_cap', email: String(lead.email || '') });
     }
   }
 
@@ -432,7 +436,7 @@ export async function executeApprovedManualSend(
       });
     } else {
       failures.push(`${lead.email}: ${result.message}`);
-      excluded.push({ id: lead.id, reason: 'send_failed', email: lead.email });
+      excluded.push({ id: lead.id, reason: 'send_failed', email: String(lead.email || '') });
     }
   }
 
