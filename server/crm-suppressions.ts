@@ -51,17 +51,19 @@ export async function listDurableSuppressions(env: SuppressionEnv = process.env)
     // Fall through to snapshot suppressions when KV empty.
     try {
       const snap = await readSnapshot(env);
-      const fromSnap = (snap.suppressions || [])
-        .map((row) =>
-          normalizeRecord({
-            email: row.email,
-            lead_id: Number(row.lead_id) || 0,
-            reason: String(row.reason || 'unsubscribe'),
-            created_at: String(row.created_at || nowIso()),
-          }),
-        )
-        .filter((r): r is UnsubscribeRecord => Boolean(r));
-      if (fromSnap.length) return fromSnap;
+      if (snap) {
+        const fromSnap = (snap.suppressions || [])
+          .map((row) =>
+            normalizeRecord({
+              email: row.email,
+              lead_id: Number(row.lead_id) || 0,
+              reason: String(row.reason || 'unsubscribe'),
+              created_at: String(row.created_at || nowIso()),
+            }),
+          )
+          .filter((r): r is UnsubscribeRecord => Boolean(r));
+        if (fromSnap.length) return fromSnap;
+      }
     } catch {
       /* ignore */
     }
@@ -108,15 +110,17 @@ export async function recordDurableSuppression(
     await dbWriteKv(SUPPRESSIONS_KV_KEY, next, env);
     try {
       const snap = await readSnapshot(env);
-      const merged = [...(snap.suppressions || [])];
-      if (!merged.some((row) => String(row.email || '').toLowerCase() === normalized)) {
-        merged.push({
-          email: normalized,
-          lead_id: leadId,
-          reason,
-          created_at: record.created_at,
-        });
-        await writeSnapshot({ ...snap, suppressions: merged }, env);
+      if (snap) {
+        const merged = [...(snap.suppressions || [])];
+        if (!merged.some((row) => String(row.email || '').toLowerCase() === normalized)) {
+          merged.push({
+            email: normalized,
+            lead_id: leadId,
+            reason,
+            created_at: record.created_at,
+          });
+          await writeSnapshot({ ...snap, schema_version: 1, suppressions: merged }, env);
+        }
       }
     } catch {
       /* snapshot optional */

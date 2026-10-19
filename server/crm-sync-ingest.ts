@@ -180,7 +180,7 @@ function normalizeBooking(raw: unknown): CrmBookingItem | null {
   };
 }
 
-function mergeById<T extends { id?: string | number | null }>(
+function mergeById<T>(
   existing: T[],
   incoming: T[],
   keyFn: (item: T) => string,

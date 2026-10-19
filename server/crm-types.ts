@@ -296,7 +296,7 @@ export type ManualSendResult = {
   campaign_id: string;
   recipient_count: number;
   excluded_count: number;
-  excluded: Array<{ id: number | string; reason: string }>;
+  excluded: Array<{ id: number | string; reason: string; email?: string }>;
   intended: Array<{ id: number | string; email: string; subject: string }>;
   message: string;
 };

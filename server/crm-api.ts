@@ -295,7 +295,6 @@ export async function handleFreelanceImport(
     return {
       status: 200,
       body: {
-        ok: true,
         ...result,
         message:
           'Proposal drafts ready for owner review. Nothing was submitted to any marketplace and no email was sent.',
@@ -323,7 +322,7 @@ export function handleFreelanceScore(
     const result = importFreelanceJobs({
       paste: body.paste || [body.title, body.body].filter(Boolean).join('\n---\n'),
     });
-    return { status: 200, body: { ok: true, ...result } };
+    return { status: 200, body: { ...result } };
   } catch (err) {
     return {
       status: 400,

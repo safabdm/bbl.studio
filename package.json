@@ -3,8 +3,10 @@
   "version": "0.1.0",
   "private": true,
   "engines": {
-    "node": ">=22.13.0"
+    "node": ">=22.13.0",
+    "pnpm": ">=10.0.0"
   },
+  "packageManager": "pnpm@10.33.4",
   "scripts": {
     "dev": "vinext dev",
     "build": "vinext build",
@@ -12,6 +14,7 @@
     "seed": "tsx server/seed.ts",
     "lint": "oxlint",
     "format": "oxfmt",
+    "typecheck": "tsc --noEmit",
     "test:unsubscribe": "tsx --test server/unsubscribe.test.ts",
     "test:booking": "tsx --test server/booking.test.ts",
     "test:crm": "tsx --test server/crm-safety.test.ts server/crm-campaigns.test.ts server/outreach-policy.test.ts server/preview-token.test.ts server/resend-send.test.ts server/freelance-score.test.ts server/resend-webhook.test.ts server/crm-freshness.test.ts server/crm-sync.test.ts server/crm-esm-imports.test.ts server/crm-discovery.test.ts",

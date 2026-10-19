@@ -604,7 +604,7 @@ function LeadDrawer({ lead, onClose, onCompose }: { lead: CrmLead; onClose: () =
   return (
     <div className="crm-drawer-backdrop" role="presentation" onClick={onClose}>
       <aside
-        ref={dialogRef as React.RefObject<HTMLAsideElement>}
+        ref={dialogRef as React.RefObject<HTMLElement | null>}
         className="crm-drawer"
         role="dialog"
         aria-modal="true"
