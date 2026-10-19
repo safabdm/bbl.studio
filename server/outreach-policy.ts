@@ -66,13 +66,24 @@ export function extractPlaceholders(text: string): string[] {
   return [...found];
 }
 
+/**
+ * Normalize website_observation for template fill: trim + strip trailing period(s)
+ * so copy like `noticed {{website_observation}}.` never becomes `noticed foo..`.
+ */
+export function normalizeWebsiteObservation(raw: string | null | undefined): string {
+  return String(raw || '')
+    .trim()
+    .replace(/\.+\s*$/, '')
+    .trim();
+}
+
 export function leadWebsiteObservation(lead: Partial<CrmLead> | null | undefined): string {
   if (!lead) return '';
-  return String(
+  return normalizeWebsiteObservation(
     lead.website_observation ||
       (lead as { outreach_observation?: string }).outreach_observation ||
       '',
-  ).trim();
+  );
 }
 
 export function hasWebsiteObservation(lead: Partial<CrmLead> | null | undefined): boolean {

@@ -7,6 +7,7 @@ import {
   isEmailSuppressed,
   makeUnsubscribeToken,
   processUnsubscribe,
+  processUnsubscribeDurable,
   verifyUnsubscribeToken,
 } from './unsubscribe.ts';
 
@@ -105,5 +106,53 @@ describe('unsubscribe processing', () => {
     assert.equal(result.ok, false);
     if (result.ok) return;
     assert.equal(result.error, 'missing_params');
+  });
+});
+
+describe('processUnsubscribeDurable fail-closed', () => {
+  it('returns misconfigured when serverless requires durable DB but none configured', async () => {
+    const email = 'failclosed@example.com';
+    const leadId = 55;
+    const token = makeUnsubscribeToken(email, leadId, SECRET);
+    const result = await processUnsubscribeDurable(
+      { email, lead_id: leadId, token },
+      {
+        UNSUBSCRIBE_SECRET: SECRET,
+        VERCEL: '1',
+        // Explicitly no CRM_DATABASE_URL / DATABASE_URL / memory
+      },
+    );
+    assert.equal(result.ok, false);
+    if (result.ok) return;
+    assert.equal(result.error, 'misconfigured');
+    assert.match(result.message, /misconfigured|CRM_DATABASE_URL|durable/i);
+  });
+
+  it('accepts valid token against memory durable DB; rejects invalid tokens', async () => {
+    const email = 'valid-durable@example.com';
+    const leadId = 77;
+    const token = makeUnsubscribeToken(email, leadId, SECRET);
+    const durableEnv = {
+      UNSUBSCRIBE_SECRET: SECRET,
+      CRM_DATABASE_URL: 'memory://crm-unsub',
+      CRM_DATABASE_MEMORY: '1',
+    };
+    const ok = await processUnsubscribeDurable({ email, lead_id: leadId, token }, durableEnv);
+    assert.equal(ok.ok, true);
+
+    const invalid = await processUnsubscribeDurable(
+      { email, lead_id: leadId, token: '0'.repeat(32) },
+      durableEnv,
+    );
+    assert.equal(invalid.ok, false);
+    if (!invalid.ok) assert.equal(invalid.error, 'invalid_token');
+
+    // Wrong lead_id / email = invalid (unsubscribe HMAC has no TTL; preview tokens expire separately)
+    const wrongLead = await processUnsubscribeDurable(
+      { email, lead_id: leadId + 1, token },
+      durableEnv,
+    );
+    assert.equal(wrongLead.ok, false);
+    if (!wrongLead.ok) assert.equal(wrongLead.error, 'invalid_token');
   });
 });

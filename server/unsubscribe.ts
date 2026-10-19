@@ -1,6 +1,6 @@
 import { createHmac, timingSafeEqual } from 'node:crypto';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
-import { resolve } from 'node:path';
+import { dirname, resolve } from 'node:path';
 import { resolveProjectRoot } from './project-root.js';
 
 /**
@@ -168,6 +168,15 @@ export async function processUnsubscribeDurable(
 ): Promise<UnsubscribeResult> {
   if (!unsubscribeSecret()) {
     return { ok: false, error: 'misconfigured', message: 'Unsubscribe is not configured.' };
+  }
+  const { isDurableDbConfigured, requiresDurableDb } = await import('./crm-db.js');
+  if (requiresDurableDb(env) && !isDurableDbConfigured(env)) {
+    return {
+      ok: false,
+      error: 'misconfigured',
+      message:
+        'Durable suppressions are misconfigured (CRM_DATABASE_URL required on serverless). Opt-out was not recorded.',
+    };
   }
   const parsed = parseUnsubscribeInput(input);
   if (!parsed.ok) {

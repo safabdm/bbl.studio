@@ -1,9 +1,13 @@
 import assert from 'node:assert/strict';
+import { createHash } from 'node:crypto';
 import { describe, it } from 'node:test';
+import { resetMemoryCrmDb } from './crm-db.ts';
+import { emptySnapshot, readSnapshot, resetSnapshotCache, writeSnapshot } from './crm-sync-store.ts';
 import { createSignedPreviewToken } from './preview-token.ts';
 import {
   DEFAULT_BATCH_CAP,
   executeApprovedManualSend,
+  resendIdempotencyKey,
   sendViaResend,
   wasContactedWithinWindow,
 } from './resend-send.ts';
@@ -96,7 +100,15 @@ describe('resend-send gates', () => {
       MANUAL_SEND_LIVE_ENABLED: 'true',
       RESEND_API_KEY: 're_test_key',
       MANUAL_SEND_BATCH_CAP: '10',
+      CRM_DATABASE_URL: 'memory://crm-live',
+      CRM_DATABASE_MEMORY: '1',
     };
+    resetMemoryCrmDb(liveEnv);
+    resetSnapshotCache();
+    await writeSnapshot(
+      { ...emptySnapshot(), last_synced_at: new Date().toISOString(), leads: [leads[0]!] },
+      liveEnv,
+    );
     const subject = 'Idea for {{business_name}}';
     const token = createSignedPreviewToken([3], subject, body, liveEnv);
     const calls: string[] = [];
@@ -159,7 +171,15 @@ describe('resend-send gates', () => {
       MANUAL_SEND_LIVE_ENABLED: 'true',
       RESEND_API_KEY: 're_test',
       MANUAL_SEND_BATCH_CAP: '1',
+      CRM_DATABASE_URL: 'memory://crm-cap',
+      CRM_DATABASE_MEMORY: '1',
     };
+    resetMemoryCrmDb(liveEnv);
+    resetSnapshotCache();
+    await writeSnapshot(
+      { ...emptySnapshot(), last_synced_at: new Date().toISOString(), leads },
+      liveEnv,
+    );
     const subject = 'Idea for {{business_name}}';
     const token = createSignedPreviewToken([3, 21], subject, body, liveEnv);
     let fetchCalls = 0;
@@ -197,5 +217,156 @@ describe('resend-send gates', () => {
     );
     assert.equal(result.ok, true);
     assert.equal(result.id, 'abc');
+  });
+
+  it('refuses live send when durable DB required but not configured', async () => {
+    const liveEnv = {
+      ...sessionEnv,
+      EMAIL_DRY_RUN: 'false',
+      MANUAL_SEND_LIVE_ENABLED: 'true',
+      RESEND_API_KEY: 're_test_key',
+      VERCEL: '1',
+    };
+    const subject = 'Idea for {{business_name}}';
+    const token = createSignedPreviewToken([3], subject, body, liveEnv);
+    let fetchCalls = 0;
+    const result = await executeApprovedManualSend(
+      {
+        campaign_name: 'Blocked',
+        subject,
+        body,
+        recipient_ids: [3],
+        preview_token: token,
+        confirmed: true,
+        confirm_live: true,
+      },
+      leads,
+      liveEnv,
+      {
+        serverLeads: leads,
+        serverHistory: [],
+        fetchImpl: (async () => {
+          fetchCalls += 1;
+          return new Response(JSON.stringify({ id: 'should_not_send' }), { status: 200 });
+        }) as typeof fetch,
+      },
+    );
+    assert.equal(result.ok, false);
+    assert.equal(result.live, false);
+    assert.equal(fetchCalls, 0);
+    assert.match(result.message, /durable suppressions unavailable/i);
+  });
+
+  it('sends Idempotency-Key = sha256(preview_token + email)', async () => {
+    const liveEnv = {
+      ...sessionEnv,
+      EMAIL_DRY_RUN: 'false',
+      MANUAL_SEND_LIVE_ENABLED: 'true',
+      RESEND_API_KEY: 're_test_key',
+      CRM_DATABASE_URL: 'memory://crm',
+      CRM_DATABASE_MEMORY: '1',
+    };
+    resetMemoryCrmDb(liveEnv);
+    resetSnapshotCache();
+    await writeSnapshot(
+      { ...emptySnapshot(), last_synced_at: new Date().toISOString(), leads: [leads[0]!] },
+      liveEnv,
+    );
+    const subject = 'Idea for {{business_name}}';
+    const token = createSignedPreviewToken([3], subject, body, liveEnv);
+    const expectedKey = createHash('sha256')
+      .update(`${token}${leads[0]!.email!.toLowerCase()}`)
+      .digest('hex');
+    assert.equal(resendIdempotencyKey(token, leads[0]!.email!), expectedKey);
+    let seenKey = '';
+    const result = await executeApprovedManualSend(
+      {
+        campaign_name: 'Idem',
+        subject,
+        body,
+        recipient_ids: [3],
+        preview_token: token,
+        confirmed: true,
+        confirm_live: true,
+      },
+      [],
+      liveEnv,
+      {
+        serverLeads: leads,
+        serverHistory: [],
+        fetchImpl: (async (_url, init) => {
+          const headers = init?.headers as Record<string, string>;
+          seenKey = headers['Idempotency-Key'] || '';
+          return new Response(JSON.stringify({ id: 'msg_idem_1' }), { status: 200 });
+        }) as typeof fetch,
+      },
+    );
+    assert.equal(result.ok, true);
+    assert.equal(seenKey, expectedKey);
+  });
+
+  it('records accepted sends; second identical batch sends 0 (30d dedupe)', async () => {
+    const liveEnv = {
+      ...sessionEnv,
+      EMAIL_DRY_RUN: 'false',
+      MANUAL_SEND_LIVE_ENABLED: 'true',
+      RESEND_API_KEY: 're_test_key',
+      CRM_DATABASE_URL: 'memory://crm-dedupe',
+      CRM_DATABASE_MEMORY: '1',
+    };
+    resetMemoryCrmDb(liveEnv);
+    resetSnapshotCache();
+    await writeSnapshot(
+      { ...emptySnapshot(), last_synced_at: new Date().toISOString(), leads: [leads[0]!] },
+      liveEnv,
+    );
+    const subject = 'Idea for {{business_name}}';
+    const token = createSignedPreviewToken([3], subject, body, liveEnv);
+    let fetchCalls = 0;
+    const fetchImpl = (async () => {
+      fetchCalls += 1;
+      return new Response(JSON.stringify({ id: `msg_dedupe_${fetchCalls}` }), { status: 200 });
+    }) as typeof fetch;
+
+    const first = await executeApprovedManualSend(
+      {
+        campaign_name: 'DedupeBatch',
+        subject,
+        body,
+        recipient_ids: [3],
+        preview_token: token,
+        confirmed: true,
+        confirm_live: true,
+      },
+      [],
+      liveEnv,
+      { serverLeads: leads, fetchImpl },
+    );
+    assert.equal(first.ok, true);
+    assert.equal(first.recipient_count, 1);
+    assert.equal(fetchCalls, 1);
+
+    const snap = await readSnapshot(liveEnv);
+    assert.equal(snap?.email_history.some((h) => h.provider_message_id === 'msg_dedupe_1' && h.accepted === 'YES' && h.dry_run === false), true);
+    assert.equal(snap?.leads.find((l) => l.id === 3)?.provider_message_ids?.includes('msg_dedupe_1'), true);
+    assert.ok(snap?.leads.find((l) => l.id === 3)?.last_contacted_at);
+
+    const second = await executeApprovedManualSend(
+      {
+        campaign_name: 'DedupeBatch',
+        subject,
+        body,
+        recipient_ids: [3],
+        preview_token: token,
+        confirmed: true,
+        confirm_live: true,
+      },
+      [],
+      liveEnv,
+      { serverLeads: leads, fetchImpl },
+    );
+    assert.equal(second.recipient_count, 0);
+    assert.equal(fetchCalls, 1);
+    assert.equal(second.excluded.some((e) => e.reason === 'contacted_within_30d'), true);
   });
 });

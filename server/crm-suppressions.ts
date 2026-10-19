@@ -125,8 +125,10 @@ export async function recordDurableSuppression(
   }
 
   if (requiresDurableDb(env)) {
-    // Misconfigured serverless — still return the record but cannot persist.
-    return { created: true, record };
+    // Fail closed — never pretend an opt-out persisted when Neon is missing.
+    throw new Error(
+      'CRM_DATABASE_URL is required for durable suppressions on serverless. Opt-out was not recorded.',
+    );
   }
 
   return recordFileSuppression(normalized, leadId, reason);

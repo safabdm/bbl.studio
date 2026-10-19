@@ -3,7 +3,7 @@
  * Never auto-sends. Requires maySendLive + confirm_live + server-side leads.
  * Full tests must mock global fetch — never hit the network in CI.
  */
-import { randomBytes } from 'node:crypto';
+import { createHash, randomBytes } from 'node:crypto';
 import type { CrmLead, CrmEmailHistoryItem, ManualSendRequest, ManualSendResult } from './crm-types.js';
 import {
   filterSendableRecipients,
@@ -30,7 +30,19 @@ import {
 } from './preview-token.js';
 import { isEmailDurablySuppressed, type SuppressionEnv } from './crm-suppressions.js';
 import { fetchEmailHistory, fetchLeads } from './crm-lead-client.js';
-import type { CrmDbEnv } from './crm-db.js';
+import {
+  isDurableDbConfigured,
+  requiresDurableDb,
+  type CrmDbEnv,
+} from './crm-db.js';
+import {
+  computeOverviewFromLeads,
+  emptySnapshot,
+  readSnapshot,
+  upsertEmailHistory,
+  writeSnapshot,
+  type CrmSyncStoreEnv,
+} from './crm-sync-store.js';
 
 export const DEFAULT_BATCH_CAP = 10;
 export const DEDUPE_WINDOW_MS = 30 * 24 * 60 * 60 * 1000;
@@ -39,7 +51,8 @@ export type ResendSendEnv = SafetyEnv &
   PolicyEnv &
   PreviewTokenEnv &
   SuppressionEnv &
-  CrmDbEnv & {
+  CrmDbEnv &
+  CrmSyncStoreEnv & {
     RESEND_API_KEY?: string;
     RESEND_FROM?: string;
     MANUAL_SEND_BATCH_CAP?: string;
@@ -55,6 +68,17 @@ function batchCap(env: ResendSendEnv): number {
 
 function fromAddress(env: ResendSendEnv): string {
   return String(env.RESEND_FROM || 'BBL Studio <hello@bbl.studio>').trim();
+}
+
+function nowIso(ms = Date.now()): string {
+  return new Date(ms).toISOString().replace(/\.\d{3}Z$/, 'Z');
+}
+
+/** Resend Idempotency-Key = sha256(preview_token + email). */
+export function resendIdempotencyKey(previewToken: string, email: string): string {
+  return createHash('sha256')
+    .update(`${previewToken}${String(email || '').trim().toLowerCase()}`)
+    .digest('hex');
 }
 
 export function wasContactedWithinWindow(
@@ -81,6 +105,71 @@ export function wasContactedWithinWindow(
     if (now - sentAt <= windowMs) return true;
   }
   return false;
+}
+
+export type AcceptedSendRecord = {
+  lead_id: number | string;
+  email: string;
+  subject: string;
+  campaign_name: string;
+  provider_message_id: string;
+  sent_at: string;
+};
+
+/**
+ * Persist accepted Resend sends in ONE snapshot write:
+ * email_history rows + lead last_contacted_at / provider_message_ids.
+ */
+export async function recordAcceptedSendsBatch(
+  sends: AcceptedSendRecord[],
+  env: ResendSendEnv = process.env,
+): Promise<void> {
+  if (!sends.length) return;
+  const snap = (await readSnapshot(env)) || emptySnapshot();
+  let history = [...(snap.email_history || [])];
+  let leads = [...(snap.leads || [])];
+
+  for (const send of sends) {
+    history = upsertEmailHistory(history, {
+      id: `resend:${send.provider_message_id}`,
+      lead_id: send.lead_id,
+      email: send.email,
+      subject: send.subject,
+      campaign_name: send.campaign_name,
+      provider_message_id: send.provider_message_id,
+      status: 'SENT',
+      dry_run: false,
+      accepted: 'YES',
+      delivered: 'UNKNOWN',
+      bounced: 'UNKNOWN',
+      replied: 'UNKNOWN',
+      sent_at: send.sent_at,
+    });
+
+    leads = leads.map((lead) => {
+      if (String(lead.id) !== String(send.lead_id)) return lead;
+      const ids = new Set(lead.provider_message_ids || []);
+      ids.add(send.provider_message_id);
+      return {
+        ...lead,
+        last_contacted_at: send.sent_at,
+        last_activity_at: send.sent_at,
+        email_accepted: 'YES' as const,
+        email_outreach_status: 'CONTACTED',
+        provider_message_ids: [...ids],
+      };
+    });
+  }
+
+  await writeSnapshot(
+    {
+      ...snap,
+      leads,
+      email_history: history,
+      overview: computeOverviewFromLeads(leads, history),
+    },
+    env,
+  );
 }
 
 export type LiveSendOpts = {
@@ -110,6 +199,8 @@ export async function sendViaResend(
     subject: string;
     text: string;
     headers?: Record<string, string>;
+    /** When set, sent as Resend request Idempotency-Key. */
+    idempotencyKey?: string;
   },
   env: ResendSendEnv,
   fetchImpl: typeof fetch = fetch,
@@ -118,12 +209,16 @@ export async function sendViaResend(
   if (!apiKey) {
     return { ok: false, message: 'RESEND_API_KEY is not configured.' };
   }
+  const requestHeaders: Record<string, string> = {
+    Authorization: `Bearer ${apiKey}`,
+    'Content-Type': 'application/json',
+  };
+  if (payload.idempotencyKey) {
+    requestHeaders['Idempotency-Key'] = payload.idempotencyKey;
+  }
   const response = await fetchImpl('https://api.resend.com/emails', {
     method: 'POST',
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      'Content-Type': 'application/json',
-    },
+    headers: requestHeaders,
     body: JSON.stringify({
       from: fromAddress(env),
       to: [payload.to],
@@ -271,6 +366,21 @@ export async function executeApprovedManualSend(
     };
   }
 
+  if (requiresDurableDb(env) && !isDurableDbConfigured(env)) {
+    return {
+      ok: false,
+      dry_run: false,
+      live: false,
+      campaign_id: campaignId,
+      recipient_count: 0,
+      excluded_count: excluded.length,
+      excluded,
+      intended,
+      message: 'durable suppressions unavailable',
+      policy_issues: policyIssues,
+    };
+  }
+
   if (!String(env.RESEND_API_KEY || '').trim()) {
     return {
       ok: false,
@@ -288,25 +398,46 @@ export async function executeApprovedManualSend(
 
   const fetchImpl = opts?.fetchImpl || fetch;
   const sentIds: string[] = [];
+  const acceptedSends: AcceptedSendRecord[] = [];
   const failures: string[] = [];
+  const sentAt = nowIso(now);
 
   for (const lead of batch) {
-    const unsub = buildUnsubscribeUrl(String(lead.email), lead.id, env);
+    const email = String(lead.email);
+    const unsub = buildUnsubscribeUrl(email, lead.id, env);
     const subject = personalizeLead(request.subject, lead, env);
     let body = personalizeLead(request.body, lead, env);
     body = appendComplianceIfNeeded(body, lead, env);
     const headers = listUnsubscribeHeaders(unsub);
     const result = await sendViaResend(
-      { to: String(lead.email), subject, text: body, headers },
+      {
+        to: email,
+        subject,
+        text: body,
+        headers,
+        idempotencyKey: resendIdempotencyKey(request.preview_token, email),
+      },
       env,
       fetchImpl,
     );
     if (result.ok && result.id) {
       sentIds.push(result.id);
+      acceptedSends.push({
+        lead_id: lead.id,
+        email,
+        subject,
+        campaign_name: request.campaign_name,
+        provider_message_id: result.id,
+        sent_at: sentAt,
+      });
     } else {
       failures.push(`${lead.email}: ${result.message}`);
       excluded.push({ id: lead.id, reason: 'send_failed', email: lead.email });
     }
+  }
+
+  if (acceptedSends.length) {
+    await recordAcceptedSendsBatch(acceptedSends, env);
   }
 
   const ok = sentIds.length > 0;

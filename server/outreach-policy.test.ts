@@ -7,6 +7,7 @@ import {
   evaluateCopyPolicy,
   filterObservationRequired,
   listUnsubscribeHeaders,
+  normalizeWebsiteObservation,
   personalizeLead,
   policyBlocksSend,
 } from './outreach-policy.ts';
@@ -81,5 +82,31 @@ describe('unsubscribe + List-Unsubscribe', () => {
     );
     assert.match(text, /missing mobile viewport/);
     assert.match(text, /9 Owner Ave/);
+  });
+
+  it('normalizes website_observation so trailing period never doubles', () => {
+    assert.equal(normalizeWebsiteObservation('  no clear online booking path.  '), 'no clear online booking path');
+    assert.equal(normalizeWebsiteObservation('outdated homepage banner...'), 'outdated homepage banner');
+    assert.equal(normalizeWebsiteObservation('ends with double..'), 'ends with double');
+    assert.equal(normalizeWebsiteObservation('..'), '');
+    const text = personalizeLead(
+      'I noticed {{website_observation}}.',
+      {
+        id: 1,
+        business_name: 'Spa',
+        email: 'a@b.com',
+        website_observation: 'missing mobile viewport.',
+      },
+      { BUSINESS_POSTAL_ADDRESS: '9 Owner Ave', UNSUBSCRIBE_SECRET: 'x', APP_ORIGIN: 'https://www.bbl.studio' },
+    );
+    assert.match(text, /I noticed missing mobile viewport\./);
+    assert.doesNotMatch(text, /\.\./);
+    const doubledInput = personalizeLead(
+      'noticed {{website_observation}}.',
+      { id: 2, business_name: 'X', email: 'x@y.com', website_observation: 'no booking CTA..' },
+      { BUSINESS_POSTAL_ADDRESS: '9 Owner Ave', UNSUBSCRIBE_SECRET: 'x', APP_ORIGIN: 'https://www.bbl.studio' },
+    );
+    assert.equal(doubledInput.includes('noticed no booking CTA.'), true);
+    assert.equal(doubledInput.includes('..'), false);
   });
 });
