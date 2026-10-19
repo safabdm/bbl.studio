@@ -12,7 +12,8 @@ import { writeTextPdf } from './pdf';
 import { seedIfNeeded } from './seed';
 import { stripeClient, stripeMode } from './stripe';
 import { activeLinks, clientFacingPayload, registerPricingRoutes } from './admin-pricing';
-import { authorizeSuppressionList, processUnsubscribe, readSuppressions } from './unsubscribe';
+import { authorizeSuppressionList, processUnsubscribeDurable } from './unsubscribe';
+import { listDurableSuppressions } from './crm-suppressions';
 import {
   handleCrmBookings,
   handleCrmCampaigns,
@@ -27,6 +28,8 @@ import {
   handleCrmSettings,
   handleCrmSyncIngest,
   handleCrmSyncStatus,
+  handleFreelanceImport,
+  handleFreelanceScore,
 } from './crm-api';
 import {
   handleDiscoveryCron,
@@ -203,8 +206,8 @@ app.use('/api/*', async (c, next) => {
 
 app.get('/api/health', (c) => c.json({ ok: true, stripeMode: stripeMode() }));
 
-app.get('/api/unsubscribe', (c) => {
-  const result = processUnsubscribe({
+app.get('/api/unsubscribe', async (c) => {
+  const result = await processUnsubscribeDurable({
     email: c.req.query('email'),
     lead_id: c.req.query('lead_id'),
     token: c.req.query('token'),
@@ -218,7 +221,7 @@ app.get('/api/unsubscribe', (c) => {
 
 app.post('/api/unsubscribe', async (c) => {
   const body = await c.req.json<{ email?: string; lead_id?: string | number; token?: string }>().catch(() => ({}));
-  const result = processUnsubscribe({
+  const result = await processUnsubscribeDurable({
     email: body.email ?? c.req.query('email'),
     lead_id: body.lead_id ?? c.req.query('lead_id'),
     token: body.token ?? c.req.query('token'),
@@ -230,11 +233,11 @@ app.post('/api/unsubscribe', async (c) => {
   return c.json(result);
 });
 
-app.get('/api/unsubscribe/suppressions', (c) => {
+app.get('/api/unsubscribe/suppressions', async (c) => {
   if (!authorizeSuppressionList(c.req.header('authorization') || c.req.header('x-unsubscribe-secret'))) {
     return c.json({ ok: false, message: 'Unauthorized.' }, 401);
   }
-  return c.json({ ok: true, suppressions: readSuppressions() });
+  return c.json({ ok: true, suppressions: await listDurableSuppressions() });
 });
 
 app.post('/api/portal/open', async (c) => {
@@ -877,6 +880,18 @@ app.post('/api/admin/crm/send-test', async (c) => {
 app.post('/api/admin/crm/send', async (c) => {
   const body = await c.req.json().catch(() => ({}));
   const result = await handleCrmSendCampaign(Boolean(requireAdmin(c)), body);
+  return c.json(result.body, result.status);
+});
+
+app.post('/api/admin/crm/freelance/import', async (c) => {
+  const body = await c.req.json().catch(() => ({}));
+  const result = await handleFreelanceImport(Boolean(requireAdmin(c)), body);
+  return c.json(result.body, result.status);
+});
+
+app.post('/api/admin/crm/freelance/score', async (c) => {
+  const body = await c.req.json().catch(() => ({}));
+  const result = handleFreelanceScore(Boolean(requireAdmin(c)), body);
   return c.json(result.body, result.status);
 });
 

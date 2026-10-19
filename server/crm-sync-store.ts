@@ -336,6 +336,14 @@ export function normalizeLead(raw: Partial<CrmLead> & Record<string, unknown>): 
     last_contacted_at: (raw.last_contacted_at as string | null | undefined) ?? null,
     last_activity_at: (raw.last_activity_at as string | null | undefined) ?? null,
     notes: (raw.notes as string | null | undefined) ?? null,
+    website_observation:
+      (raw.website_observation as string | null | undefined) ||
+      (raw.outreach_observation as string | null | undefined) ||
+      null,
+    outreach_observation:
+      (raw.outreach_observation as string | null | undefined) ||
+      (raw.website_observation as string | null | undefined) ||
+      null,
     suppressed: Boolean(raw.suppressed),
     unsubscribed: Boolean(raw.unsubscribed),
     email_accepted: asTri(raw.email_accepted, 'UNKNOWN'),

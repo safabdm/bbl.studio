@@ -1,14 +1,14 @@
 import { createHmac, timingSafeEqual } from 'node:crypto';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
-import { fileURLToPath } from 'node:url';
-import { loadEnv } from './env';
-
-loadEnv();
+import { resolveProjectRoot } from './project-root.js';
 
 /**
  * Signed unsubscribe tokens — must match bbl_studio_agent email_outreach:
  *   HMAC-SHA256(secret, `${lead_id}:${email.lower}`) hex digest, first 32 chars.
+ *
+ * Do not import server/env here — loadEnv uses import.meta.url and breaks the
+ * Vercel CJS catch-all init path when CRM campaigns pull suppressions.
  */
 
 export type UnsubscribeParams = {
@@ -28,8 +28,6 @@ export type UnsubscribeResult =
   | { ok: true; already: boolean; email: string; lead_id: number }
   | { ok: false; error: 'missing_params' | 'invalid_lead_id' | 'invalid_token' | 'misconfigured'; message: string };
 
-const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
-
 export function unsubscribeSecret(): string {
   return (process.env.UNSUBSCRIBE_SECRET || '').trim();
 }
@@ -41,6 +39,7 @@ export function unsubscribeStorePath(): string {
   if (process.env.VERCEL) {
     return '/tmp/bbls-email-suppressions.json';
   }
+  const root = resolveProjectRoot(import.meta.url);
   return resolve(root, 'data/email-suppressions.json');
 }
 
@@ -155,6 +154,40 @@ export function processUnsubscribe(input: {
     return { ok: false, error: 'invalid_token', message: 'This unsubscribe link is invalid or expired.' };
   }
   const { created, record } = recordSuppression(email, leadId, 'unsubscribe', storePath);
+  return { ok: true, already: !created, email: record.email, lead_id: record.lead_id };
+}
+
+/** Prefer Neon durable suppressions; fall back to local JSON store. */
+export async function processUnsubscribeDurable(
+  input: {
+    email?: string | null;
+    lead_id?: string | number | null;
+    token?: string | null;
+  },
+  env: NodeJS.ProcessEnv = process.env,
+): Promise<UnsubscribeResult> {
+  if (!unsubscribeSecret()) {
+    return { ok: false, error: 'misconfigured', message: 'Unsubscribe is not configured.' };
+  }
+  const { isDurableDbConfigured, requiresDurableDb } = await import('./crm-db.js');
+  if (requiresDurableDb(env) && !isDurableDbConfigured(env)) {
+    return {
+      ok: false,
+      error: 'misconfigured',
+      message:
+        'Durable suppressions are misconfigured (CRM_DATABASE_URL required on serverless). Opt-out was not recorded.',
+    };
+  }
+  const parsed = parseUnsubscribeInput(input);
+  if (!parsed.ok) {
+    return { ok: false, error: parsed.error, message: parsed.message };
+  }
+  const { email, leadId, token } = parsed.params;
+  if (!verifyUnsubscribeToken(email, leadId, token)) {
+    return { ok: false, error: 'invalid_token', message: 'This unsubscribe link is invalid or expired.' };
+  }
+  const { recordDurableSuppression } = await import('./crm-suppressions.js');
+  const { created, record } = await recordDurableSuppression(email, leadId, 'unsubscribe', env);
   return { ok: true, already: !created, email: record.email, lead_id: record.lead_id };
 }
 

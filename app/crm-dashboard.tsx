@@ -4,6 +4,7 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type ReactNode,
 } from 'react';
@@ -67,6 +68,49 @@ type LeadsResponse = {
 };
 
 const SELECTION_KEY = 'bbl_crm_selected_ids';
+
+/** Escape to close + simple focus trap for modal/drawer dialogs. */
+function useDialogA11y(open: boolean, onClose: () => void, containerRef: React.RefObject<HTMLElement | null>) {
+  useEffect(() => {
+    if (!open) return;
+    const node = containerRef.current;
+    const previouslyFocused = document.activeElement as HTMLElement | null;
+    const focusables = () => {
+      if (!node) return [] as HTMLElement[];
+      return Array.from(
+        node.querySelectorAll<HTMLElement>(
+          'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])',
+        ),
+      ).filter((el) => !el.hasAttribute('disabled') && el.tabIndex !== -1);
+    };
+    const list = focusables();
+    list[0]?.focus();
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        onClose();
+        return;
+      }
+      if (e.key !== 'Tab' || !node) return;
+      const items = focusables();
+      if (!items.length) return;
+      const first = items[0]!;
+      const last = items[items.length - 1]!;
+      if (e.shiftKey && document.activeElement === first) {
+        e.preventDefault();
+        last.focus();
+      } else if (!e.shiftKey && document.activeElement === last) {
+        e.preventDefault();
+        first.focus();
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => {
+      window.removeEventListener('keydown', onKey);
+      previouslyFocused?.focus?.();
+    };
+  }, [open, onClose, containerRef]);
+}
 
 function asText(value: unknown, fallback = '') {
   if (value == null) return fallback;
@@ -294,6 +338,7 @@ const NAV: Array<{ group: string; items: Array<{ to: string; label: string; end?
       { to: '/admin/campaigns', label: 'Campaigns' },
       { to: '/admin/analytics', label: 'Analytics' },
       { to: '/admin/automation', label: 'Automation' },
+      { to: '/admin/freelance', label: 'Freelance' },
     ],
   },
   {
@@ -541,27 +586,31 @@ const VIEWS: Array<{ id: string; label: string; test: (l: CrmLead) => boolean }>
 ];
 
 function LeadDrawer({ lead, onClose, onCompose }: { lead: CrmLead; onClose: () => void; onCompose: () => void }) {
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose();
-    };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [onClose]);
+  const dialogRef = useRef<HTMLElement | null>(null);
+  useDialogA11y(true, onClose, dialogRef);
   const contactable = isContactable(lead);
+  const observation = lead.website_observation || lead.outreach_observation || '';
   const rows: Array<[string, ReactNode]> = [
     ['Contact', lead.contact_name || '—'],
     ['Email', contactable ? lead.email : <span className="crm-muted">No verified email</span>],
     ['Phone', lead.phone || '—'],
     ['Location', lead.location || '—'],
     ['Category', lead.category || '—'],
+    ['Website observation', observation || <span className="crm-muted">Missing — excluded from approved outreach</span>],
     ['Outreach status', lead.email_outreach_status || '—'],
     ['Last contacted', fmtDate(lead.last_contacted_at, true)],
     ['Last activity', fmtDate(lead.last_activity_at, true)],
   ];
   return (
     <div className="crm-drawer-backdrop" role="presentation" onClick={onClose}>
-      <aside className="crm-drawer" role="dialog" aria-modal="true" aria-labelledby="lead-title" onClick={(e) => e.stopPropagation()}>
+      <aside
+        ref={dialogRef as React.RefObject<HTMLAsideElement>}
+        className="crm-drawer"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="lead-title"
+        onClick={(e) => e.stopPropagation()}
+      >
         <div className="crm-drawer-head">
           <div>
             <h2 id="lead-title">{lead.business_name}</h2>
@@ -789,7 +838,9 @@ function LeadsPage() {
 /* Campaigns                                                           */
 /* ------------------------------------------------------------------ */
 
-const PLACEHOLDERS = ['contact_name', 'business_name', 'location', 'category'];
+const PLACEHOLDERS = ['contact_name', 'business_name', 'website_observation', 'location', 'category', 'signed_unsubscribe_url', 'BUSINESS_POSTAL_ADDRESS'];
+
+type PolicyIssue = { code: string; message: string; severity: 'block' | 'warn' };
 
 function Stepper({ step }: { step: number }) {
   const steps = ['Recipients', 'Compose', 'Preview', 'Confirm'];
@@ -818,9 +869,14 @@ function CampaignsPage() {
   const [previews, setPreviews] = useState<PersonalizedPreview[]>([]);
   const [previewIndex, setPreviewIndex] = useState(0);
   const [showConfirm, setShowConfirm] = useState(false);
+  const [sendForReal, setSendForReal] = useState(false);
+  const [policyIssues, setPolicyIssues] = useState<PolicyIssue[]>([]);
+  const [exclusions, setExclusions] = useState<Array<{ id: number | string; reason: string }>>([]);
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
+  const confirmRef = useRef<HTMLDivElement | null>(null);
+  useDialogA11y(showConfirm, () => setShowConfirm(false), confirmRef);
 
   useEffect(() => {
     void Promise.all([
@@ -874,13 +930,21 @@ function CampaignsPage() {
     setError('');
     setMessage('');
     try {
-      const data = await api<{ preview_token: string; previews: PersonalizedPreview[] }>('/api/admin/crm/preview', {
+      const data = await api<{
+        preview_token: string;
+        previews: PersonalizedPreview[];
+        policy_issues?: PolicyIssue[];
+        exclusions?: Array<{ id: number | string; reason: string }>;
+      }>('/api/admin/crm/preview', {
         method: 'POST',
-        body: JSON.stringify({ recipient_ids: selected, subject, body, leads }),
+        body: JSON.stringify({ recipient_ids: selected, subject, body }),
       });
       setPreviewToken(data.preview_token);
       setPreviews(data.previews || []);
+      setPolicyIssues(data.policy_issues || []);
+      setExclusions(data.exclusions || []);
       setPreviewIndex(0);
+      setSendForReal(false);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Preview failed.');
     } finally {
@@ -924,7 +988,13 @@ function CampaignsPage() {
     setBusy(true);
     setError('');
     try {
-      const data = await api<{ message: string; dry_run?: boolean; recipient_count?: number }>('/api/admin/crm/send', {
+      const data = await api<{
+        message: string;
+        dry_run?: boolean;
+        recipient_count?: number;
+        excluded?: Array<{ id: number | string; reason: string }>;
+        policy_issues?: PolicyIssue[];
+      }>('/api/admin/crm/send', {
         method: 'POST',
         body: JSON.stringify({
           campaign_name: name,
@@ -933,12 +1003,14 @@ function CampaignsPage() {
           recipient_ids: selected,
           preview_token: previewToken,
           confirmed: true,
-          confirm_live: false,
-          leads,
+          confirm_live: sendForReal,
         }),
       });
       setShowConfirm(false);
       setMessage(data.message || 'Campaign processed.');
+      if (data.excluded) setExclusions(data.excluded);
+      if (data.policy_issues) setPolicyIssues(data.policy_issues);
+      setSendForReal(false);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Send failed.');
     } finally {
@@ -948,7 +1020,9 @@ function CampaignsPage() {
 
   const step = !selected.length ? 0 : !previewToken ? 1 : showConfirm ? 3 : 2;
   const sample = previews[Math.min(previewIndex, previews.length - 1)];
-  const live = Boolean(overview?.safety?.MANUAL_SEND_LIVE_ENABLED) && overview?.safety?.EMAIL_DRY_RUN === false;
+  const liveCapable = Boolean(overview?.safety?.MANUAL_SEND_LIVE_ENABLED) && overview?.safety?.EMAIL_DRY_RUN === false;
+  const policyBlocked = policyIssues.some((i) => i.severity === 'block');
+  const includedPreviews = previews.filter((p) => !p.excluded);
 
   return (
     <>
@@ -962,14 +1036,41 @@ function CampaignsPage() {
           </>
         }
       />
-      <div className={`crm-banner ${live ? 'warn' : ''}`} role="note">
-        {live
-          ? <><strong>Live sending is enabled.</strong> Confirmed campaigns can reach recipients.</>
-          : <><strong>Dry-run mode.</strong> Nothing is sent while live sending is off. Runs are logged only.</>}
+      <div className={`crm-banner ${liveCapable ? 'warn' : ''}`} role="note">
+        {liveCapable
+          ? <><strong>Live sending flags are on.</strong> Check “Send for real” only after owner approval. Prices stay out of cold email.</>
+          : <><strong>Dry-run mode.</strong> Live outreach is off. Nothing is sent unless flags + “Send for real” are set.</>}
       </div>
       <Stepper step={step} />
       {message ? <p className="crm-ok" role="status">{message}</p> : null}
       {error ? <p className="crm-error" role="alert">{error}</p> : null}
+      {policyIssues.length ? (
+        <div className={`crm-banner ${policyBlocked ? 'warn' : ''}`} role="status">
+          <strong>Policy {policyBlocked ? 'blocks' : 'notes'}</strong>
+          <ul className="crm-confirm-list">
+            {policyIssues.map((issue) => (
+              <li key={issue.code + issue.message}>
+                <span>{issue.severity === 'block' ? 'Block' : 'Warn'}</span>
+                <span className="crm-muted">{issue.message}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
+      {exclusions.length ? (
+        <div className="crm-banner" role="status">
+          <strong>{exclusions.length} exclusion{exclusions.length === 1 ? '' : 's'}</strong>
+          <ul className="crm-confirm-list">
+            {exclusions.slice(0, 12).map((row) => (
+              <li key={String(row.id)}>
+                <span>Lead {String(row.id)}</span>
+                <span className="crm-muted">{row.reason}</span>
+              </li>
+            ))}
+            {exclusions.length > 12 ? <li className="crm-muted">+{exclusions.length - 12} more</li> : null}
+          </ul>
+        </div>
+      ) : null}
 
       <div className="crm-grid-2 crm-compose">
         <section className="crm-panel">
@@ -1051,8 +1152,13 @@ function CampaignsPage() {
                 <div className="crm-mail-body">{sample.body}</div>
               </div>
               <div className="crm-actions">
-                <button className="crm-btn" type="button" disabled={busy} onClick={() => setShowConfirm(true)}>
-                  Review &amp; send to {previews.length}
+                <button
+                  className="crm-btn"
+                  type="button"
+                  disabled={busy || policyBlocked || !includedPreviews.length}
+                  onClick={() => setShowConfirm(true)}
+                >
+                  Review &amp; send to {includedPreviews.length || previews.length}
                 </button>
               </div>
             </>
@@ -1062,24 +1168,43 @@ function CampaignsPage() {
 
       {showConfirm ? (
         <div className="crm-modal-backdrop" role="presentation" onClick={() => setShowConfirm(false)}>
-          <div className="crm-modal" role="dialog" aria-modal="true" aria-labelledby="confirm-title" onClick={(e) => e.stopPropagation()}>
+          <div
+            ref={confirmRef}
+            className="crm-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="confirm-title"
+            onClick={(e) => e.stopPropagation()}
+          >
             <h3 id="confirm-title">Send “{name}”?</h3>
             <dl className="crm-dl compact">
               <div><dt>Subject</dt><dd>{subject}</dd></div>
-              <div><dt>Recipients</dt><dd>{previews.length}</dd></div>
-              <div><dt>Mode</dt><dd>{live ? 'Live' : 'Dry-run (nothing is sent)'}</dd></div>
+              <div><dt>Recipients</dt><dd>{includedPreviews.length}</dd></div>
+              <div><dt>Mode</dt><dd>{sendForReal && liveCapable ? 'Live (Send for real)' : 'Dry-run (nothing is sent)'}</dd></div>
             </dl>
             <ul className="crm-confirm-list">
-              {previews.slice(0, 12).map((item) => (
+              {includedPreviews.slice(0, 12).map((item) => (
                 <li key={String(item.lead_id)}><span>{item.business_name}</span><span className="crm-muted">{item.email}</span></li>
               ))}
-              {previews.length > 12 ? <li className="crm-muted">+{previews.length - 12} more</li> : null}
+              {includedPreviews.length > 12 ? <li className="crm-muted">+{includedPreviews.length - 12} more</li> : null}
             </ul>
-            <p className="crm-muted">Unsubscribed, suppressed and bounced addresses are excluded automatically.</p>
+            <p className="crm-muted">Missing website observations, unsubscribed, suppressed, bounced, and 30-day contacts are excluded. No prices in cold email.</p>
+            <label className="crm-field" style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+              <input
+                type="checkbox"
+                checked={sendForReal}
+                disabled={!liveCapable}
+                onChange={(e) => setSendForReal(e.target.checked)}
+              />
+              <span>
+                Send for real
+                {!liveCapable ? ' (disabled while live flags are off)' : ' — only after owner approval'}
+              </span>
+            </label>
             <div className="crm-actions end">
               <button className="crm-btn-ghost" type="button" onClick={() => setShowConfirm(false)}>Cancel</button>
-              <button className="crm-btn" type="button" disabled={busy} onClick={() => void onConfirmSend()}>
-                {live ? 'Send campaign' : 'Run dry-run'}
+              <button className="crm-btn" type="button" disabled={busy || policyBlocked} onClick={() => void onConfirmSend()}>
+                {sendForReal && liveCapable ? 'Send campaign' : 'Run dry-run'}
               </button>
             </div>
           </div>
@@ -1551,6 +1676,135 @@ function AutomationPage() {
 }
 
 /* ------------------------------------------------------------------ */
+/* Freelance (paste → score → proposal draft; no scrape / auto-submit) */
+/* ------------------------------------------------------------------ */
+
+type ScoredFreelance = {
+  id: string;
+  title: string;
+  score: number;
+  tier: string;
+  reasons: string[];
+  proposal_draft: string;
+  auto_submit: false;
+  status: string;
+};
+
+function FreelancePage() {
+  const [paste, setPaste] = useState('');
+  const [jobs, setJobs] = useState<ScoredFreelance[]>([]);
+  const [error, setError] = useState('');
+  const [message, setMessage] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [selectedDraft, setSelectedDraft] = useState<ScoredFreelance | null>(null);
+  const draftRef = useRef<HTMLDivElement | null>(null);
+  useDialogA11y(Boolean(selectedDraft), () => setSelectedDraft(null), draftRef);
+
+  async function onImport() {
+    setBusy(true);
+    setError('');
+    setMessage('');
+    try {
+      const data = await api<{ jobs: ScoredFreelance[]; message?: string; auto_submit?: boolean }>(
+        '/api/admin/crm/freelance/import',
+        { method: 'POST', body: JSON.stringify({ paste }) },
+      );
+      setJobs(data.jobs || []);
+      setMessage(data.message || 'Drafts ready for owner review. Nothing was submitted.');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Import failed.');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <>
+      <PageHeader
+        title="Freelance"
+        description="Paste jobs you copied while logged in. Score + proposal draft only — no scraping, no auto-submit, no outreach email."
+      />
+      <div className="crm-banner" role="note">
+        <strong>Authorized paste only.</strong> Quotes stay private until you approve. Marketplace bids are never auto-sent.
+      </div>
+      {message ? <p className="crm-ok" role="status">{message}</p> : null}
+      {error ? <p className="crm-error" role="alert">{error}</p> : null}
+      <section className="crm-panel">
+        <div className="crm-panel-head"><h2>Paste import</h2></div>
+        <div className="crm-field">
+          <label htmlFor="freelance-paste">Job paste (optional Title/Budget/Location header, then ---)</label>
+          <textarea
+            id="freelance-paste"
+            value={paste}
+            onChange={(e) => setPaste(e.target.value)}
+            rows={12}
+            placeholder={'Title: Med spa website\nBudget: $2k\nLocation: Remote US\n---\nNeed booking + modern site…'}
+          />
+        </div>
+        <div className="crm-actions">
+          <button className="crm-btn" type="button" disabled={busy || !paste.trim()} onClick={() => void onImport()}>
+            Score &amp; draft proposals
+          </button>
+        </div>
+      </section>
+      {jobs.length ? (
+        <section className="crm-panel">
+          <div className="crm-panel-head"><h2>Results</h2></div>
+          <div className="crm-table-wrap flush">
+            <table className="crm-table">
+              <thead>
+                <tr>
+                  <th>Title</th>
+                  <th className="num">Score</th>
+                  <th>Tier</th>
+                  <th>Draft</th>
+                </tr>
+              </thead>
+              <tbody>
+                {jobs.map((job) => (
+                  <tr key={job.id}>
+                    <td>
+                      <div>{job.title}</div>
+                      <div className="crm-muted crm-sub">{job.reasons.slice(0, 2).join(' · ')}</div>
+                    </td>
+                    <td className="num">{job.score}</td>
+                    <td><span className="crm-pill muted">{job.tier}</span></td>
+                    <td>
+                      <button type="button" className="crm-link" onClick={() => setSelectedDraft(job)}>
+                        View draft
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </section>
+      ) : null}
+      {selectedDraft ? (
+        <div className="crm-modal-backdrop" role="presentation" onClick={() => setSelectedDraft(null)}>
+          <div
+            ref={draftRef}
+            className="crm-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="freelance-draft-title"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3 id="freelance-draft-title">{selectedDraft.title}</h3>
+            <p className="crm-muted">Status: {selectedDraft.status} · auto_submit: false</p>
+            <pre className="crm-code" style={{ whiteSpace: 'pre-wrap' }}>{selectedDraft.proposal_draft}</pre>
+            <div className="crm-actions end">
+              <button className="crm-btn" type="button" onClick={() => setSelectedDraft(null)}>Close</button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+    </>
+  );
+}
+
+/* ------------------------------------------------------------------ */
 /* Settings                                                            */
 /* ------------------------------------------------------------------ */
 
@@ -1623,6 +1877,7 @@ export function CrmDashboard() {
         <Route path="bookings" element={<BookingsPage />} />
         <Route path="analytics" element={<AnalyticsPage />} />
         <Route path="automation" element={<AutomationPage />} />
+        <Route path="freelance" element={<FreelancePage />} />
         <Route path="settings" element={<SettingsPage />} />
         <Route path="projects" element={<AdminHome />} />
         <Route path="projects/:projectId" element={<AdminProject />} />

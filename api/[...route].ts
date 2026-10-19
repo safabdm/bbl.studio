@@ -1,10 +1,6 @@
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import Stripe from 'stripe';
-import {
-  authorizeSuppressionList,
-  processUnsubscribe,
-  readSuppressions,
-} from './unsubscribe-core.js';
+import { authorizeSuppressionList } from './unsubscribe-core.js';
 import {
   BookingError,
   bookConsultation,
@@ -37,6 +33,12 @@ async function loadCrmDiscoveryApi() {
 }
 async function loadResendWebhook() {
   return import('./resend-webhook.js');
+}
+async function loadUnsubscribeDurable() {
+  return import('../server/unsubscribe.js');
+}
+async function loadSuppressionsDurable() {
+  return import('../server/crm-suppressions.js');
 }
 
 function crmHeaders(req: IncomingMessage) {
@@ -235,13 +237,15 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
     if (matches(path, '/api/unsubscribe/suppressions') && method === 'GET') {
       const auth = String(req.headers.authorization || req.headers['x-unsubscribe-secret'] || '');
       if (!authorizeSuppressionList(auth)) return send(res, 401, { ok: false, message: 'Unauthorized.' });
-      return send(res, 200, { ok: true, suppressions: readSuppressions() });
+      const { listDurableSuppressions } = await loadSuppressionsDurable();
+      return send(res, 200, { ok: true, suppressions: await listDurableSuppressions() });
     }
 
     if (matches(path, '/api/unsubscribe') && (method === 'GET' || method === 'POST')) {
       const url = new URL(req.url || '/', 'https://bbl.studio');
       const body = method === 'POST' ? await readJson(req) : {};
-      const result = processUnsubscribe({
+      const { processUnsubscribeDurable } = await loadUnsubscribeDurable();
+      const result = await processUnsubscribeDurable({
         email: String(body.email || url.searchParams.get('email') || ''),
         lead_id: body.lead_id ?? url.searchParams.get('lead_id'),
         token: String(body.token || url.searchParams.get('token') || ''),
@@ -418,6 +422,20 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
       const body = await readJsonUnknown(req);
       const { handleCrmSendCampaign } = await loadCrmApi();
       const result = await handleCrmSendCampaign(admin, body as never);
+      return send(res, result.status, result.body);
+    }
+    if (matches(path, '/api/admin/crm/freelance/import') && method === 'POST') {
+      if (!admin) return send(res, 401, { ok: false, message: 'Sign in required.' });
+      const body = await readJsonUnknown(req);
+      const { handleFreelanceImport } = await loadCrmApi();
+      const result = await handleFreelanceImport(admin, body as never);
+      return send(res, result.status, result.body);
+    }
+    if (matches(path, '/api/admin/crm/freelance/score') && method === 'POST') {
+      if (!admin) return send(res, 401, { ok: false, message: 'Sign in required.' });
+      const body = await readJsonUnknown(req);
+      const { handleFreelanceScore } = await loadCrmApi();
+      const result = handleFreelanceScore(admin, body as never);
       return send(res, result.status, result.body);
     }
 

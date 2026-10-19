@@ -2,6 +2,7 @@
  * Shared CRM HTTP handlers used by Hono (local) and Vercel [...route].
  */
 import {
+  analyzeCampaignRecipients,
   buildPreviews,
   createPreviewToken,
   executeManualSend,
@@ -22,7 +23,9 @@ import {
 import { authorizeCrmSync, ingestCrmSync } from './crm-sync-ingest.js';
 import { connectionStatus } from './crm-sync-store.js';
 import type { CrmLead, ManualSendRequest } from './crm-types.js';
-import { safetySnapshot, selectedCount } from './crm-safety.js';
+import { maySendLive, safetySnapshot, selectedCount } from './crm-safety.js';
+import { importFreelanceJobs } from './freelance-score.js';
+import { evaluateCopyPolicy } from './outreach-policy.js';
 
 export type CrmJsonResult = { status: number; body: Record<string, unknown> };
 
@@ -177,13 +180,24 @@ export async function handleCrmPreview(
   }
   const subject = String(body.subject || '');
   const text = String(body.body || '');
-  let leads = body.leads || [];
-  if (!leads.length) {
-    const remote = await fetchLeads('', env);
-    leads = remote.data || [];
+  // Prefer server-side leads; client leads only fill gaps for local dry-run UX.
+  const remote = await fetchLeads('', env);
+  const serverLeads = remote.data || [];
+  const leads = serverLeads.length ? serverLeads : body.leads || [];
+  const analysis = analyzeCampaignRecipients(leads, ids, subject, text, env);
+  const previews = buildPreviews(leads, ids, subject, text, env);
+  let preview_token = '';
+  try {
+    preview_token = createPreviewToken(ids, subject, text, env);
+  } catch (err) {
+    return {
+      status: 503,
+      body: {
+        ok: false,
+        message: err instanceof Error ? err.message : 'Could not sign preview token.',
+      },
+    };
   }
-  const previews = buildPreviews(leads, ids, subject, text);
-  const preview_token = createPreviewToken(ids, subject, text);
   return {
     status: 200,
     body: {
@@ -191,6 +205,8 @@ export async function handleCrmPreview(
       preview_token,
       selected_count: selectedCount(ids),
       previews,
+      policy_issues: analysis.policy_issues,
+      exclusions: analysis.observation_excluded,
       safety: safetySnapshot(env),
     },
   };
@@ -253,16 +269,83 @@ export async function handleCrmSendCampaign(
 ): Promise<CrmJsonResult> {
   const denied = adminOk(isAdmin);
   if (denied) return denied;
-  let leads = body.leads || [];
-  if (!leads.length) {
-    const remote = await fetchLeads('', env);
-    leads = remote.data || [];
-  }
-  const result = await executeManualSend(body, leads, env);
+  const live = maySendLive({ confirm_live: body.confirm_live }, env);
+  // Live path: ignore client-supplied leads — server snapshot only.
+  const remote = await fetchLeads('', env);
+  const serverLeads = remote.data || [];
+  const leads = live ? serverLeads : serverLeads.length ? serverLeads : body.leads || [];
+  const result = await executeManualSend(body, leads, env, live ? { serverLeads } : undefined);
   return {
     status: result.ok ? 200 : 400,
     body: { ...result, safety: safetySnapshot(env) },
   };
+}
+
+export async function handleFreelanceImport(
+  isAdmin: boolean,
+  body: { paste?: string; jobs?: Array<Record<string, unknown>> },
+): Promise<CrmJsonResult> {
+  const denied = adminOk(isAdmin);
+  if (denied) return denied;
+  try {
+    const result = importFreelanceJobs({
+      paste: body.paste,
+      jobs: Array.isArray(body.jobs) ? (body.jobs as never) : undefined,
+    });
+    return {
+      status: 200,
+      body: {
+        ok: true,
+        ...result,
+        message:
+          'Proposal drafts ready for owner review. Nothing was submitted to any marketplace and no email was sent.',
+      },
+    };
+  } catch (err) {
+    return {
+      status: 400,
+      body: {
+        ok: false,
+        message: err instanceof Error ? err.message : 'Could not import freelance jobs.',
+        auto_submit: false,
+      },
+    };
+  }
+}
+
+export function handleFreelanceScore(
+  isAdmin: boolean,
+  body: { title?: string; body?: string; paste?: string },
+): CrmJsonResult {
+  const denied = adminOk(isAdmin);
+  if (denied) return denied;
+  try {
+    const result = importFreelanceJobs({
+      paste: body.paste || [body.title, body.body].filter(Boolean).join('\n---\n'),
+    });
+    return { status: 200, body: { ok: true, ...result } };
+  } catch (err) {
+    return {
+      status: 400,
+      body: {
+        ok: false,
+        message: err instanceof Error ? err.message : 'Could not score paste.',
+        auto_submit: false,
+      },
+    };
+  }
+}
+
+/** Expose policy check for UI without preview token. */
+export function handleCrmPolicyCheck(
+  isAdmin: boolean,
+  body: { subject?: string; body?: string },
+  env = process.env,
+): CrmJsonResult {
+  const denied = adminOk(isAdmin);
+  if (denied) return denied;
+  const policy_issues = evaluateCopyPolicy(String(body.subject || ''), String(body.body || ''), env);
+  return { status: 200, body: { ok: true, policy_issues } };
 }
 
 export async function handleCrmSettings(isAdmin: boolean, env = process.env): Promise<CrmJsonResult> {

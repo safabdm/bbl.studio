@@ -1,4 +1,4 @@
-import { createHash, randomBytes } from 'node:crypto';
+import { randomBytes } from 'node:crypto';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import type {
@@ -9,13 +9,7 @@ import type {
   ManualSendResult,
   PersonalizedPreview,
 } from './crm-types.js';
-import {
-  filterSendableRecipients,
-  isDryRun,
-  maySendLive,
-  validateManualSendGate,
-  type SafetyEnv,
-} from './crm-safety.js';
+import { isDryRun, type SafetyEnv } from './crm-safety.js';
 import {
   dbReadKv,
   dbWriteKv,
@@ -24,64 +18,85 @@ import {
   type CrmDbEnv,
 } from './crm-db.js';
 import { resolveProjectRoot } from './project-root.js';
+import {
+  BOOKING_CTA_URL,
+  CONSULT_MINUTES,
+  evaluateCopyPolicy,
+  filterObservationRequired,
+  personalizeLead,
+  type PolicyEnv,
+} from './outreach-policy.js';
+import {
+  createSignedPreviewToken,
+  verifySignedPreviewToken,
+  type PreviewTokenEnv,
+} from './preview-token.js';
+import { executeApprovedManualSend, type ResendSendEnv } from './resend-send.js';
 
 function projectRoot() {
   return resolveProjectRoot(import.meta.url);
 }
 
+/** Intro / follow-up — no pricing; private quotes after consult only. */
 export const DEFAULT_TEMPLATES: EmailTemplate[] = [
   {
     id: 'tpl_intro',
     name: 'Studio introduction',
-    subject: 'A website as good as {{business_name}}',
+    subject: 'A quick idea for {{business_name}}',
     body: [
       'Hi {{contact_name}},',
       '',
-      '{{business_name}} looks great in person. Your website should too, and it should make booking effortless.',
+      'I was looking at {{business_name}} and noticed {{website_observation}}.',
       '',
-      'BBL Studio builds custom websites for Orange County salons and beauty brands:',
+      'BBL Studio builds websites for Orange County beauty and wellness brands that make a stronger first impression and make booking feel effortless.',
       '',
-      '- A modern site that matches the look of your space',
-      '- Booking front and center, connected to the system you already use',
-      '- Fast on mobile and set up to be found on Google',
+      `I have a few specific ideas for {{business_name}} — happy to share them in a complimentary ${CONSULT_MINUTES}-minute website review.`,
       '',
-      'Clear, fixed pricing. No surprises:',
-      '- Landing page: from $3,000',
-      '- Full business website: from $5,500',
+      'Book a time here:',
+      BOOKING_CTA_URL,
       '',
-      'Interested? Just reply to this email and we will send a free, quick review of your current site with three easy wins.',
-      '',
+      'Best,',
       'BBL Studio',
       'hello@bbl.studio · www.bbl.studio',
+      '',
+      '{{BUSINESS_POSTAL_ADDRESS}}',
+      '',
+      'Prefer not to receive these emails? Unsubscribe:',
+      '{{signed_unsubscribe_url}}',
     ].join('\n'),
   },
   {
     id: 'tpl_followup',
     name: 'Soft follow-up',
-    subject: 'Re: A website as good as {{business_name}}',
+    subject: 'Re: A quick idea for {{business_name}}',
     body: [
       'Hi {{contact_name}},',
       '',
       'Quick follow-up in case my last note got buried.',
       '',
-      'We design salon websites that look premium and make booking easy, with fixed pricing from $3,000.',
+      `If helpful, I can still walk through a complimentary ${CONSULT_MINUTES}-minute website review for {{business_name}} — including the note that {{website_observation}}.`,
       '',
-      'Want the free review of your current site? Reply "yes" and we will send it over.',
+      `Book here: ${BOOKING_CTA_URL}`,
       '',
+      'Best,',
       'BBL Studio',
-      'hello@bbl.studio · www.bbl.studio',
+      'hello@bbl.studio',
+      '',
+      '{{BUSINESS_POSTAL_ADDRESS}}',
+      '',
+      'Unsubscribe: {{signed_unsubscribe_url}}',
     ].join('\n'),
   },
 ];
-
-const previewSessions = new Map<string, { recipient_ids: string[]; created_at: number; subject: string; body: string }>();
-const PREVIEW_TTL_MS = 2 * 60 * 60 * 1000;
 
 const DRAFTS_KV_KEY = 'campaign_drafts';
 const SEND_LOG_KV_KEY = 'campaign_send_log';
 
 export type CampaignStoreEnv = CrmDbEnv &
-  SafetyEnv & {
+  SafetyEnv &
+  PolicyEnv &
+  PreviewTokenEnv &
+  ResendSendEnv & {
     CRM_DRAFTS_PATH?: string;
     CRM_SEND_LOG_PATH?: string;
     VERCEL?: string;
@@ -98,7 +113,6 @@ function sendLogPath(env: CampaignStoreEnv = process.env) {
 }
 
 function assertLocalFsAllowed(env: CampaignStoreEnv, label: string) {
-  // Hard gate: never create ./data under /var/task (or any serverless root).
   if (requiresDurableDb(env)) {
     throw new Error(
       isDurableDbConfigured(env)
@@ -124,7 +138,6 @@ function writeJsonFile(path: string, value: unknown, env: CampaignStoreEnv = pro
     writeFileSync(path, `${JSON.stringify(value, null, 2)}\n`, 'utf8');
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
-    // Never surface raw ENOENT mkdir '/var/task/data' to the CRM UI.
     if (/ENOENT|EACCES|EROFS|mkdir/i.test(message)) {
       throw new Error(
         'Campaign storage is not writable on this host. Configure CRM_DATABASE_URL (Neon) for drafts.',
@@ -138,15 +151,8 @@ export function listTemplates() {
   return DEFAULT_TEMPLATES;
 }
 
-export function personalize(template: string, lead: Partial<CrmLead>) {
-  const contact = lead.contact_name?.trim() || 'there';
-  const business = lead.business_name?.trim() || 'your studio';
-  return template
-    .replaceAll('{{contact_name}}', contact)
-    .replaceAll('{{business_name}}', business)
-    .replaceAll('{{email}}', lead.email || '')
-    .replaceAll('{{location}}', lead.location || '')
-    .replaceAll('{{category}}', lead.category || '');
+export function personalize(template: string, lead: Partial<CrmLead>, env: PolicyEnv = process.env) {
+  return personalizeLead(template, lead, env);
 }
 
 export function buildPreviews(
@@ -154,6 +160,7 @@ export function buildPreviews(
   recipientIds: Array<number | string>,
   subject: string,
   body: string,
+  env: CampaignStoreEnv = process.env,
 ): PersonalizedPreview[] {
   const wanted = new Set(recipientIds.map(String));
   return leads
@@ -162,8 +169,10 @@ export function buildPreviews(
       lead_id: lead.id,
       email: lead.email,
       business_name: lead.business_name,
-      subject: personalize(subject, lead),
-      body: personalize(body, lead),
+      subject: personalize(subject, lead, env),
+      body: personalize(body, lead, env),
+      excluded: !lead.website_observation?.trim(),
+      exclude_reason: !lead.website_observation?.trim() ? 'missing_website_observation' : undefined,
     }));
 }
 
@@ -171,31 +180,18 @@ export function createPreviewToken(
   recipientIds: Array<number | string>,
   subject: string,
   body: string,
+  env: CampaignStoreEnv = process.env,
 ) {
-  const token = randomBytes(16).toString('hex');
-  previewSessions.set(token, {
-    recipient_ids: recipientIds.map(String).sort(),
-    created_at: Date.now(),
-    subject,
-    body: createHash('sha256').update(body).digest('hex'),
-  });
-  return token;
+  return createSignedPreviewToken(recipientIds, subject, body, env);
 }
 
-export function getPreviewSession(token: string | undefined) {
-  if (!token) return null;
-  const session = previewSessions.get(token);
-  if (!session) return null;
-  if (Date.now() - session.created_at > PREVIEW_TTL_MS) {
-    previewSessions.delete(token);
-    return null;
-  }
-  return session;
+export function getPreviewSession(token: string | undefined, env: CampaignStoreEnv = process.env) {
+  return verifySignedPreviewToken(token, env);
 }
 
-/** Test helper — clear in-memory preview sessions. */
+/** Test helper — HMAC tokens are stateless; no-op retained for test imports. */
 export function clearPreviewSessions() {
-  previewSessions.clear();
+  /* HMAC tokens are verified statelessly; nothing to clear. */
 }
 
 export async function listDrafts(env: CampaignStoreEnv = process.env): Promise<CampaignDraft[]> {
@@ -204,7 +200,6 @@ export async function listDrafts(env: CampaignStoreEnv = process.env): Promise<C
     return Array.isArray(drafts) ? drafts : [];
   }
   if (requiresDurableDb(env)) {
-    // No durable DB on Vercel — surface empty drafts, never mkdir /var/task/data.
     return [];
   }
   return readJsonFile<CampaignDraft[]>(draftsPath(env), []);
@@ -246,7 +241,6 @@ async function appendSendLog(entry: Record<string, unknown>, env: CampaignStoreE
     return;
   }
   if (requiresDurableDb(env)) {
-    // Dry-run still succeeds without durable log when misconfigured — avoid ENOENT in UI.
     return;
   }
   assertLocalFsAllowed(env, 'Campaign send log');
@@ -264,124 +258,58 @@ export async function listSendLog(env: CampaignStoreEnv = process.env): Promise<
   return readJsonFile<Record<string, unknown>[]>(sendLogPath(env), []);
 }
 
+export function analyzeCampaignRecipients(
+  leads: CrmLead[],
+  recipientIds: Array<number | string>,
+  subject: string,
+  body: string,
+  env: CampaignStoreEnv = process.env,
+) {
+  const policy_issues = evaluateCopyPolicy(subject, body, env);
+  const { included, excluded } = filterObservationRequired(leads, recipientIds);
+  return { policy_issues, observation_excluded: excluded, observation_included: included };
+}
+
 /**
  * Manual campaign send. Default path is dry-run only — no Resend call.
  * Live ESP send requires MANUAL_SEND_LIVE_ENABLED=true, EMAIL_DRY_RUN=false,
- * confirm_live, plus the select → preview → confirm gate.
+ * confirm_live ("Send for real"), HMAC preview, policy pass, server-side leads.
  */
 export async function executeManualSend(
   request: ManualSendRequest,
   leads: CrmLead[],
   env: CampaignStoreEnv = process.env,
-  opts?: { liveSender?: (payload: { to: string; subject: string; text: string }) => Promise<boolean> },
+  opts?: Parameters<typeof executeApprovedManualSend>[3],
 ): Promise<ManualSendResult> {
-  const gate = validateManualSendGate({
-    recipient_ids: request.recipient_ids,
-    preview_token: request.preview_token,
-    expected_preview_token: getPreviewSession(request.preview_token) ? request.preview_token : undefined,
-    confirmed: request.confirmed,
-  });
-  // Re-check preview session contents match current composition when present.
-  const session = getPreviewSession(request.preview_token);
-  if (gate.ok && session) {
-    const sameRecipients =
-      session.recipient_ids.join(',') === [...request.recipient_ids].map(String).sort().join(',');
-    const sameBody = session.body === createHash('sha256').update(request.body).digest('hex');
-    const sameSubject = session.subject === request.subject;
-    if (!sameRecipients || !sameBody || !sameSubject) {
-      return {
-        ok: false,
-        dry_run: true,
-        live: false,
-        campaign_id: '',
-        recipient_count: 0,
-        excluded_count: 0,
-        excluded: [],
-        intended: [],
-        message: 'Preview is out of date. Preview again after changing recipients or copy.',
-      };
-    }
+  const result = await executeApprovedManualSend(request, leads, env, opts);
+  await appendSendLog(
+    {
+      id: result.campaign_id || `camp_${randomBytes(8).toString('hex')}`,
+      dry_run: result.dry_run,
+      live: result.live,
+      name: request.campaign_name,
+      subject: request.subject,
+      recipient_count: result.recipient_count,
+      excluded: result.excluded,
+      intended: result.intended,
+      policy_issues: result.policy_issues,
+      created_at: new Date().toISOString(),
+      message: result.message,
+    },
+    env,
+  );
+  if (!result.ok && !result.campaign_id) {
+    return result;
   }
-  if (!gate.ok) {
+  if (result.ok && result.dry_run && !result.message) {
     return {
-      ok: false,
-      dry_run: true,
-      live: false,
-      campaign_id: '',
-      recipient_count: 0,
-      excluded_count: 0,
-      excluded: [],
-      intended: [],
-      message: gate.message,
-    };
-  }
-
-  const { included, excluded } = filterSendableRecipients(leads, request.recipient_ids);
-  const intended = included.map((lead) => ({
-    id: lead.id,
-    email: String(lead.email),
-    subject: personalize(request.subject, lead as CrmLead),
-  }));
-  const campaignId = `camp_${randomBytes(8).toString('hex')}`;
-  const live = maySendLive({ confirm_live: request.confirm_live }, env);
-
-  if (!live) {
-    await appendSendLog(
-      {
-        id: campaignId,
-        dry_run: true,
-        live: false,
-        name: request.campaign_name,
-        subject: request.subject,
-        recipient_count: intended.length,
-        excluded,
-        intended,
-        created_at: new Date().toISOString(),
-      },
-      env,
-    );
-    return {
-      ok: true,
-      dry_run: true,
-      live: false,
-      campaign_id: campaignId,
-      recipient_count: intended.length,
-      excluded_count: excluded.length,
-      excluded,
-      intended,
+      ...result,
       message: isDryRun(env)
-        ? `Dry-run only: ${intended.length} recipient(s) logged. No emails were sent.`
-        : `Manual live send is disabled (MANUAL_SEND_LIVE_ENABLED≠true). ${intended.length} recipient(s) logged as dry-run.`,
+        ? `Dry-run only: ${result.recipient_count} recipient(s) logged. No emails were sent.`
+        : result.message,
     };
   }
-
-  // Live path — only when flags + confirm_live. Still refuses without a sender.
-  if (!opts?.liveSender) {
-    return {
-      ok: false,
-      dry_run: false,
-      live: false,
-      campaign_id: campaignId,
-      recipient_count: intended.length,
-      excluded_count: excluded.length,
-      excluded,
-      intended,
-      message: 'Live send flagged but no ESP sender is configured. Aborting without sending.',
-    };
-  }
-
-  // Intentionally not invoked in this build phase by default tests / UI.
-  return {
-    ok: false,
-    dry_run: false,
-    live: false,
-    campaign_id: campaignId,
-    recipient_count: intended.length,
-    excluded_count: excluded.length,
-    excluded,
-    intended,
-    message: 'Live ESP send is blocked in this build phase. Keep MANUAL_SEND_LIVE_ENABLED=false.',
-  };
+  return result;
 }
 
 export function sendTestDryRun(to: string, subject: string, body: string) {
