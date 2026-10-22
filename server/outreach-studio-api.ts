@@ -539,7 +539,7 @@ export async function handleDaily20Get(
         label: `${controls.window_start_hour_pt ?? 9}–${controls.window_end_hour_pt ?? 11} America/Los_Angeles`,
       },
       mail_app_interim:
-        'Mail.app is Mac-only interim and cannot run when Mac is asleep. Daily prep uses Vercel cron + Neon; post-approval send uses Graph/Resend. No auto-send.',
+        'Mail.app is Mac-only interim and cannot run when Mac is asleep. Daily prep uses GitHub Actions (primary, PT-gated) + Vercel Hobby backup + Neon; post-approval send uses Graph/Resend. No auto-send.',
       live_email_send: false,
       safety: { ...safetySnapshot(asSafetyEnv(env)), FOLLOWUPS_LIVE: false },
     },
@@ -553,12 +553,15 @@ export async function handleSchedulerStatus(isAdmin: boolean, env = process.env)
   return { status: 200, body: { ...scheduler, live_email_send: false } };
 }
 
-/** Vercel cron — Bearer CRON_SECRET. Mac-independent dispatcher. */
+/** GitHub Actions (primary) / Vercel Hobby backup — Bearer CRON_SECRET. PT-gated dispatcher. */
 export async function handleOutreachSchedulerCron(
   headers: { authorization?: string | null },
   env = process.env,
+  opts: { source?: string } = {},
 ): Promise<CrmJsonResult> {
-  return dispatchOutreachCron(headers, env);
+  return dispatchOutreachCron(headers, env, {
+    source: opts.source || 'vercel',
+  });
 }
 
 /** Admin manual trigger for a single job (still never auto-sends prospects without flags). */

@@ -1,9 +1,17 @@
 /**
  * America/Los_Angeles helpers for cron scheduling.
- * Vercel crons are UTC — resolve “what PT job is due” with DST-aware Intl.
+ * GitHub Actions / Vercel fire in UTC — gate heavy work with DST-aware Intl.
  */
 
 export const PACIFIC_TZ = 'America/Los_Angeles';
+
+/** Primary morning pipeline start hour in America/Los_Angeles (inclusive). */
+export const MORNING_PIPELINE_START_HOUR_PT = 7;
+/**
+ * Exclusive end of the dispatch window. 07:00–08:59 PT so the full
+ * discover→verify→select→notify chain can finish before 09:00 PT year-round.
+ */
+export const MORNING_PIPELINE_WINDOW_END_HOUR_PT = 9;
 
 export type PacificParts = {
   year: number;
@@ -70,6 +78,25 @@ export function isPacificTimeInRange(
   return cur >= start && cur < end;
 }
 
+/** True in the 07:00–07:59 America/Los_Angeles start hour (Mon–Fri). */
+export function isMorningPipelineStartHour(ms = Date.now()): boolean {
+  return (
+    isPacificWeekday(ms) &&
+    isPacificTimeInRange(ms, MORNING_PIPELINE_START_HOUR_PT, 0, MORNING_PIPELINE_START_HOUR_PT + 1, 0)
+  );
+}
+
+/**
+ * True Mon–Fri 07:00–08:59 PT — primary start + catch-up so pipeline finishes before 9 AM PT.
+ * Idempotency (`job:YYYY-MM-DD` LA) prevents double-running stages.
+ */
+export function isMorningPipelineDispatchWindow(ms = Date.now()): boolean {
+  return (
+    isPacificWeekday(ms) &&
+    isPacificTimeInRange(ms, MORNING_PIPELINE_START_HOUR_PT, 0, MORNING_PIPELINE_WINDOW_END_HOUR_PT, 0)
+  );
+}
+
 /**
  * Approximate next UTC Instant for a Pacific wall-clock on a given LA dayKey.
  * Uses iterative search (±1 day window) — DST-safe without external libs.
@@ -93,30 +120,33 @@ export function pacificWallClockToUtcMs(
   return guess;
 }
 
-/** Human label for next run given a PT hour:minute on next weekday. */
+/** Human label for next run given a PT hour:minute on next weekday (America/Los_Angeles). */
 export function describeNextWeekdayRun(hour: number, minute: number, fromMs = Date.now()): {
   dayKey: string;
   at_utc: string;
   at_pt: string;
+  timezone: typeof PACIFIC_TZ;
 } {
   let cursor = fromMs;
-  for (let i = 0; i < 10; i++) {
+  for (let i = 0; i < 14; i++) {
     const p = pacificParts(cursor);
     const targetMs = pacificWallClockToUtcMs(p.dayKey, hour, minute);
     if (isPacificWeekday(targetMs) && targetMs > fromMs + 30_000) {
       return {
         dayKey: p.dayKey,
         at_utc: new Date(targetMs).toISOString().replace(/\.\d{3}Z$/, 'Z'),
-        at_pt: `${p.dayKey} ${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')} PT`,
+        at_pt: `${p.dayKey} ${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')} ${PACIFIC_TZ}`,
+        timezone: PACIFIC_TZ,
       };
     }
-    // advance to next LA midnight-ish
+    // advance to next LA calendar day
     cursor = pacificWallClockToUtcMs(p.dayKey, 23, 59) + 120_000;
   }
   const p = pacificParts(fromMs);
   return {
     dayKey: p.dayKey,
     at_utc: new Date(fromMs).toISOString().replace(/\.\d{3}Z$/, 'Z'),
-    at_pt: `${p.dayKey} ${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')} PT`,
+    at_pt: `${p.dayKey} ${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')} ${PACIFIC_TZ}`,
+    timezone: PACIFIC_TZ,
   };
 }

@@ -1473,11 +1473,17 @@ type Daily20Response = {
   message?: string;
   scheduler?: {
     mac_independent?: boolean;
+    timezone?: string;
+    source_of_truth?: string;
     hobby_single_cron?: boolean;
+    github_actions_cron?: string;
     cron_schedule?: string;
     cron_schedule_note?: string;
     auto_send?: boolean;
     send_window_in_cron?: boolean;
+    morning_pipeline_complete?: boolean;
+    dispatch_window_pt?: string;
+    ready_for_review?: { qualified?: number; target?: number; day_key?: string; message?: string | null };
     next_runs?: {
       cron?: { at_pt?: string };
       discover?: { at_pt?: string };
@@ -1489,8 +1495,10 @@ type Daily20Response = {
       string,
       { intended_pt?: string; status?: string | null; finished_at?: string | null; message?: string | null }
     >;
+    execution_log?: Array<{ job?: string; status?: string; at?: string; message?: string; day_key?: string }>;
     last_successful_run?: { job?: string; at?: string; message?: string; day_key?: string } | null;
     last_error?: string | null;
+    last_source?: string | null;
     daily_counter?: { sent_today?: number; effective_cap?: number; remaining?: number };
     tracking?: {
       pending_send?: number;
@@ -1608,13 +1616,24 @@ function DailyReviewPage() {
 
       {data?.scheduler ? (
         <section className="crm-panel">
-          <div className="crm-panel-head"><h2>Scheduler (Vercel cron · Mac-independent)</h2></div>
+          <div className="crm-panel-head"><h2>Scheduler (GitHub Actions · Mac-independent)</h2></div>
           <div className="crm-checks">
-            <CheckRow ok={data.scheduler.mac_independent !== false} label="Runs when Mac asleep" value="Vercel cron + Neon" />
-            <CheckRow ok={data.scheduler.hobby_single_cron !== false} label="Hobby cron" value={data.scheduler.cron_schedule || '0 14 * * 1-5'} />
+            <CheckRow ok={data.scheduler.mac_independent !== false} label="Runs when Mac asleep" value="GitHub Actions + Vercel backup + Neon" />
+            <CheckRow ok={data.scheduler.source_of_truth === 'github-actions'} label="Source of truth" value={data.scheduler.source_of_truth || 'github-actions'} />
+            <CheckRow ok={null} label="Timezone" value={data.scheduler.timezone || 'America/Los_Angeles'} />
+            <CheckRow ok={null} label="Dispatch window" value={data.scheduler.dispatch_window_pt || '07:00–08:59 PT'} />
+            <CheckRow
+              ok={data.scheduler.morning_pipeline_complete === true}
+              label="Morning pipeline today"
+              value={
+                data.scheduler.morning_pipeline_complete
+                  ? `Complete · review ${data.scheduler.ready_for_review?.qualified ?? 0}/${data.scheduler.ready_for_review?.target ?? 20}`
+                  : `Pending · review ${data.scheduler.ready_for_review?.qualified ?? 0}/${data.scheduler.ready_for_review?.target ?? 20}`
+              }
+            />
             <CheckRow ok={data.scheduler.auto_send === false} label="Auto-send" value="OFF — owner approve required" />
             <CheckRow ok={data.scheduler.send_window_in_cron === false} label="Send in cron" value="Never — owner-approval gated" />
-            <CheckRow ok={null} label="Next cron fire" value={data.scheduler.next_runs?.cron?.at_pt || data.scheduler.next_runs?.discover?.at_pt || '—'} />
+            <CheckRow ok={null} label="Next run (PT)" value={data.scheduler.next_runs?.cron?.at_pt || data.scheduler.next_runs?.discover?.at_pt || '—'} />
             <CheckRow
               ok={null}
               label="Logical stages (PT)"
@@ -1634,7 +1653,7 @@ function DailyReviewPage() {
               label="Last successful job"
               value={
                 data.scheduler.last_successful_run
-                  ? `${data.scheduler.last_successful_run.job} · ${data.scheduler.last_successful_run.day_key || ''} · ${fmtRelative(data.scheduler.last_successful_run.at)}`
+                  ? `${data.scheduler.last_successful_run.job} · ${data.scheduler.last_successful_run.day_key || ''} · ${fmtRelative(data.scheduler.last_successful_run.at)}${data.scheduler.last_source ? ` · via ${data.scheduler.last_source}` : ''}`
                   : 'None yet'
               }
             />
@@ -1649,6 +1668,11 @@ function DailyReviewPage() {
               value={`submitted ${data.scheduler.tracking?.submitted ?? 0} · failed ${data.scheduler.tracking?.failed ?? 0} · bounced ${data.scheduler.tracking?.bounced ?? 0} · interested ${data.scheduler.tracking?.interested ?? 0}`}
             />
           </div>
+          {data.scheduler.execution_log?.length ? (
+            <p className="crm-muted crm-pad">
+              Recent: {data.scheduler.execution_log.slice(0, 4).map((r) => `${r.job}:${r.status}`).join(' · ')}
+            </p>
+          ) : null}
           {data.scheduler.cron_schedule_note ? <p className="crm-muted crm-pad">{data.scheduler.cron_schedule_note}</p> : null}
           {data.scheduler.mail_app_note ? <p className="crm-muted crm-pad">{data.scheduler.mail_app_note}</p> : null}
         </section>

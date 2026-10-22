@@ -151,11 +151,17 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
     }
     if (matches(path, '/api/crm/outreach/cron') && method === 'GET') {
       const { handleOutreachSchedulerCron } = await loadOutreachStudioApi();
-      const result = await handleOutreachSchedulerCron({
-        authorization: Array.isArray(req.headers.authorization)
-          ? req.headers.authorization[0]
-          : req.headers.authorization,
-      });
+      const url = new URL(req.url || '/', 'http://localhost');
+      const source = url.searchParams.get('source') || undefined;
+      const result = await handleOutreachSchedulerCron(
+        {
+          authorization: Array.isArray(req.headers.authorization)
+            ? req.headers.authorization[0]
+            : req.headers.authorization,
+        },
+        process.env,
+        { source },
+      );
       return send(res, result.status, result.body);
     }
 

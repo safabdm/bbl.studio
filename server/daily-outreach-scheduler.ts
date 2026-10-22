@@ -1,5 +1,5 @@
 /**
- * Mac-independent Daily Outreach scheduler — Vercel cron + Neon.
+ * Mac-independent Daily Outreach scheduler — GitHub Actions (primary) + Vercel Hobby backup + Neon.
  * Never auto-sends prospects. Owner must approve in Daily Review.
  * Mail.app cannot run when Mac is asleep — Graph/Resend only for post-approval send.
  */
@@ -12,6 +12,7 @@ import {
   getDaily20Dashboard,
   type Daily20Env,
 } from './daily-20-pipeline.js';
+import { upsertStudioDraftFromLead } from './email-studio.js';
 import { laDayKey, readDailyCapState, remainingSends, effectiveCap } from './daily-cap.js';
 import {
   generateFollowUpDrafts,
@@ -20,7 +21,10 @@ import {
 } from './follow-up-drafts.js';
 import { notifyOwnerDailyReviewReady, type OwnerNotifyEnv } from './owner-notify.js';
 import {
+  PACIFIC_TZ,
   describeNextWeekdayRun,
+  isMorningPipelineDispatchWindow,
+  isMorningPipelineStartHour,
   isPacificWeekday,
   pacificParts,
 } from './pacific-time.js';
@@ -80,12 +84,14 @@ export type SchedulerState = {
   /** Logical stage stamps for the current/last LA day (UI schedule even when Hobby runs stages back-to-back). */
   stages: Partial<Record<SchedulerJobName, StageStamp>>;
   stages_day_key: string | null;
-  /** Hobby: one Vercel cron fire/day runs the full morning pipeline. */
+  /** Hobby: Vercel backup crons are once/day each; GHA is primary. */
   hobby_single_cron: boolean;
+  /** Last dispatcher source: github-actions | vercel | admin | unknown */
+  last_source: string | null;
   updated_at: string;
 };
 
-/** Morning prep stages — Hobby runs these sequentially in one daily cron (never auto-send). */
+/** Morning prep stages — run sequentially in one invocation (never auto-send). */
 export const MORNING_PIPELINE_JOBS: SchedulerJobName[] = ['discover', 'verify', 'select', 'notify'];
 
 export const STAGE_INTENDED_PT: Record<SchedulerJobName, string> = {
@@ -98,10 +104,20 @@ export const STAGE_INTENDED_PT: Record<SchedulerJobName, string> = {
   followups: '10:00 (optional after notify)',
 };
 
-/** Vercel Hobby-compatible: once per day Mon–Fri at 14:00 UTC ≈ 7:00 AM PT (PDT). */
+/**
+ * Source of truth: GitHub Actions hourly Mon–Fri (UTC window), PT-gated server-side.
+ * Vercel Hobby crons are backup only (once/day each; handler no-ops outside 07:00–08:59 PT).
+ */
+export const SCHEDULER_SOURCE_OF_TRUTH = 'github-actions' as const;
+
+/** GHA schedule (UTC): hourly :05 during 13–17 UTC Mon–Fri — covers 6–10 AM PT year-round. */
+export const GITHUB_ACTIONS_CRON_SCHEDULE = '5 13-17 * * 1-5';
+
+/** Vercel Hobby backups — each fires once/day (Hobby-safe). Handler gates on America/Los_Angeles. */
 export const OUTREACH_CRON_SCHEDULE = '0 14 * * 1-5';
+export const OUTREACH_CRON_SCHEDULE_PST_BACKUP = '0 15 * * 1-5';
 export const OUTREACH_CRON_SCHEDULE_NOTE =
-  '14:00 UTC Mon–Fri ≈ 7:00 AM PT during PDT (UTC-7); ≈ 6:00 AM PT during PST (UTC-8). Hobby allows one fire/day.';
+  'Primary: GitHub Actions (PT-gated 07:00–08:59 America/Los_Angeles). Vercel Hobby backups: 0 14 * * 1-5 (≈7am PDT) + 0 15 * * 1-5 (≈7am PST). Idempotent per job:LA-day.';
 
 export type SchedulerEnv = Daily20Env &
   DiscoveryRunnerEnv &
@@ -135,6 +151,7 @@ function emptyState(): SchedulerState {
     stages: {},
     stages_day_key: null,
     hobby_single_cron: true,
+    last_source: null,
     updated_at: nowIso(),
   };
 }
@@ -223,21 +240,32 @@ async function stampStageFinish(
 }
 
 /**
- * Hobby plan: one cron fire/day. Morning pipeline is always the sequential prep jobs.
+ * Morning pipeline stages (discover→verify→select→notify).
  * Never includes send_window (owner-approval gated; not part of auto cron).
- * Pro could split stages across multiple crons — see STAGE_INTENDED_PT.
  */
 export function morningPipelineJobs(): SchedulerJobName[] {
   return [...MORNING_PIPELINE_JOBS];
 }
 
 /**
- * Jobs due for a weekday cron invocation.
- * Hobby: full morning pipeline (discover→verify→select→notify). Never send_window.
+ * Whether an automated dispatcher (GHA / Vercel) should run the morning pipeline now.
+ * Gated to Mon–Fri 07:00–08:59 America/Los_Angeles so work finishes before 9:00 AM PT year-round.
+ */
+export function shouldDispatchMorningPipeline(ms = Date.now()): boolean {
+  return isMorningPipelineDispatchWindow(ms);
+}
+
+/**
+ * Jobs due for an automated cron tick.
+ * Only inside the PT dispatch window; never send_window.
  */
 export function jobsDueAt(ms = Date.now()): SchedulerJobName[] {
-  if (!isPacificWeekday(ms)) return [];
+  if (!shouldDispatchMorningPipeline(ms)) return [];
   return morningPipelineJobs();
+}
+
+export function isMorningPipelineComplete(state: SchedulerState, dayKey: string): boolean {
+  return MORNING_PIPELINE_JOBS.every((job) => isJobComplete(state, job, dayKey));
 }
 
 export async function runSchedulerJob(
@@ -352,18 +380,29 @@ export async function runSchedulerJob(
         { fixturesOnly: opts.fixturesOnly, now: nowMs },
         env,
       );
+      // Persist unapproved Email Studio drafts for Daily Review (never auto-approve / auto-send).
+      let drafts_ready = 0;
+      let drafts_blocked = 0;
+      for (const q of cohort.qualified) {
+        const draft = await upsertStudioDraftFromLead(q, { regenerate: true }, env);
+        if (draft.blocked_reasons.length || !draft.observation_verified) drafts_blocked += 1;
+        else drafts_ready += 1;
+      }
       // Quality bar: do not pad — cohort already caps by verified observation+email
       result = {
         job,
         day_key,
         status: 'completed',
-        message: cohort.message,
+        message: `${cohort.message} Drafts ready for review: ${drafts_ready}/${cohort.qualified.length}.`,
         at,
         details: {
           qualified: cohort.qualified.length,
           discovered_count: cohort.discovered_count,
           rejected: cohort.rejected_pool.length,
+          drafts_ready,
+          drafts_blocked,
           padded: false,
+          auto_approved: false,
         },
       };
     } else if (job === 'notify') {
@@ -536,8 +575,9 @@ export async function runSchedulerJob(
 }
 
 /**
- * Dispatcher for Vercel Hobby cron — one fire/day runs morning pipeline sequentially.
- * Idempotent per job/day. Never includes send_window. Never prospect-sends without approval + flags.
+ * Dispatcher for GitHub Actions (primary) + Vercel Hobby backup.
+ * PT-gated Mon–Fri 07:00–08:59 America/Los_Angeles; sequential morning pipeline.
+ * Idempotent per job/LA-day. Never includes send_window. Never prospect-sends without approval + flags.
  */
 export async function dispatchOutreachCron(
   headers: { authorization?: string | null },
@@ -547,6 +587,10 @@ export async function dispatchOutreachCron(
     forceJobs?: SchedulerJobName[];
     fetchImpl?: typeof fetch;
     fixturesOnly?: boolean;
+    /** github-actions | vercel | admin | unknown */
+    source?: string;
+    /** Bypass PT window (admin / tests only). */
+    bypassPtWindow?: boolean;
   } = {},
 ): Promise<{
   status: number;
@@ -563,12 +607,37 @@ export async function dispatchOutreachCron(
   }
 
   const nowMs = opts.nowMs ?? Date.now();
-  // Default: morning pipeline only. forceJobs may include send_window for admin tests — still gated.
-  const weekdayDue = opts.forceJobs?.length
-    ? opts.forceJobs
-    : isPacificWeekday(nowMs)
-      ? morningPipelineJobs()
-      : [];
+  const source = String(opts.source || 'unknown').slice(0, 64);
+  const pacific = pacificParts(nowMs);
+  const day_key = laDayKey(nowMs);
+
+  // Automated path: forceJobs unset → PT window gate (finishes before 9 AM PT year-round).
+  if (!opts.forceJobs?.length && !opts.bypassPtWindow && !shouldDispatchMorningPipeline(nowMs)) {
+    const state = await readSchedulerState(env);
+    return {
+      status: 200,
+      body: {
+        ok: true,
+        skipped: true,
+        reason: isPacificWeekday(nowMs) ? 'outside_pt_dispatch_window' : 'weekend_pt',
+        day_key,
+        pacific,
+        timezone: PACIFIC_TZ,
+        dispatch_window_pt: '07:00–08:59',
+        source_of_truth: SCHEDULER_SOURCE_OF_TRUTH,
+        source,
+        morning_pipeline_complete: isMorningPipelineComplete(state, day_key),
+        live_email_send: false,
+        auto_send: false,
+        send_window_in_cron: false,
+        message: isPacificWeekday(nowMs)
+          ? `Skipped — outside America/Los_Angeles 07:00–08:59 (now ${String(pacific.hour).padStart(2, '0')}:${String(pacific.minute).padStart(2, '0')} PT). Idempotent; GHA retries hourly.`
+          : 'Weekend PT — no outreach morning pipeline.',
+      },
+    };
+  }
+
+  const weekdayDue = opts.forceJobs?.length ? opts.forceJobs : morningPipelineJobs();
   const results: SchedulerJobResult[] = [];
   for (const job of weekdayDue) {
     results.push(
@@ -580,17 +649,31 @@ export async function dispatchOutreachCron(
     );
   }
 
-  const state = await readSchedulerState(env);
+  let state = await readSchedulerState(env);
+  state.last_source = source;
+  state.hobby_single_cron = true;
+  await writeSchedulerState(state, env);
+  state = await readSchedulerState(env);
+
+  const failed = results.some((r) => r.status === 'failed');
   return {
-    status: results.some((r) => r.status === 'failed') ? 502 : 200,
+    status: failed ? 502 : 200,
     body: {
-      ok: !results.some((r) => r.status === 'failed'),
-      day_key: laDayKey(nowMs),
-      pacific: pacificParts(nowMs),
+      ok: !failed,
+      day_key,
+      pacific,
+      timezone: PACIFIC_TZ,
+      dispatch_window_pt: '07:00–08:59',
+      in_start_hour: isMorningPipelineStartHour(nowMs),
+      source_of_truth: SCHEDULER_SOURCE_OF_TRUTH,
+      source,
+      github_actions_cron: GITHUB_ACTIONS_CRON_SCHEDULE,
+      vercel_backup_crons: [OUTREACH_CRON_SCHEDULE, OUTREACH_CRON_SCHEDULE_PST_BACKUP],
       cron_schedule: OUTREACH_CRON_SCHEDULE,
       cron_schedule_note: OUTREACH_CRON_SCHEDULE_NOTE,
       hobby_single_cron: true,
       morning_pipeline: MORNING_PIPELINE_JOBS,
+      morning_pipeline_complete: isMorningPipelineComplete(state, day_key),
       due: weekdayDue,
       results,
       stages: state.stages,
@@ -601,20 +684,21 @@ export async function dispatchOutreachCron(
         last_message: state.last_message,
         last_at: state.last_at,
         last_error: state.last_error,
+        last_source: state.last_source,
         hobby_single_cron: true,
       },
       live_email_send: false,
       auto_send: false,
       send_window_in_cron: false,
       message: weekdayDue.length
-        ? `Hobby morning pipeline: processed ${results.length} stage(s) sequentially (no auto-send).`
-        : 'Weekend PT — no outreach morning pipeline.',
+        ? `Morning pipeline (${source}): processed ${results.length} stage(s) sequentially before 9:00 AM PT target (no auto-send).`
+        : 'No outreach jobs due.',
     },
   };
 }
 
 export async function getSchedulerDashboard(env: SchedulerEnv = process.env, nowMs = Date.now()) {
-  const [state, runs, cap, controls, queue, interested, followUps] = await Promise.all([
+  const [state, runs, cap, controls, queue, interested, followUps, cohortDash] = await Promise.all([
     readSchedulerState(env),
     dbReadKv<SchedulerJobResult[]>(SCHEDULER_RUNS_KV, [], env),
     readDailyCapState(env, nowMs),
@@ -622,27 +706,42 @@ export async function getSchedulerDashboard(env: SchedulerEnv = process.env, now
     readSendQueue(env),
     listInterestedNotify(env),
     listFollowUpDrafts(env),
+    getDaily20Dashboard(env, { refresh: false, now: nowMs }).catch(() => null),
   ]);
-  // Logical intended PT times for UI (stages may run back-to-back on Hobby).
-  const nextCron = describeNextWeekdayRun(7, 0, nowMs); // ≈14:00 UTC / 7am PDT
+  // Next run always computed in America/Los_Angeles (DST-safe).
+  const nextCron = describeNextWeekdayRun(7, 0, nowMs);
   const nextDiscover = describeNextWeekdayRun(7, 0, nowMs);
   const nextVerify = describeNextWeekdayRun(8, 0, nowMs);
   const nextSelect = describeNextWeekdayRun(8, 30, nowMs);
   const nextNotify = describeNextWeekdayRun(9, 0, nowMs);
+  const day_key = laDayKey(nowMs);
+  const recent = Array.isArray(runs) ? runs : [];
   return {
     ok: true as const,
     mac_independent: true,
+    timezone: PACIFIC_TZ,
+    source_of_truth: SCHEDULER_SOURCE_OF_TRUTH,
     hobby_single_cron: true,
+    github_actions_cron: GITHUB_ACTIONS_CRON_SCHEDULE,
+    vercel_backup_crons: [OUTREACH_CRON_SCHEDULE, OUTREACH_CRON_SCHEDULE_PST_BACKUP],
     cron_schedule: OUTREACH_CRON_SCHEDULE,
     cron_schedule_note: OUTREACH_CRON_SCHEDULE_NOTE,
     mail_app_note:
-      'Mail.app is Mac-only interim and cannot run when Mac is asleep. Scheduler prep uses Vercel cron + Neon; post-approval send uses Graph/Resend when enabled.',
+      'Mail.app is Mac-only interim and cannot run when Mac is asleep. Morning prep: GitHub Actions (primary, PT-gated) + Vercel Hobby backup + Neon. Post-approval send uses Graph/Resend when enabled.',
     auto_send: false,
     send_window_in_cron: false,
     scheduler_enabled: env.OUTREACH_SCHEDULER_ENABLED === undefined || truthy(env.OUTREACH_SCHEDULER_ENABLED),
     pacific_now: pacificParts(nowMs),
+    dispatch_window_pt: '07:00–08:59',
+    morning_pipeline_complete: isMorningPipelineComplete(state, day_key),
+    ready_for_review: {
+      day_key,
+      qualified: cohortDash?.cohort.qualified.length ?? 0,
+      target: cohortDash?.cohort.target_qualify ?? 20,
+      message: cohortDash?.cohort.message ?? null,
+    },
     next_runs: {
-      /** Single Hobby cron fire (logical discover slot). */
+      /** Next America/Los_Angeles 07:00 weekday (GHA primary tick). */
       cron: nextCron,
       discover: nextDiscover,
       verify: nextVerify,
@@ -652,10 +751,18 @@ export async function getSchedulerDashboard(env: SchedulerEnv = process.env, now
     stages: state.stages,
     stages_day_key: state.stages_day_key,
     stage_intended_pt: STAGE_INTENDED_PT,
-    last_successful_run: (Array.isArray(runs) ? runs : []).find((r) => r.status === 'completed') || null,
+    last_successful_run: recent.find((r) => r.status === 'completed') || null,
     last_error: state.last_error,
+    last_source: state.last_source,
     state,
-    recent_runs: (Array.isArray(runs) ? runs : []).slice(0, 20),
+    recent_runs: recent.slice(0, 20),
+    execution_log: recent.slice(0, 20).map((r) => ({
+      job: r.job,
+      day_key: r.day_key,
+      status: r.status,
+      at: r.at,
+      message: r.message,
+    })),
     daily_counter: {
       sent_today: cap.sent_today,
       effective_cap: effectiveCap(cap, nowMs),
@@ -672,7 +779,7 @@ export async function getSchedulerDashboard(env: SchedulerEnv = process.env, now
     },
     send_window: {
       enforce: controls.enforce_send_window,
-      label: `${controls.window_start_hour_pt ?? 9}–${controls.window_end_hour_pt ?? 11} PT (owner-approved only; not in Hobby cron)`,
+      label: `${controls.window_start_hour_pt ?? 9}–${controls.window_end_hour_pt ?? 11} ${PACIFIC_TZ} (owner-approved only; not in auto cron)`,
     },
   };
 }

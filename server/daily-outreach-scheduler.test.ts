@@ -1,10 +1,11 @@
 /**
- * Daily outreach scheduler — Hobby single-cron, sequential morning pipeline,
+ * Daily outreach scheduler — PT-gated morning pipeline, GHA primary,
  * idempotency, exclusions, no auto-send.
  */
 import assert from 'node:assert/strict';
 import { describe, it, beforeEach } from 'node:test';
 import { resetMemoryCrmDb } from './crm-db.ts';
+import { resetMemoryDiscovery } from './crm-discovery-store.ts';
 import {
   DAILY_20_BATCH_1_SENT_EMAILS,
   HARD_EXCLUDE_EMAILS,
@@ -15,18 +16,24 @@ import {
 } from './daily-20-pipeline.ts';
 import { fixtureCrmLead, fixtureDiscoveredLead } from './lead-queue.ts';
 import {
+  GITHUB_ACTIONS_CRON_SCHEDULE,
   MORNING_PIPELINE_JOBS,
   OUTREACH_CRON_SCHEDULE,
+  OUTREACH_CRON_SCHEDULE_PST_BACKUP,
+  SCHEDULER_SOURCE_OF_TRUTH,
   dispatchOutreachCron,
+  getSchedulerDashboard,
   idempotencyKey,
   isJobComplete,
   jobsDueAt,
   morningPipelineJobs,
   readSchedulerState,
   runSchedulerJob,
+  shouldDispatchMorningPipeline,
 } from './daily-outreach-scheduler.ts';
 import { pacificParts } from './pacific-time.ts';
 import { notifyOwnerDailyReviewReady } from './owner-notify.ts';
+import { listStudioDrafts } from './email-studio.ts';
 
 const memEnv = {
   CRM_DATABASE_MEMORY: '1',
@@ -45,6 +52,7 @@ const memEnv = {
 
 beforeEach(() => {
   resetMemoryCrmDb(memEnv);
+  resetMemoryDiscovery(memEnv);
 });
 
 describe('hard exclusions (Batch 1 + Daily-20 19 + AKA HOLD)', () => {
@@ -119,44 +127,74 @@ describe('hard exclusions (Batch 1 + Daily-20 19 + AKA HOLD)', () => {
   });
 });
 
-describe('Hobby single-cron + morning pipeline', () => {
-  it('cron schedule fires once per weekday (Hobby-safe)', () => {
-    // Once at minute 0 of hour 14 UTC, Mon–Fri — not */30 and not an hour range.
+describe('PT-gated morning pipeline (GHA primary)', () => {
+  it('documents source of truth + Hobby-safe Vercel backups', () => {
+    assert.equal(SCHEDULER_SOURCE_OF_TRUTH, 'github-actions');
+    assert.equal(GITHUB_ACTIONS_CRON_SCHEDULE, '5 13-17 * * 1-5');
     assert.equal(OUTREACH_CRON_SCHEDULE, '0 14 * * 1-5');
+    assert.equal(OUTREACH_CRON_SCHEDULE_PST_BACKUP, '0 15 * * 1-5');
     assert.ok(!OUTREACH_CRON_SCHEDULE.includes('*/'));
-    assert.ok(!/\d+-\d+/.test(OUTREACH_CRON_SCHEDULE.split(' ')[1] || ''));
+    assert.ok(!OUTREACH_CRON_SCHEDULE_PST_BACKUP.includes('*/'));
   });
 
-  it('weekday cron due list is full morning pipeline; never send_window', () => {
-    // 2026-10-23 Friday: any weekday PT time → full pipeline (Hobby single fire)
-    const morningMs = Date.parse('2026-10-23T14:00:00Z'); // 7:00 PT PDT
-    const middayMs = Date.parse('2026-10-23T16:10:00Z'); // 9:10 PT
-    assert.deepEqual(jobsDueAt(morningMs), ['discover', 'verify', 'select', 'notify']);
-    assert.deepEqual(jobsDueAt(middayMs), MORNING_PIPELINE_JOBS);
+  it('jobsDueAt only inside 07:00–08:59 PT weekday; never send_window', () => {
+    // PDT Friday 7:05 PT
+    const startMs = Date.parse('2026-10-23T14:05:00Z');
+    assert.equal(shouldDispatchMorningPipeline(startMs), true);
+    assert.deepEqual(jobsDueAt(startMs), ['discover', 'verify', 'select', 'notify']);
     assert.deepEqual(morningPipelineJobs(), MORNING_PIPELINE_JOBS);
-    assert.ok(!jobsDueAt(morningMs).includes('send_window'));
-    assert.ok(!jobsDueAt(middayMs).includes('replies'));
+    assert.ok(!jobsDueAt(startMs).includes('send_window'));
 
-    const weekend = Date.parse('2026-10-24T16:00:00Z'); // Sat
+    // PDT Friday 9:10 PT — past window
+    const lateMs = Date.parse('2026-10-23T16:10:00Z');
+    assert.equal(pacificParts(lateMs).hour, 9);
+    assert.equal(shouldDispatchMorningPipeline(lateMs), false);
+    assert.deepEqual(jobsDueAt(lateMs), []);
+
+    // PST Wednesday 6:05 PT — too early (Vercel 14:00 UTC in winter)
+    const earlyPst = Date.parse('2026-01-14T14:05:00Z');
+    assert.equal(pacificParts(earlyPst).hour, 6);
+    assert.deepEqual(jobsDueAt(earlyPst), []);
+
+    // PST Wednesday 7:05 PT — run
+    const pst7 = Date.parse('2026-01-14T15:05:00Z');
+    assert.deepEqual(jobsDueAt(pst7), MORNING_PIPELINE_JOBS);
+
+    const weekend = Date.parse('2026-10-24T15:00:00Z');
     assert.deepEqual(jobsDueAt(weekend), []);
   });
 
-  it('dispatch runs discover→verify→select→notify sequentially with stage stamps', async () => {
-    const nowMs = Date.parse('2026-10-23T14:00:00Z');
+  it('dispatch skips outside PT window; runs full pipeline inside (with drafts)', async () => {
+    const outside = await dispatchOutreachCron(
+      { authorization: 'Bearer cron-test-secret' },
+      memEnv,
+      {
+        nowMs: Date.parse('2026-10-23T16:10:00Z'), // 9:10 PT
+        fixturesOnly: true,
+        source: 'github-actions',
+      },
+    );
+    assert.equal(outside.status, 200);
+    assert.equal(outside.body.skipped, true);
+    assert.equal(outside.body.reason, 'outside_pt_dispatch_window');
+    assert.equal(outside.body.auto_send, false);
+
     const ok = await dispatchOutreachCron(
       { authorization: 'Bearer cron-test-secret' },
       memEnv,
       {
-        nowMs,
+        nowMs: Date.parse('2026-10-23T14:05:00Z'), // 7:05 PT PDT
         fixturesOnly: true,
+        source: 'github-actions',
         fetchImpl: async () => new Response(JSON.stringify({ id: 'mock' }), { status: 200 }),
       },
     );
     assert.equal(ok.status, 200);
     assert.equal(ok.body.hobby_single_cron, true);
+    assert.equal(ok.body.source_of_truth, 'github-actions');
+    assert.equal(ok.body.source, 'github-actions');
     assert.equal(ok.body.auto_send, false);
     assert.equal(ok.body.send_window_in_cron, false);
-    assert.equal(ok.body.cron_schedule, '0 14 * * 1-5');
     assert.deepEqual(ok.body.due, ['discover', 'verify', 'select', 'notify']);
     const results = ok.body.results as Array<{ job: string; status: string }>;
     assert.deepEqual(
@@ -168,14 +206,58 @@ describe('Hobby single-cron + morning pipeline', () => {
 
     const stages = ok.body.stages as Record<string, { intended_pt: string; status: string }>;
     assert.equal(stages.discover?.intended_pt, '07:00');
-    assert.equal(stages.verify?.intended_pt, '08:00');
-    assert.equal(stages.select?.intended_pt, '08:30');
     assert.equal(stages.notify?.intended_pt, '09:00');
-    assert.ok(['completed', 'idempotent_skip'].includes(stages.notify?.status));
+
+    // Second tick same LA day is idempotent (no double heavy work)
+    const again = await dispatchOutreachCron(
+      { authorization: 'Bearer cron-test-secret' },
+      memEnv,
+      {
+        nowMs: Date.parse('2026-10-23T15:10:00Z'), // 8:10 PT catch-up
+        fixturesOnly: true,
+        source: 'vercel',
+      },
+    );
+    assert.equal(again.status, 200);
+    const againResults = again.body.results as Array<{ status: string }>;
+    assert.ok(againResults.every((r) => r.status === 'idempotent_skip'));
+  });
+
+  it('select persists unapproved personalized drafts for Daily Review', async () => {
+    const { upsertDiscoveredLead } = await import('./crm-discovery-store.ts');
+    const nowMs = Date.parse('2026-10-23T14:30:00Z');
+    for (let i = 0; i < 25; i++) {
+      await upsertDiscoveredLead(
+        fixtureDiscoveredLead({
+          id: `d${i}`,
+          place_id: `places/d${i}`,
+          public_email: `lead${i}@ocspa.example`,
+          business_name: `OC Spa ${i}`,
+          city: 'Irvine',
+          category: 'med spa',
+          website: `https://ocspa${i}.example`,
+          score_total: 80,
+          status: 'qualified',
+          weak_website_signals: [`booking widget lacks confirm ${i}`],
+        }),
+        memEnv,
+      );
+    }
+    // Live select path (no fixturesOnly) reads discovered store → qualify → persist drafts
+    const select = await runSchedulerJob('select', memEnv, { nowMs, fixturesOnly: false });
+    assert.equal(select.status, 'completed');
+    assert.ok((select.details?.qualified as number) >= 1);
+    assert.ok((select.details?.drafts_ready as number) >= 1);
+    assert.equal(select.details?.auto_approved, false);
+    assert.equal(select.details?.padded, false);
+    const drafts = await listStudioDrafts(memEnv);
+    assert.ok(drafts.length >= 1);
+    assert.ok(drafts.every((d) => d.approved === false));
+    assert.ok(drafts.every((d) => d.observation_verified));
   });
 
   it('is idempotent for the same job/day', async () => {
-    const nowMs = Date.parse('2026-10-23T15:40:00Z');
+    const nowMs = Date.parse('2026-10-23T14:40:00Z');
     const first = await runSchedulerJob('select', memEnv, { nowMs, fixturesOnly: true, force: false });
     assert.equal(first.status, 'completed');
     const second = await runSchedulerJob('select', memEnv, { nowMs, fixturesOnly: true, force: false });
@@ -184,12 +266,11 @@ describe('Hobby single-cron + morning pipeline', () => {
     assert.equal(isJobComplete(state, 'select', first.day_key), true);
     assert.equal(idempotencyKey('select', first.day_key), `select:${first.day_key}`);
     assert.equal(state.stages.select?.status, 'idempotent_skip');
-    assert.equal(state.hobby_single_cron, true);
   });
 
   it('cron requires CRON_SECRET and never auto-sends (even if send_window forced)', async () => {
     const denied = await dispatchOutreachCron({ authorization: 'Bearer wrong' }, memEnv, {
-      nowMs: Date.parse('2026-10-23T16:10:00Z'),
+      nowMs: Date.parse('2026-10-23T14:10:00Z'),
       fixturesOnly: true,
     });
     assert.equal(denied.status, 401);
@@ -198,7 +279,7 @@ describe('Hobby single-cron + morning pipeline', () => {
       { authorization: 'Bearer cron-test-secret' },
       memEnv,
       {
-        nowMs: Date.parse('2026-10-23T16:10:00Z'),
+        nowMs: Date.parse('2026-10-23T14:10:00Z'),
         forceJobs: ['notify', 'send_window'],
         fixturesOnly: true,
         fetchImpl: async () => new Response(JSON.stringify({ id: 'mock' }), { status: 200 }),
@@ -211,6 +292,17 @@ describe('Hobby single-cron + morning pipeline', () => {
     const send = results.find((r) => r.job === 'send_window');
     assert.ok(send);
     assert.ok(send!.status === 'skipped' || /live cron send OFF/i.test(send!.message));
+  });
+
+  it('dashboard next_runs use America/Los_Angeles', async () => {
+    const nowMs = Date.parse('2026-01-14T14:00:00Z'); // 6am PST Wed
+    const dash = await getSchedulerDashboard(memEnv, nowMs);
+    assert.equal(dash.timezone, 'America/Los_Angeles');
+    assert.equal(dash.source_of_truth, 'github-actions');
+    assert.equal(dash.auto_send, false);
+    assert.match(dash.next_runs.cron.at_pt, /America\/Los_Angeles/);
+    assert.equal(dash.next_runs.cron.dayKey, '2026-01-14');
+    assert.equal(pacificParts(Date.parse(dash.next_runs.cron.at_utc)).hour, 7);
   });
 });
 

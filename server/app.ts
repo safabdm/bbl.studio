@@ -1090,7 +1090,12 @@ app.post('/api/admin/crm/scheduler/run', async (c) => {
   return c.json(result.body, result.status);
 });
 app.get('/api/crm/outreach/cron', async (c) => {
-  const result = await handleOutreachSchedulerCron({ authorization: c.req.header('authorization') });
+  const source = c.req.query('source') || undefined;
+  const result = await handleOutreachSchedulerCron(
+    { authorization: c.req.header('authorization') },
+    process.env,
+    { source },
+  );
   return c.json(result.body, result.status);
 });
 
