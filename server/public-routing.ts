@@ -9,6 +9,8 @@ export type VercelRedirect = {
   destination: string;
   statusCode?: number;
   permanent?: boolean;
+  /** Host / header conditions — evaluated by Vercel, ignored by the local route model. */
+  has?: unknown[];
 };
 
 export type VercelRewrite = {
@@ -80,6 +82,9 @@ export function resolvePublicRoute(
     return { status: 308, kind: 'redirect', location: `${path.replace(/\/+$/, '')}${search}` };
   }
   for (const redirect of config.redirects || []) {
+    // Skip host-conditioned redirects (e.g. apex → www). Vercel evaluates `has`;
+    // the local model only simulates path redirects.
+    if (Array.isArray(redirect.has) && redirect.has.length > 0) continue;
     if (sourceMatches(redirect.source, path)) {
       return { status: redirectStatus(redirect), location: redirect.destination, kind: 'redirect' };
     }
@@ -88,6 +93,10 @@ export function resolvePublicRoute(
   const fileName = path === '/' ? 'index.html' : path.slice(1);
   if (!fileName.includes('..') && files.has(fileName)) {
     return { status: 200, kind: 'file', file: fileName };
+  }
+  // Vercel clean URLs: /about resolves to about.html when present in the output.
+  if (!fileName.includes('..') && !fileName.endsWith('.html') && files.has(`${fileName}.html`)) {
+    return { status: 200, kind: 'file', file: `${fileName}.html` };
   }
 
   for (const rewrite of config.rewrites || []) {
@@ -109,4 +118,20 @@ export const PRODUCTION_OUTPUT_FILES = [
   'sitemap.xml',
   'robots.txt',
   'llms.txt',
+  'orange-county-web-design.html',
+  'landing-page-design.html',
+  'business-website-design.html',
+  'commercial-web-design.html',
+  'med-spa-website-design.html',
+  'salon-website-design.html',
+  'booking-website-design.html',
+  'website-redesign.html',
+  'ux-audit.html',
+  'healthcare-ux-design.html',
+  'work.html',
+  'work/raysan-ip.html',
+  'work/7-stud-farm.html',
+  'work/ip-law-nerds.html',
+  'about.html',
+  'contact.html',
 ] as const;

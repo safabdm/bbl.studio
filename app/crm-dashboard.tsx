@@ -1260,7 +1260,7 @@ function InboxPage() {
                     {item.snippet ? <div className="crm-muted crm-sub crm-clamp">{item.snippet}</div> : null}
                   </td>
                   <td className="crm-col-date crm-muted">{fmtDate(item.received_at, true)}</td>
-                  <td><span className="crm-pill muted">{item.source === 'resend_inbound' ? 'Resend' : item.source === 'gmail' ? 'Gmail' : 'Unknown'}</span></td>
+                  <td><span className="crm-pill muted">{item.source === 'resend_inbound' ? 'Resend' : item.source === 'gmail' ? 'Gmail' : item.source === 'website_form' ? 'Website' : 'Unknown'}</span></td>
                 </tr>
               ))}
             </tbody>
@@ -1412,7 +1412,32 @@ function AnalyticsPage() {
           </div>
         )}
       </section>
+      <SeoConnectionCard />
     </>
+  );
+}
+
+function SeoConnectionCard() {
+  const { overview } = useCrmStatus();
+  const connected = Boolean(
+    overview &&
+      typeof overview === 'object' &&
+      (overview as { seo?: { gsc_connected?: boolean } }).seo?.gsc_connected,
+  );
+  return (
+    <section className="crm-panel">
+      <div className="crm-panel-head"><h2>SEO</h2></div>
+      <div className="crm-pad">
+        {connected ? (
+          <CheckRow ok label="Google Search Console" value="Connected" />
+        ) : (
+          <CheckRow ok={false} label="Google Search Console" value="Not connected" />
+        )}
+        <p className="crm-muted crm-sub" style={{ marginTop: 8 }}>
+          Only connected Search Console data will appear here. Estimates are never shown as metrics.
+        </p>
+      </div>
+    </section>
   );
 }
 

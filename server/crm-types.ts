@@ -119,7 +119,7 @@ export type CrmInboxItem = {
   subject?: string | null;
   snippet?: string | null;
   received_at?: string | null;
-  source: 'resend_inbound' | 'gmail' | 'unknown';
+  source: 'resend_inbound' | 'gmail' | 'website_form' | 'unknown';
 };
 
 export type CrmBookingItem = {

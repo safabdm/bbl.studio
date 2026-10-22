@@ -194,6 +194,26 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
       }
     }
 
+    if (matches(path, '/api/inquiry') && method === 'POST') {
+      const { submitPublicInquiry } = await import('../server/public-inquiry.js');
+      const body = await readJson(req);
+      const forwarded = String(req.headers['x-forwarded-for'] || '')
+        .split(',')[0]
+        ?.trim();
+      const ip = forwarded || String(req.socket.remoteAddress || 'unknown');
+      const result = await submitPublicInquiry(
+        {
+          name: String(body.name || ''),
+          email: String(body.email || ''),
+          service: String(body.service || ''),
+          message: String(body.message || ''),
+          website: String(body.website || ''),
+        },
+        ip,
+      );
+      return send(res, result.status, { ok: result.ok, message: result.message });
+    }
+
     if (matches(path, '/api/start-project/checkout') && method === 'POST') {
       const body = await readJson(req);
       const offerId = String(body.offerId || '') as keyof typeof PROJECT_PACKAGES;

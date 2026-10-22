@@ -152,7 +152,9 @@ function normalizeInbox(raw: unknown): CrmInboxItem | null {
   if (!from.includes('@')) return null;
   const sourceRaw = String(row.source || 'unknown');
   const source =
-    sourceRaw === 'resend_inbound' || sourceRaw === 'gmail' ? sourceRaw : 'unknown';
+    sourceRaw === 'resend_inbound' || sourceRaw === 'gmail' || sourceRaw === 'website_form'
+      ? sourceRaw
+      : 'unknown';
   return {
     id: String(row.id || `${from}:${row.received_at || ''}`),
     from_email: from,

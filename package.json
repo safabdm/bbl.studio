@@ -10,6 +10,7 @@
   "scripts": {
     "dev": "vinext dev",
     "build": "vinext build",
+    "build:vercel": "pnpm exec vite build --config vite.vercel.config.ts && cp out/index.html out/app.html && cp out/home.html out/index.html && rm -f out/studio.html && pnpm exec tsx scripts/seo-build.ts",
     "start": "wrangler dev --config dist/server/wrangler.json",
     "seed": "tsx server/seed.ts",
     "lint": "oxlint",
@@ -20,8 +21,9 @@
     "test:crm": "tsx --test server/crm-safety.test.ts server/crm-campaigns.test.ts server/outreach-policy.test.ts server/preview-token.test.ts server/resend-send.test.ts server/freelance-score.test.ts server/resend-webhook.test.ts server/crm-freshness.test.ts server/crm-sync.test.ts server/crm-esm-imports.test.ts server/crm-discovery.test.ts",
     "test:admin-auth": "tsx --test api/admin-auth.test.ts server/admin-auth.test.ts api/crm-sync-auth.test.ts",
     "test:routing": "tsx --test server/public-routing.test.ts",
+    "test:inquiry": "tsx --test server/public-inquiry.test.ts",
     "test:serverless-init": "tsx --test server/project-root.test.ts server/crm-esm-imports.test.ts",
-    "test:crm-all": "pnpm test:unsubscribe && pnpm test:booking && pnpm test:crm && pnpm test:admin-auth && pnpm test:serverless-init"
+    "test:crm-all": "pnpm test:unsubscribe && pnpm test:booking && pnpm test:crm && pnpm test:admin-auth && pnpm test:serverless-init && pnpm test:inquiry && pnpm test:routing"
   },
   "dependencies": {
     "@base-ui/react": "1.7.0",

@@ -10,36 +10,45 @@
 - Public name: BBL Studio
 - Brand statement: We don’t shape bodies. We build businesses.
 
+Note: llms.txt is a plain-text summary for assistants and crawlers. It is not a confirmed search ranking factor.
+
 ## What is BBL Studio?
 
-BBL Studio is a boutique website design studio serving businesses in Orange County, California. Strategy, design, and development stay in one studio. The work is custom website design — landing pages, business websites, and commercial websites — built to build credibility, generate inquiries, and support growth.
+BBL Studio is a boutique website design studio serving businesses in Orange County, California. Strategy, design, and development stay in one studio. The work is custom website design — landing pages, business websites, commercial sites, redesigns, and UX audits — built to build credibility, generate inquiries, and support growth.
 
-## Who should hire BBL Studio for website design?
+## Who is BBL Studio for?
 
-Businesses in Orange County that want a distinctive custom website, not a template. Typical clients need a clear offer, a considered visual direction, and a site that is ready to launch.
+Orange County businesses that want a distinctive custom website, not a template. Typical clients need a clear offer, a considered visual direction, and a site that is ready to launch. Vertical pages exist for med spas, salons, booking-led businesses, healthcare UX, redesigns, and UX audits.
 
-## Does BBL Studio provide website design in Orange County?
+## What services does BBL Studio offer?
 
-Yes. BBL Studio provides custom website design throughout Orange County, including Irvine, Newport Beach, Costa Mesa, Laguna Beach, and Tustin. The studio does not claim a public street office in those cities.
+- Landing page design — https://www.bbl.studio/landing-page-design
+- Business website design — https://www.bbl.studio/business-website-design
+- Commercial web design — https://www.bbl.studio/commercial-web-design
+- Med spa website design — https://www.bbl.studio/med-spa-website-design
+- Salon website design — https://www.bbl.studio/salon-website-design
+- Booking website design — https://www.bbl.studio/booking-website-design
+- Website redesign — https://www.bbl.studio/website-redesign
+- UX audit — https://www.bbl.studio/ux-audit
+- Healthcare UX design — https://www.bbl.studio/healthcare-ux-design
+- Orange County web design (service area) — https://www.bbl.studio/orange-county-web-design
+- Optional Brand Identity add-on with a website engagement
 
-## What website services does BBL Studio offer?
+Pricing is quoted after consultation based on scope. Public dollar starting prices are not listed here.
 
-- Simple Landing Page. Starting at $3,000. One focused page designed to present one offer clearly.
-- Business Website. Starting at $5,500. Up to five custom pages for credibility and inquiries.
-- Commercial Website. Starting at $8,500. Six to ten custom pages with stronger architecture and journeys.
-- Design Faster with AI. Designer-led, AI-assisted ideation, iteration, prototyping, and production. Scope is agreed per project.
-- Brand Identity add-on. Starting at $3,500. Optional logo, color, typography, and visual direction with a website engagement.
+## Where does BBL Studio work?
 
-## How much does website design cost?
-
-Landing pages start at $3,000, business websites start at $5,500, and commercial websites start at $8,500. Brand Identity starts at $3,500 as an optional add-on. Final pricing depends on scope, content, and functionality. Platform subscriptions are separate.
+Orange County, California — including Irvine, Newport Beach, Costa Mesa, Laguna Beach, Tustin, and nearby cities. The studio does not claim a public street storefront in those cities.
 
 ## Selected work
 
-- Raysan IP: https://raysanip.com/
-- 7 Stud Farm: https://7studfarm.com/
-- IP Law Nerds: https://www.iplawnerds.com/
+- Raysan IP: https://raysanip.com/ — case study https://www.bbl.studio/work/raysan-ip
+- 7 Stud Farm: https://7studfarm.com/ — case study https://www.bbl.studio/work/7-stud-farm
+- IP Law Nerds: https://www.iplawnerds.com/ — case study https://www.bbl.studio/work/ip-law-nerds
 
-## How to start
+## How to book
 
-Email hello@bbl.studio or call (949) 524-2324.
+Book a free consultation: https://www.bbl.studio/book (canonical https://www.bbl.studio/booking)
+Email: hello@bbl.studio
+Phone: (949) 524-2324
+Contact page: https://www.bbl.studio/contact
