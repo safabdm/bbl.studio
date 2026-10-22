@@ -327,23 +327,17 @@ const NAV: Array<{ group: string; items: Array<{ to: string; label: string; end?
     group: 'Pipeline',
     items: [
       { to: '/admin', label: 'Overview', end: true },
-      { to: '/admin/leads', label: 'Leads' },
+      { to: '/admin/automation', label: 'Discover Leads' },
+      { to: '/admin/lead-queue', label: 'Lead Queue' },
+      { to: '/admin/campaigns', label: 'Email Campaigns' },
       { to: '/admin/inbox', label: 'Inbox' },
-      { to: '/admin/bookings', label: 'Bookings' },
-    ],
-  },
-  {
-    group: 'Outreach',
-    items: [
-      { to: '/admin/campaigns', label: 'Campaigns' },
       { to: '/admin/analytics', label: 'Analytics' },
-      { to: '/admin/automation', label: 'Automation' },
-      { to: '/admin/freelance', label: 'Freelance' },
     ],
   },
   {
     group: 'Studio',
     items: [
+      { to: '/admin/freelance', label: 'Freelance' },
       { to: '/admin/projects', label: 'Client portal' },
       { to: '/admin/settings', label: 'Settings' },
     ],
@@ -1027,7 +1021,7 @@ function CampaignsPage() {
   return (
     <>
       <PageHeader
-        title="Campaigns"
+        title="Email Campaigns"
         description="Select recipients, write, preview every personalization, then confirm."
         actions={
           <>
@@ -1337,12 +1331,24 @@ function BookingsPage() {
 function AnalyticsPage() {
   const [campaigns, setCampaigns] = useState<CrmCampaignSummary[] | null>(null);
   const [history, setHistory] = useState<CrmEmailHistoryItem[]>([]);
+  const [outreach, setOutreach] = useState<{
+    empty?: boolean;
+    metrics_trusted?: boolean;
+    message?: string;
+    metrics?: Record<string, number> | null;
+  } | null>(null);
   const [error, setError] = useState('');
   useEffect(() => {
-    void api<{ campaigns: CrmCampaignSummary[]; email_history?: CrmEmailHistoryItem[] }>('/api/admin/crm/campaigns')
-      .then((data) => {
+    void Promise.all([
+      api<{ campaigns: CrmCampaignSummary[]; email_history?: CrmEmailHistoryItem[] }>('/api/admin/crm/campaigns'),
+      api<{ empty?: boolean; metrics_trusted?: boolean; message?: string; metrics?: Record<string, number> | null }>(
+        '/api/admin/crm/outreach-analytics',
+      ),
+    ])
+      .then(([data, oa]) => {
         setCampaigns(data.campaigns || []);
         setHistory(data.email_history || []);
+        setOutreach(oa);
       })
       .catch((err) => {
         setCampaigns([]);
@@ -1362,9 +1368,24 @@ function AnalyticsPage() {
 
   return (
     <>
-      <PageHeader title="Analytics" description="Outcomes from live sends only. Unknown means no provider event has arrived — not a failure." />
+      <PageHeader title="Analytics" description="KPIs from real data only. Empty when unsynced — never fake zeros. Unknown stays Unknown until a provider event." />
       <SyncNotice />
       {error ? <p className="crm-error">{error}</p> : null}
+      {outreach?.empty || !outreach?.metrics_trusted ? (
+        <Empty title="No outreach metrics yet">{outreach?.message || 'Queue activity and live sends will appear here.'}</Empty>
+      ) : outreach?.metrics ? (
+        <div className="crm-tiles">
+          {Object.entries(outreach.metrics)
+            .filter(([, v]) => typeof v === 'number')
+            .map(([label, value]) => (
+              <div className="crm-tile" key={label}>
+                <span>{label.replace(/_/g, ' ')}</span>
+                <strong>{value}</strong>
+                <em>trusted</em>
+              </div>
+            ))}
+        </div>
+      ) : null}
       {history.length ? (
         <div className="crm-tiles">
           {tiles.map((t) => (
@@ -1417,7 +1438,211 @@ function AnalyticsPage() {
 }
 
 /* ------------------------------------------------------------------ */
-/* Automation (discovery)                                              */
+/* Lead Queue (Neon discovery + Mac CRM bridge)                        */
+/* ------------------------------------------------------------------ */
+
+type QueueItem = {
+  id: string;
+  business_name: string;
+  email: string;
+  location?: string | null;
+  category?: string | null;
+  website_observation?: string | null;
+  score_total?: number | null;
+  scores?: Record<string, number> | null;
+  evidence?: Array<{ field: string; signal: string; detail: string; source: string }>;
+  sources: string[];
+  queue_status: string;
+  outreach_status: string;
+  reject_reason?: string | null;
+  contactable?: boolean;
+};
+
+function LeadQueuePage() {
+  const [items, setItems] = useState<QueueItem[]>([]);
+  const [excludedCount, setExcludedCount] = useState(0);
+  const [message, setMessage] = useState('');
+  const [error, setError] = useState('');
+  const [q, setQ] = useState('');
+  const [selected, setSelected] = useState<string[]>([]);
+  const [drawer, setDrawer] = useState<QueueItem | null>(null);
+  const [busy, setBusy] = useState('');
+  const [rejectReason, setRejectReason] = useState('');
+
+  const load = useCallback(() => {
+    const params = new URLSearchParams();
+    if (q.trim()) params.set('q', q.trim());
+    void api<{ items: QueueItem[]; excluded_count?: number; message?: string }>(
+      `/api/admin/crm/lead-queue?${params.toString()}`,
+    )
+      .then((data) => {
+        setItems(data.items || []);
+        setExcludedCount(data.excluded_count || 0);
+        setMessage(data.message || '');
+        setError('');
+      })
+      .catch((err) => setError(err instanceof Error ? err.message : 'Lead queue unavailable.'));
+  }, [q]);
+
+  useEffect(load, [load]);
+
+  useEffect(() => {
+    if (!drawer) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setDrawer(null);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [drawer]);
+
+  const act = async (action: string, leadId: string, reason?: string) => {
+    setBusy(action);
+    try {
+      await api('/api/admin/crm/lead-queue/action', {
+        method: 'POST',
+        body: JSON.stringify({ lead_id: leadId, action, reason }),
+      });
+      if (action === 'draft_email') {
+        await api('/api/admin/crm/email-studio/draft', {
+          method: 'POST',
+          body: JSON.stringify({ lead_id: leadId, regenerate: true }),
+        });
+      }
+      load();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Action failed.');
+    } finally {
+      setBusy('');
+    }
+  };
+
+  const toggle = (id: string) => {
+    setSelected((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
+  };
+
+  return (
+    <>
+      <PageHeader
+        title="Lead Queue"
+        description="One queue from Neon discovery + Mac CRM snapshot. Deduped by domain, email, and place_id. Suppressed / unsubscribed / contacted in 30 days are excluded."
+      />
+      {error ? <p className="crm-error">{error}</p> : null}
+      {message ? <p className="crm-banner">{message}{excludedCount ? ` · ${excludedCount} excluded` : ''}</p> : null}
+      <div className="crm-toolbar crm-pad">
+        <input
+          className="crm-input"
+          placeholder="Search business, email, city…"
+          value={q}
+          onChange={(e) => setQ(e.target.value)}
+          aria-label="Search lead queue"
+        />
+        <span className="crm-muted">{selected.length} selected</span>
+      </div>
+      <section className="crm-panel">
+        {!items.length ? (
+          <Empty title="Queue empty">{message || 'Sync CRM or run Discover Leads.'}</Empty>
+        ) : (
+          <div className="crm-table-wrap">
+            <table className="crm-table">
+              <thead>
+                <tr>
+                  <th aria-label="Select" />
+                  <th>Business</th>
+                  <th>Email</th>
+                  <th>Score</th>
+                  <th>Queue</th>
+                  <th>Outreach</th>
+                  <th>Source</th>
+                  <th />
+                </tr>
+              </thead>
+              <tbody>
+                {items.map((item) => (
+                  <tr key={item.id}>
+                    <td>
+                      <input type="checkbox" checked={selected.includes(item.id)} onChange={() => toggle(item.id)} aria-label={`Select ${item.business_name}`} />
+                    </td>
+                    <td>
+                      <button type="button" className="crm-link" onClick={() => setDrawer(item)}>{item.business_name}</button>
+                      <div className="crm-sub">{item.location || '—'} · {item.category || '—'}</div>
+                    </td>
+                    <td>{item.email || <span className="crm-faint">no email</span>}</td>
+                    <td>{item.score_total ?? '—'}</td>
+                    <td>{item.queue_status}</td>
+                    <td>{item.outreach_status}</td>
+                    <td>{item.sources.filter((s) => s !== 'merged').join(' + ')}</td>
+                    <td className="crm-col-action">
+                      <button type="button" className="crm-btn-secondary" disabled={Boolean(busy)} onClick={() => void act('approve', item.id)}>Approve</button>
+                      <button type="button" className="crm-btn-secondary" disabled={Boolean(busy)} onClick={() => void act('save_for_later', item.id)}>Save</button>
+                      <button type="button" className="crm-btn-secondary" disabled={Boolean(busy)} onClick={() => void act('draft_email', item.id)}>Draft</button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </section>
+
+      {drawer ? (
+        <div className="crm-drawer-backdrop" role="presentation" onClick={() => setDrawer(null)}>
+          <aside
+            className="crm-drawer"
+            role="dialog"
+            aria-modal="true"
+            aria-label={`${drawer.business_name} details`}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="crm-panel-head">
+              <h2>{drawer.business_name}</h2>
+              <button type="button" className="crm-btn-secondary" onClick={() => setDrawer(null)}>Close</button>
+            </div>
+            <p className="crm-muted">{drawer.website_observation || 'No verified website observation yet.'}</p>
+            {drawer.scores ? (
+              <div className="crm-pad">
+                <p className="crm-subhead">Score breakdown</p>
+                <ul className="crm-checklist">
+                  {Object.entries(drawer.scores).map(([k, v]) => (
+                    <li key={k}>{k}: {v}</li>
+                  ))}
+                </ul>
+              </div>
+            ) : null}
+            {drawer.evidence?.length ? (
+              <div className="crm-pad">
+                <p className="crm-subhead">Evidence</p>
+                <ul className="crm-checklist">
+                  {drawer.evidence.map((ev, i) => (
+                    <li key={`${ev.signal}-${i}`}><strong>{ev.signal}</strong> — {ev.detail} <span className="crm-faint">({ev.source})</span></li>
+                  ))}
+                </ul>
+              </div>
+            ) : null}
+            <div className="crm-field">
+              <label htmlFor="reject-reason">Reject reason</label>
+              <input id="reject-reason" className="crm-input" value={rejectReason} onChange={(e) => setRejectReason(e.target.value)} />
+            </div>
+            <div className="crm-head-actions">
+              <button type="button" className="crm-btn" disabled={Boolean(busy)} onClick={() => void act('approve', drawer.id)}>Approve</button>
+              <button
+                type="button"
+                className="crm-btn-secondary"
+                disabled={Boolean(busy) || !rejectReason.trim()}
+                onClick={() => void act('reject', drawer.id, rejectReason.trim())}
+              >
+                Reject
+              </button>
+              <button type="button" className="crm-btn-secondary" disabled={Boolean(busy)} onClick={() => void act('draft_email', drawer.id)}>Draft email</button>
+            </div>
+          </aside>
+        </div>
+      ) : null}
+    </>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/* Automation (discovery) — nav label: Discover Leads                  */
 /* ------------------------------------------------------------------ */
 
 type DiscoveryDash = {
@@ -1519,8 +1744,8 @@ function AutomationPage() {
   return (
     <>
       <PageHeader
-        title="Automation"
-        description="Discover and qualify local businesses for owner review. Live outreach email stays off."
+        title="Discover Leads"
+        description="Places discovery + qualification for owner approval. Live outreach email stays off."
         actions={
           <>
             <button
@@ -1536,7 +1761,7 @@ function AutomationPage() {
                 Resume
               </button>
             ) : (
-              <button type="button" className="crm-btn-secondary" disabled={Boolean(busy)} onClick={() => void act('Pause', '/api/admin/crm/discovery/pause', { reason: 'Paused from Automation UI' })}>
+              <button type="button" className="crm-btn-secondary" disabled={Boolean(busy)} onClick={() => void act('Pause', '/api/admin/crm/discovery/pause', { reason: 'Paused from Discover Leads UI' })}>
                 Pause
               </button>
             )}
@@ -1810,20 +2035,88 @@ function FreelancePage() {
 
 function SettingsPage() {
   const [data, setData] = useState<Record<string, unknown> | null>(null);
+  const [sender, setSender] = useState<Record<string, unknown> | null>(null);
+  const [cap, setCap] = useState<Record<string, unknown> | null>(null);
   const [failed, setFailed] = useState(false);
-  useEffect(() => {
-    void api<Record<string, unknown>>('/api/admin/crm/settings').then(setData).catch(() => setFailed(true));
+  const [note, setNote] = useState('');
+  const [busy, setBusy] = useState('');
+
+  const load = useCallback(() => {
+    void Promise.all([
+      api<Record<string, unknown>>('/api/admin/crm/settings'),
+      api<Record<string, unknown>>('/api/admin/crm/sender'),
+      api<Record<string, unknown>>('/api/admin/crm/daily-cap'),
+    ])
+      .then(([settings, senderSnap, daily]) => {
+        setData(settings);
+        setSender(senderSnap);
+        setCap(daily);
+        setFailed(false);
+      })
+      .catch(() => setFailed(true));
   }, []);
+
+  useEffect(load, [load]);
+
   const safety = (data?.safety || {}) as Record<string, unknown>;
   const mac = (data?.mac_side_required || []) as string[];
   const persistence = (data?.persistence || {}) as Record<string, unknown>;
   const connection = asText(data?.connection, 'not_connected');
+  const graph = (sender?.graph || {}) as Record<string, unknown>;
   const onOff = (v: unknown) => (v === true ? 'On' : 'Off');
+
+  const connectOutlook = async () => {
+    setBusy('outlook');
+    setNote('');
+    try {
+      const res = await api<{ authorize_url?: string; message?: string }>('/api/admin/crm/outlook/connect', { method: 'POST', body: '{}' });
+      if (res.authorize_url) window.location.href = res.authorize_url;
+      else setNote(res.message || 'Connect started.');
+    } catch (err) {
+      setNote(err instanceof Error ? err.message : 'Could not start Outlook connect.');
+    } finally {
+      setBusy('');
+    }
+  };
+
+  const setActive = async (active_sender: string) => {
+    setBusy('sender');
+    try {
+      const res = await api<Record<string, unknown>>('/api/admin/crm/sender', {
+        method: 'POST',
+        body: JSON.stringify({ active_sender }),
+      });
+      setSender(res);
+      setNote(`Active sender: ${active_sender}`);
+    } catch (err) {
+      setNote(err instanceof Error ? err.message : 'Could not set sender.');
+    } finally {
+      setBusy('');
+    }
+  };
+
+  const applyCapSuggestion = async () => {
+    setBusy('cap');
+    try {
+      const res = await api<Record<string, unknown>>('/api/admin/crm/daily-cap', {
+        method: 'POST',
+        body: JSON.stringify({ apply_suggestion: true }),
+      });
+      setCap(res);
+      setNote('Suggested daily cap applied (owner click).');
+      load();
+    } catch (err) {
+      setNote(err instanceof Error ? err.message : 'No suggestion to apply.');
+    } finally {
+      setBusy('');
+    }
+  };
 
   return (
     <>
-      <PageHeader title="Settings" description="Integration health and send safety. Values come from server environment variables." />
+      <PageHeader title="Settings" description="Integrations, Outlook/Graph connect, daily cap, and send safety. Env names only — no Mail.app path." />
       {failed ? <p className="crm-error">Could not load settings.</p> : null}
+      {note ? <p className="crm-ok">{note}</p> : null}
       <div className="crm-grid-2">
         <section className="crm-panel">
           <div className="crm-panel-head"><h2>Integrations</h2></div>
@@ -1833,18 +2126,34 @@ function SettingsPage() {
             <CheckRow ok={Boolean(data?.sync_secret_configured)} label="Sync secret" value={data?.sync_secret_configured ? 'Set' : 'Missing'} />
             <CheckRow ok={Boolean(data?.durable_db_configured)} label="Database" value={asText(persistence.backend, '—').replace('_', ' ')} />
             <CheckRow ok={Boolean(data?.resend_webhook_secret)} label="Resend webhook" value={data?.resend_webhook_secret ? 'Secret set' : 'Not configured'} />
-            <CheckRow ok={false} label="Reply inbox (M365)" value="Not connected" />
+            <CheckRow ok={Boolean(graph.connected)} label="Outlook (Graph)" value={graph.connected ? asText(graph.account_email, 'Connected') : graph.configured ? 'Configured — not connected' : 'Needs Azure app env'} />
           </div>
+          <div className="crm-head-actions crm-pad">
+            <button type="button" className="crm-btn" disabled={Boolean(busy)} onClick={() => void connectOutlook()}>
+              {busy === 'outlook' ? 'Connecting…' : 'Connect Outlook'}
+            </button>
+            <button type="button" className="crm-btn-secondary" disabled={Boolean(busy)} onClick={() => void setActive('graph')}>Use Graph</button>
+            <button type="button" className="crm-btn-secondary" disabled={Boolean(busy)} onClick={() => void setActive('resend')}>Use Resend</button>
+            <button type="button" className="crm-btn-secondary" disabled={Boolean(busy)} onClick={() => void setActive('none')}>Sender off</button>
+          </div>
+          <p className="crm-muted crm-pad">Active sender: <strong>{asText(sender?.active_sender, 'none')}</strong>. Mail.app is not supported.</p>
         </section>
         <section className="crm-panel">
-          <div className="crm-panel-head"><h2>Send safety</h2></div>
+          <div className="crm-panel-head"><h2>Send safety + daily cap</h2></div>
           <div className="crm-checks">
             <CheckRow ok={safety.EMAIL_OUTREACH_ENABLED !== true} label="Automated outreach" value={onOff(safety.EMAIL_OUTREACH_ENABLED)} />
             <CheckRow ok={safety.EMAIL_DRY_RUN !== false} label="Dry-run" value={safety.EMAIL_DRY_RUN === false ? 'Off' : 'On'} />
             <CheckRow ok={safety.MANUAL_SEND_LIVE_ENABLED !== true} label="Manual live send" value={onOff(safety.MANUAL_SEND_LIVE_ENABLED)} />
             <CheckRow ok={safety.FOLLOWUPS_LIVE !== true} label="Automatic follow-ups" value={onOff(safety.FOLLOWUPS_LIVE)} />
+            <CheckRow ok={true} label="Daily cap (effective)" value={`${asText(cap?.effective_cap, '20')} · remaining ${asText(cap?.remaining, '—')}`} />
           </div>
-          <p className="crm-muted crm-pad">Green means safe. Change flags in Vercel environment variables, then redeploy.</p>
+          {((cap?.state as Record<string, unknown> | undefined)?.suggested_cap != null) ? (
+            <div className="crm-head-actions crm-pad">
+              <p className="crm-muted">Suggested cap: {String((cap?.state as Record<string, unknown>).suggested_cap)} (never auto-applied)</p>
+              <button type="button" className="crm-btn-secondary" disabled={Boolean(busy)} onClick={() => void applyCapSuggestion()}>Apply suggested cap</button>
+            </div>
+          ) : null}
+          <p className="crm-muted crm-pad">Green means safe. Cap raises require an owner click. Change live flags in Vercel only when ready.</p>
         </section>
       </div>
       {mac.length ? (
@@ -1871,7 +2180,8 @@ export function CrmDashboard() {
       <Routes>
         {/* Relative paths: this <Routes> is mounted under <Route path="/admin/*"> in main.tsx. */}
         <Route index element={<OverviewPage />} />
-        <Route path="leads" element={<LeadsPage />} />
+        <Route path="leads" element={<LeadQueuePage />} />
+        <Route path="lead-queue" element={<LeadQueuePage />} />
         <Route path="campaigns" element={<CampaignsPage />} />
         <Route path="inbox" element={<InboxPage />} />
         <Route path="bookings" element={<BookingsPage />} />

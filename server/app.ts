@@ -41,6 +41,24 @@ import {
   handleDiscoveryRun,
   handleDiscoveryStatus,
 } from './crm-discovery-api';
+import {
+  handleDailyCapGet,
+  handleDailyCapSet,
+  handleEmailStudioApprove,
+  handleEmailStudioDraft,
+  handleEmailStudioList,
+  handleInboxImportReplies,
+  handleLeadQueueAction,
+  handleLeadQueueAudit,
+  handleLeadQueueList,
+  handleOutlookCallback,
+  handleOutlookConnect,
+  handleOutlookDisconnect,
+  handleOutreachAnalytics,
+  handleSendControlsAction,
+  handleSendControlsGet,
+  handleSenderPreference,
+} from './outreach-studio-api';
 import { processResendWebhook } from '../api/resend-webhook';
 
 try {
@@ -941,6 +959,92 @@ app.post('/api/admin/crm/discovery/enrich', async (c) => {
 
 app.get('/api/crm/discovery/cron', async (c) => {
   const result = await handleDiscoveryCron({ authorization: c.req.header('authorization') });
+  return c.json(result.body, result.status);
+});
+
+/** Outreach Studio — Lead Queue, Email Studio, caps, Graph (live send stays OFF). */
+app.get('/api/admin/crm/lead-queue', async (c) => {
+  const url = new URL(c.req.url);
+  const result = await handleLeadQueueList(Boolean(requireAdmin(c)), {
+    q: url.searchParams.get('q') || undefined,
+    queue_status: (url.searchParams.get('queue_status') as never) || undefined,
+    source: (url.searchParams.get('source') as never) || undefined,
+  });
+  return c.json(result.body, result.status);
+});
+app.post('/api/admin/crm/lead-queue/action', async (c) => {
+  const body = await c.req.json().catch(() => ({}));
+  const result = await handleLeadQueueAction(Boolean(requireAdmin(c)), body);
+  return c.json(result.body, result.status);
+});
+app.get('/api/admin/crm/lead-queue/audit', async (c) => {
+  const result = await handleLeadQueueAudit(Boolean(requireAdmin(c)));
+  return c.json(result.body, result.status);
+});
+app.get('/api/admin/crm/email-studio', async (c) => {
+  const result = await handleEmailStudioList(Boolean(requireAdmin(c)));
+  return c.json(result.body, result.status);
+});
+app.post('/api/admin/crm/email-studio/draft', async (c) => {
+  const body = await c.req.json().catch(() => ({}));
+  const result = await handleEmailStudioDraft(Boolean(requireAdmin(c)), body);
+  return c.json(result.body, result.status);
+});
+app.post('/api/admin/crm/email-studio/approve', async (c) => {
+  const body = await c.req.json().catch(() => ({}));
+  const result = await handleEmailStudioApprove(Boolean(requireAdmin(c)), body);
+  return c.json(result.body, result.status);
+});
+app.get('/api/admin/crm/daily-cap', async (c) => {
+  const result = await handleDailyCapGet(Boolean(requireAdmin(c)));
+  return c.json(result.body, result.status);
+});
+app.post('/api/admin/crm/daily-cap', async (c) => {
+  const body = await c.req.json().catch(() => ({}));
+  const result = await handleDailyCapSet(Boolean(requireAdmin(c)), body);
+  return c.json(result.body, result.status);
+});
+app.get('/api/admin/crm/send-controls', async (c) => {
+  const result = await handleSendControlsGet(Boolean(requireAdmin(c)));
+  return c.json(result.body, result.status);
+});
+app.post('/api/admin/crm/send-controls', async (c) => {
+  const body = await c.req.json().catch(() => ({}));
+  const result = await handleSendControlsAction(Boolean(requireAdmin(c)), body);
+  return c.json(result.body, result.status);
+});
+app.post('/api/admin/crm/outlook/connect', async (c) => {
+  const result = await handleOutlookConnect(Boolean(requireAdmin(c)));
+  return c.json(result.body, result.status);
+});
+app.get('/api/admin/crm/outlook/callback', async (c) => {
+  const url = new URL(c.req.url);
+  const result = await handleOutlookCallback({
+    code: url.searchParams.get('code') || undefined,
+    state: url.searchParams.get('state') || undefined,
+    error: url.searchParams.get('error') || undefined,
+  });
+  return c.json(result.body, result.status);
+});
+app.post('/api/admin/crm/outlook/disconnect', async (c) => {
+  const result = await handleOutlookDisconnect(Boolean(requireAdmin(c)));
+  return c.json(result.body, result.status);
+});
+app.get('/api/admin/crm/sender', async (c) => {
+  const result = await handleSenderPreference(Boolean(requireAdmin(c)), {});
+  return c.json(result.body, result.status);
+});
+app.post('/api/admin/crm/sender', async (c) => {
+  const body = await c.req.json().catch(() => ({}));
+  const result = await handleSenderPreference(Boolean(requireAdmin(c)), body);
+  return c.json(result.body, result.status);
+});
+app.post('/api/admin/crm/inbox/import-replies', async (c) => {
+  const result = await handleInboxImportReplies(Boolean(requireAdmin(c)));
+  return c.json(result.body, result.status);
+});
+app.get('/api/admin/crm/outreach-analytics', async (c) => {
+  const result = await handleOutreachAnalytics(Boolean(requireAdmin(c)));
   return c.json(result.body, result.status);
 });
 

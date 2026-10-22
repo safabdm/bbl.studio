@@ -31,6 +31,9 @@ async function loadCrmApi() {
 async function loadCrmDiscoveryApi() {
   return import('../server/crm-discovery-api.js');
 }
+async function loadOutreachStudioApi() {
+  return import('../server/outreach-studio-api.js');
+}
 async function loadResendWebhook() {
   return import('./resend-webhook.js');
 }
@@ -486,6 +489,131 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
       const body = await readJsonUnknown(req);
       const { handleDiscoveryEnrich } = await loadCrmDiscoveryApi();
       const result = await handleDiscoveryEnrich(admin, body as never);
+      return send(res, result.status, result.body);
+    }
+
+    /* Outreach Studio */
+    if (matches(path, '/api/admin/crm/lead-queue') && method === 'GET') {
+      if (!admin) return send(res, 401, { ok: false, message: 'Sign in required.' });
+      const url = new URL(req.url || '/', 'https://www.bbl.studio');
+      const { handleLeadQueueList } = await loadOutreachStudioApi();
+      const result = await handleLeadQueueList(admin, {
+        q: url.searchParams.get('q') || undefined,
+        queue_status: (url.searchParams.get('queue_status') as never) || undefined,
+        source: (url.searchParams.get('source') as never) || undefined,
+        has_email:
+          url.searchParams.get('has_email') === '1'
+            ? true
+            : url.searchParams.get('has_email') === '0'
+              ? false
+              : undefined,
+        has_observation:
+          url.searchParams.get('has_observation') === '1'
+            ? true
+            : url.searchParams.get('has_observation') === '0'
+              ? false
+              : undefined,
+      });
+      return send(res, result.status, result.body);
+    }
+    if (matches(path, '/api/admin/crm/lead-queue/action') && method === 'POST') {
+      if (!admin) return send(res, 401, { ok: false, message: 'Sign in required.' });
+      const body = await readJsonUnknown(req);
+      const { handleLeadQueueAction } = await loadOutreachStudioApi();
+      const result = await handleLeadQueueAction(admin, body as never);
+      return send(res, result.status, result.body);
+    }
+    if (matches(path, '/api/admin/crm/lead-queue/audit') && method === 'GET') {
+      if (!admin) return send(res, 401, { ok: false, message: 'Sign in required.' });
+      const { handleLeadQueueAudit } = await loadOutreachStudioApi();
+      const result = await handleLeadQueueAudit(admin);
+      return send(res, result.status, result.body);
+    }
+    if (matches(path, '/api/admin/crm/email-studio') && method === 'GET') {
+      if (!admin) return send(res, 401, { ok: false, message: 'Sign in required.' });
+      const { handleEmailStudioList } = await loadOutreachStudioApi();
+      const result = await handleEmailStudioList(admin);
+      return send(res, result.status, result.body);
+    }
+    if (matches(path, '/api/admin/crm/email-studio/draft') && method === 'POST') {
+      if (!admin) return send(res, 401, { ok: false, message: 'Sign in required.' });
+      const body = await readJsonUnknown(req);
+      const { handleEmailStudioDraft } = await loadOutreachStudioApi();
+      const result = await handleEmailStudioDraft(admin, body as never);
+      return send(res, result.status, result.body);
+    }
+    if (matches(path, '/api/admin/crm/email-studio/approve') && method === 'POST') {
+      if (!admin) return send(res, 401, { ok: false, message: 'Sign in required.' });
+      const body = await readJsonUnknown(req);
+      const { handleEmailStudioApprove } = await loadOutreachStudioApi();
+      const result = await handleEmailStudioApprove(admin, body as never);
+      return send(res, result.status, result.body);
+    }
+    if (matches(path, '/api/admin/crm/daily-cap') && method === 'GET') {
+      if (!admin) return send(res, 401, { ok: false, message: 'Sign in required.' });
+      const { handleDailyCapGet } = await loadOutreachStudioApi();
+      const result = await handleDailyCapGet(admin);
+      return send(res, result.status, result.body);
+    }
+    if (matches(path, '/api/admin/crm/daily-cap') && method === 'POST') {
+      if (!admin) return send(res, 401, { ok: false, message: 'Sign in required.' });
+      const body = await readJsonUnknown(req);
+      const { handleDailyCapSet } = await loadOutreachStudioApi();
+      const result = await handleDailyCapSet(admin, body as never);
+      return send(res, result.status, result.body);
+    }
+    if (matches(path, '/api/admin/crm/send-controls') && method === 'GET') {
+      if (!admin) return send(res, 401, { ok: false, message: 'Sign in required.' });
+      const { handleSendControlsGet } = await loadOutreachStudioApi();
+      const result = await handleSendControlsGet(admin);
+      return send(res, result.status, result.body);
+    }
+    if (matches(path, '/api/admin/crm/send-controls') && method === 'POST') {
+      if (!admin) return send(res, 401, { ok: false, message: 'Sign in required.' });
+      const body = await readJsonUnknown(req);
+      const { handleSendControlsAction } = await loadOutreachStudioApi();
+      const result = await handleSendControlsAction(admin, body as never);
+      return send(res, result.status, result.body);
+    }
+    if (matches(path, '/api/admin/crm/outlook/connect') && method === 'POST') {
+      if (!admin) return send(res, 401, { ok: false, message: 'Sign in required.' });
+      const { handleOutlookConnect } = await loadOutreachStudioApi();
+      const result = await handleOutlookConnect(admin);
+      return send(res, result.status, result.body);
+    }
+    if (matches(path, '/api/admin/crm/outlook/callback') && method === 'GET') {
+      const url = new URL(req.url || '/', 'https://www.bbl.studio');
+      const { handleOutlookCallback } = await loadOutreachStudioApi();
+      const result = await handleOutlookCallback({
+        code: url.searchParams.get('code') || undefined,
+        state: url.searchParams.get('state') || undefined,
+        error: url.searchParams.get('error') || undefined,
+      });
+      return send(res, result.status, result.body);
+    }
+    if (matches(path, '/api/admin/crm/outlook/disconnect') && method === 'POST') {
+      if (!admin) return send(res, 401, { ok: false, message: 'Sign in required.' });
+      const { handleOutlookDisconnect } = await loadOutreachStudioApi();
+      const result = await handleOutlookDisconnect(admin);
+      return send(res, result.status, result.body);
+    }
+    if (matches(path, '/api/admin/crm/sender') && (method === 'GET' || method === 'POST')) {
+      if (!admin) return send(res, 401, { ok: false, message: 'Sign in required.' });
+      const body = method === 'POST' ? await readJsonUnknown(req) : {};
+      const { handleSenderPreference } = await loadOutreachStudioApi();
+      const result = await handleSenderPreference(admin, body as never);
+      return send(res, result.status, result.body);
+    }
+    if (matches(path, '/api/admin/crm/inbox/import-replies') && method === 'POST') {
+      if (!admin) return send(res, 401, { ok: false, message: 'Sign in required.' });
+      const { handleInboxImportReplies } = await loadOutreachStudioApi();
+      const result = await handleInboxImportReplies(admin);
+      return send(res, result.status, result.body);
+    }
+    if (matches(path, '/api/admin/crm/outreach-analytics') && method === 'GET') {
+      if (!admin) return send(res, 401, { ok: false, message: 'Sign in required.' });
+      const { handleOutreachAnalytics } = await loadOutreachStudioApi();
+      const result = await handleOutreachAnalytics(admin);
       return send(res, result.status, result.body);
     }
 
