@@ -185,6 +185,7 @@ describe('PT-gated morning pipeline (GHA primary)', () => {
       {
         nowMs: Date.parse('2026-10-23T14:05:00Z'), // 7:05 PT PDT
         fixturesOnly: true,
+        seedProofFixtures: true,
         source: 'github-actions',
         fetchImpl: async () => new Response(JSON.stringify({ id: 'mock' }), { status: 200 }),
       },
@@ -196,13 +197,17 @@ describe('PT-gated morning pipeline (GHA primary)', () => {
     assert.equal(ok.body.auto_send, false);
     assert.equal(ok.body.send_window_in_cron, false);
     assert.deepEqual(ok.body.due, ['discover', 'verify', 'select', 'notify']);
-    const results = ok.body.results as Array<{ job: string; status: string }>;
+    const results = ok.body.results as Array<{ job: string; status: string; details?: Record<string, unknown> }>;
     assert.deepEqual(
       results.map((r) => r.job),
       ['discover', 'verify', 'select', 'notify'],
     );
     assert.ok(results.every((r) => r.status === 'completed' || r.status === 'idempotent_skip'));
     assert.ok(!results.some((r) => r.job === 'send_window'));
+    const select = results.find((r) => r.job === 'select');
+    assert.ok((select?.details?.qualified as number) >= 1);
+    assert.ok((select?.details?.drafts_ready as number) >= 1);
+    assert.equal(select?.details?.padded, false);
 
     const stages = ok.body.stages as Record<string, { intended_pt: string; status: string }>;
     assert.equal(stages.discover?.intended_pt, '07:00');
@@ -215,6 +220,7 @@ describe('PT-gated morning pipeline (GHA primary)', () => {
       {
         nowMs: Date.parse('2026-10-23T15:10:00Z'), // 8:10 PT catch-up
         fixturesOnly: true,
+        seedProofFixtures: true,
         source: 'vercel',
       },
     );

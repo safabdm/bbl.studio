@@ -8,11 +8,16 @@ import { authorizeCron } from './crm-discovery-api.js';
 import { runDiscoveryCycle, type DiscoveryRunnerEnv } from './crm-discovery-runner.js';
 import { enrichNeedsEmailLeads } from './crm-discovery-enrich.js';
 import {
+  BATCH_1_BLOCKLIST_EMAILS,
+  DAILY_20_BATCH_1_SENT_EMAILS,
+  HOLD_BLOCKLIST_EMAILS,
   buildDaily20Cohort,
   getDaily20Dashboard,
   type Daily20Env,
 } from './daily-20-pipeline.js';
+import { upsertDiscoveredLead } from './crm-discovery-store.js';
 import { upsertStudioDraftFromLead } from './email-studio.js';
+import { fixtureDiscoveredLead } from './lead-queue.js';
 import { laDayKey, readDailyCapState, remainingSends, effectiveCap } from './daily-cap.js';
 import {
   generateFollowUpDrafts,
@@ -268,6 +273,88 @@ export function isMorningPipelineComplete(state: SchedulerState, dayKey: string)
   return MORNING_PIPELINE_JOBS.every((job) => isJobComplete(state, job, dayKey));
 }
 
+/**
+ * Seed a deterministic discovered pool for dry-run / CI proof when Places is unavailable.
+ * Includes hard-excluded emails so select can prove they never qualify. Never sends.
+ */
+export async function seedProofDiscoveredPool(
+  env: SchedulerEnv = process.env,
+  opts: { goodCount?: number } = {},
+): Promise<{
+  seeded_good: number;
+  seeded_excluded: number;
+  excluded_emails: string[];
+}> {
+  const goodCount = opts.goodCount ?? 28;
+  const cities = ['Irvine', 'Newport Beach', 'Costa Mesa', 'Laguna Beach', 'Huntington Beach'];
+  let seeded_good = 0;
+  for (let i = 0; i < goodCount; i++) {
+    // Unique email domain per lead — lead-queue merges same-domain discoveries into one row.
+    await upsertDiscoveredLead(
+      fixtureDiscoveredLead({
+        id: `proof_good_${i}`,
+        place_id: `places/proof_good_${i}`,
+        public_email: `hello@oc-proof-medspa-${i}.example`,
+        business_name: `OC Proof Med Spa ${i}`,
+        city: cities[i % cities.length],
+        category: i % 2 === 0 ? 'med spa' : 'wellness spa',
+        website: `https://oc-proof-medspa-${i}.example`,
+        score_total: 70 + (i % 20),
+        status: 'qualified',
+        weak_website_signals: [`hero CTA is phone-only on mobile (${i})`],
+      }),
+      env,
+    );
+    seeded_good += 1;
+  }
+  const excluded = [
+    ...BATCH_1_BLOCKLIST_EMAILS.slice(0, 2),
+    ...DAILY_20_BATCH_1_SENT_EMAILS.slice(0, 3),
+    ...HOLD_BLOCKLIST_EMAILS,
+  ];
+  let seeded_excluded = 0;
+  for (let i = 0; i < excluded.length; i++) {
+    const email = excluded[i]!;
+    await upsertDiscoveredLead(
+      fixtureDiscoveredLead({
+        id: `proof_excl_${i}`,
+        place_id: `places/proof_excl_${i}`,
+        public_email: email,
+        business_name: `Excluded Proof ${i}`,
+        city: 'Newport Beach',
+        category: 'med spa',
+        website: `https://excluded-proof-${i}.example`,
+        score_total: 90,
+        status: 'qualified',
+        weak_website_signals: ['should never qualify — hard exclude'],
+      }),
+      env,
+    );
+    seeded_excluded += 1;
+  }
+  return { seeded_good, seeded_excluded, excluded_emails: excluded.map((e) => e.toLowerCase()) };
+}
+
+async function notifyWithRetry(
+  args: {
+    day_key: string;
+    qualified_count: number;
+    discovered_count: number;
+    message: string;
+  },
+  env: SchedulerEnv,
+  fetchImpl: typeof fetch,
+  attempts = 2,
+): Promise<Awaited<ReturnType<typeof notifyOwnerDailyReviewReady>> & { attempts: number }> {
+  let last = await notifyOwnerDailyReviewReady(args, env, fetchImpl);
+  let used = 1;
+  while (!last.ok && used < attempts) {
+    used += 1;
+    last = await notifyOwnerDailyReviewReady(args, env, fetchImpl);
+  }
+  return { ...last, attempts: used };
+}
+
 export async function runSchedulerJob(
   job: SchedulerJobName,
   env: SchedulerEnv = process.env,
@@ -275,8 +362,10 @@ export async function runSchedulerJob(
     nowMs?: number;
     force?: boolean;
     fetchImpl?: typeof fetch;
-    /** Test-only: skip Places network */
+    /** Skip Places / live enrich network (tests + dry-run proof). */
     fixturesOnly?: boolean;
+    /** When fixturesOnly discover runs, seed a proof discovered pool into Neon/memory. */
+    seedProofFixtures?: boolean;
   } = {},
 ): Promise<SchedulerJobResult> {
   const nowMs = opts.nowMs ?? Date.now();
@@ -324,13 +413,16 @@ export async function runSchedulerJob(
 
     if (job === 'discover') {
       if (opts.fixturesOnly) {
+        const seeded = opts.seedProofFixtures ? await seedProofDiscoveredPool(env) : null;
         result = {
           job,
           day_key,
           status: 'completed',
-          message: 'Discover skipped in fixtures mode (no Places call).',
+          message: seeded
+            ? `Discover fixtures: seeded proof pool (good=${seeded.seeded_good}, excluded_samples=${seeded.seeded_excluded}). No Places call.`
+            : 'Discover skipped in fixtures mode (no Places call).',
           at,
-          details: { fixturesOnly: true },
+          details: { fixturesOnly: true, seedProofFixtures: Boolean(opts.seedProofFixtures), seeded },
         };
       } else {
         const run = await runDiscoveryCycle({
@@ -360,7 +452,7 @@ export async function runSchedulerJob(
           job,
           day_key,
           status: 'completed',
-          message: 'Verify fixtures: enrichment skipped.',
+          message: 'Verify fixtures: enrichment skipped (pool already has public emails).',
           at,
         };
       } else {
@@ -376,18 +468,23 @@ export async function runSchedulerJob(
         };
       }
     } else if (job === 'select') {
-      const cohort = await buildDaily20Cohort(
-        { fixturesOnly: opts.fixturesOnly, now: nowMs },
-        env,
-      );
+      // Always read persisted discovery/CRM pool — fixturesOnly only skips Places/enrich network.
+      const cohort = await buildDaily20Cohort({ fixturesOnly: false, now: nowMs }, env);
       // Persist unapproved Email Studio drafts for Daily Review (never auto-approve / auto-send).
       let drafts_ready = 0;
       let drafts_blocked = 0;
+      const draft_ids: string[] = [];
       for (const q of cohort.qualified) {
         const draft = await upsertStudioDraftFromLead(q, { regenerate: true }, env);
         if (draft.blocked_reasons.length || !draft.observation_verified) drafts_blocked += 1;
-        else drafts_ready += 1;
+        else {
+          drafts_ready += 1;
+          draft_ids.push(draft.id);
+        }
       }
+      const hardRejected = cohort.rejected_pool.filter((r) =>
+        ['batch_1_sent', 'daily_20_batch_1_sent', 'hold_aka'].includes(r.reason),
+      ).length;
       // Quality bar: do not pad — cohort already caps by verified observation+email
       result = {
         job,
@@ -399,15 +496,19 @@ export async function runSchedulerJob(
           qualified: cohort.qualified.length,
           discovered_count: cohort.discovered_count,
           rejected: cohort.rejected_pool.length,
+          hard_excluded_rejected: hardRejected,
           drafts_ready,
           drafts_blocked,
+          draft_ids: draft_ids.slice(0, 20),
+          sample_emails: cohort.qualified.slice(0, 5).map((q) => q.email),
           padded: false,
           auto_approved: false,
+          prospect_send: false,
         },
       };
     } else if (job === 'notify') {
       const dash = await getDaily20Dashboard(env, { refresh: false, now: nowMs });
-      const notify = await notifyOwnerDailyReviewReady(
+      const notify = await notifyWithRetry(
         {
           day_key,
           qualified_count: dash.cohort.qualified.length,
@@ -416,14 +517,15 @@ export async function runSchedulerJob(
         },
         env,
         opts.fetchImpl || fetch,
+        2,
       );
       result = {
         job,
         day_key,
         status: notify.ok ? 'completed' : 'failed',
         message: notify.ok
-          ? `Owner notified via ${notify.channel} → ${notify.to} (no prospect send).`
-          : `Owner notify failed: ${notify.error}`,
+          ? `Owner notified via ${notify.channel} → ${notify.to} (no prospect send; attempts=${notify.attempts}).`
+          : `Owner notify failed after ${notify.attempts} attempt(s): ${notify.error}`,
         at,
         details: { ...notify, prospect_send: false },
       };
@@ -587,6 +689,8 @@ export async function dispatchOutreachCron(
     forceJobs?: SchedulerJobName[];
     fetchImpl?: typeof fetch;
     fixturesOnly?: boolean;
+    /** Seed proof discovered pool during fixturesOnly discover (dry-run / CI). */
+    seedProofFixtures?: boolean;
     /** github-actions | vercel | admin | unknown */
     source?: string;
     /** Bypass PT window (admin / tests only). */
@@ -645,6 +749,7 @@ export async function dispatchOutreachCron(
         nowMs,
         fetchImpl: opts.fetchImpl,
         fixturesOnly: opts.fixturesOnly,
+        seedProofFixtures: opts.seedProofFixtures,
       }),
     );
   }
