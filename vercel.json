@@ -1,18 +1,45 @@
 {
   "framework": "vite",
-  "buildCommand": "pnpm exec vite build --config vite.vercel.config.ts && cp out/index.html out/app.html && cp out/home.html out/index.html && rm -f out/studio.html",
+  "buildCommand": "pnpm exec vite build --config vite.vercel.config.ts && cp out/index.html out/app.html && cp out/home.html out/index.html && rm -f out/studio.html && pnpm exec tsx scripts/seo-build.ts",
   "outputDirectory": "out",
   "trailingSlash": false,
   "redirects": [
+    {
+      "source": "/:path*",
+      "has": [{ "type": "host", "value": "bbl.studio" }],
+      "destination": "https://www.bbl.studio/:path*",
+      "statusCode": 301
+    },
     { "source": "/home.html", "destination": "/", "statusCode": 301 },
     { "source": "/index.html", "destination": "/", "statusCode": 301 },
     { "source": "/book", "destination": "/booking", "statusCode": 301 },
-    { "source": "/book.html", "destination": "/booking", "statusCode": 301 }
+    { "source": "/book.html", "destination": "/booking", "statusCode": 301 },
+    { "source": "/orange-county/irvine-web-design", "destination": "/orange-county-web-design", "statusCode": 301 },
+    { "source": "/orange-county/newport-beach-web-design", "destination": "/orange-county-web-design", "statusCode": 301 },
+    { "source": "/orange-county/costa-mesa-web-design", "destination": "/orange-county-web-design", "statusCode": 301 },
+    { "source": "/orange-county/laguna-beach-web-design", "destination": "/orange-county-web-design", "statusCode": 301 },
+    { "source": "/orange-county/tustin-web-design", "destination": "/orange-county-web-design", "statusCode": 301 }
   ],
   "rewrites": [
     { "source": "/api/:path*", "destination": "/api/[...route]" },
     { "source": "/", "destination": "/home.html" },
     { "source": "/booking", "destination": "/book.html" },
+    { "source": "/orange-county-web-design", "destination": "/orange-county-web-design.html" },
+    { "source": "/landing-page-design", "destination": "/landing-page-design.html" },
+    { "source": "/business-website-design", "destination": "/business-website-design.html" },
+    { "source": "/commercial-web-design", "destination": "/commercial-web-design.html" },
+    { "source": "/med-spa-website-design", "destination": "/med-spa-website-design.html" },
+    { "source": "/salon-website-design", "destination": "/salon-website-design.html" },
+    { "source": "/booking-website-design", "destination": "/booking-website-design.html" },
+    { "source": "/website-redesign", "destination": "/website-redesign.html" },
+    { "source": "/ux-audit", "destination": "/ux-audit.html" },
+    { "source": "/healthcare-ux-design", "destination": "/healthcare-ux-design.html" },
+    { "source": "/work", "destination": "/work.html" },
+    { "source": "/work/raysan-ip", "destination": "/work/raysan-ip.html" },
+    { "source": "/work/7-stud-farm", "destination": "/work/7-stud-farm.html" },
+    { "source": "/work/ip-law-nerds", "destination": "/work/ip-law-nerds.html" },
+    { "source": "/about", "destination": "/about.html" },
+    { "source": "/contact", "destination": "/contact.html" },
     { "source": "/admin", "destination": "/app.html" },
     { "source": "/admin/:path*", "destination": "/app.html" },
     { "source": "/client", "destination": "/app.html" },
@@ -33,13 +60,26 @@
       ]
     },
     {
+      "source": "/(orange-county-web-design|landing-page-design|business-website-design|commercial-web-design|med-spa-website-design|salon-website-design|booking-website-design|website-redesign|ux-audit|healthcare-ux-design|work|about|contact)",
+      "headers": [
+        { "key": "X-Robots-Tag", "value": "index, follow, max-image-preview:large, max-snippet:-1" }
+      ]
+    },
+    {
+      "source": "/work/(.*)",
+      "headers": [
+        { "key": "X-Robots-Tag", "value": "index, follow, max-image-preview:large, max-snippet:-1" },
+        { "key": "Cache-Control", "value": "public, max-age=2592000, stale-while-revalidate=86400" }
+      ]
+    },
+    {
       "source": "/assets/(.*)",
       "headers": [
         { "key": "Cache-Control", "value": "public, max-age=31536000, immutable" }
       ]
     },
     {
-      "source": "/work/(.*)",
+      "source": "/media/(.*)",
       "headers": [
         { "key": "Cache-Control", "value": "public, max-age=2592000, stale-while-revalidate=86400" }
       ]

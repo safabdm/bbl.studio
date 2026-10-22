@@ -22,7 +22,7 @@ export const projects = [
     category: 'Strategy, Brand, Website',
     href: 'https://raysanip.com/',
     image: '/work/raysanip.webp',
-    alt: 'Raysan IP website homepage on a dark editorial layout',
+    alt: 'Desktop screenshot of the Raysan IP homepage: dark editorial layout introducing a global intellectual property information platform',
     description: 'Brand and website for a global intellectual property information platform.',
     service: 'Commercial Website',
     servicePath: '/commercial-web-design',
@@ -35,7 +35,7 @@ export const projects = [
     category: 'Brand Direction, Website',
     href: 'https://7studfarm.com/',
     image: '/work/7studfarm.webp',
-    alt: '7 Stud Farm website homepage with equestrian photography',
+    alt: 'Desktop screenshot of the 7 Stud Farm homepage: large equestrian photography with restrained typography for an international breeding program',
     description: 'Brand direction and website for an international sport horse breeding program.',
     service: 'Business Website',
     servicePath: '/business-website-design',
@@ -48,7 +48,7 @@ export const projects = [
     category: 'Brand Expression, Website',
     href: 'https://www.iplawnerds.com/',
     image: '/work/iplawnerds.webp',
-    alt: 'IP Law Nerds website homepage with a direct, approachable layout',
+    alt: 'Desktop screenshot of the IP Law Nerds homepage: open, approachable layout with direct messaging for an intellectual property practice',
     description: 'Brand expression and website for an approachable intellectual property practice.',
     service: 'Business Website',
     servicePath: '/business-website-design',
@@ -62,102 +62,133 @@ export type PageSeo = {
   h1: string;
 };
 
+/** Keep in sync with lib/public-marketing.ts MARKETING_PAGES (avoids circular import). */
 export const PUBLIC_PAGES: PageSeo[] = [
   {
     path: '/',
     title: 'Website Design in Orange County | BBL Studio',
-    description: 'BBL is a boutique website design studio serving Orange County businesses. Distinctive websites designed to build credibility, generate inquiries, and support business growth.',
+    description:
+      'BBL Studio is a boutique website design studio in Orange County. Custom landing pages, business websites, and commercial sites — strategy, design, and development in one studio.',
     h1: 'Website design in Orange County.',
+  },
+  {
+    path: '/booking',
+    title: 'Book a Consultation | BBL Studio',
+    description:
+      'Book a free BBL Studio consultation. Choose a date and time at least 48 hours ahead. Pacific Time.',
+    h1: 'Book a time to talk.',
   },
   {
     path: '/orange-county-web-design',
     title: 'Orange County Web Design | BBL Studio',
-    description: 'Orange County web design by BBL. Distinctive landing pages, business websites, and commercial sites planned to launch, convert, and grow.',
+    description:
+      'Orange County web design by BBL Studio. Custom landing pages, business websites, and commercial sites for Irvine, Newport Beach, Costa Mesa, Laguna Beach, Tustin, and nearby cities.',
     h1: 'Orange County web design.',
   },
   {
     path: '/landing-page-design',
-    title: 'Landing Page Design in Orange County | BBL',
-    description: 'Landing page design in Orange County starting at $3,000. One focused page with a clear offer, form, and launch ready structure.',
+    title: 'Landing Page Design in Orange County | BBL Studio',
+    description:
+      'Landing page design by BBL Studio in Orange County. One focused page with a clear offer, inquiry path, and launch-ready structure. Custom quote after consultation.',
     h1: 'Landing page design in Orange County.',
   },
   {
     path: '/business-website-design',
-    title: 'Small Business Website Design Orange County | BBL',
-    description: 'Business website design in Orange County starting at $5,500. Up to five custom pages for a credible site that takes inquiries.',
+    title: 'Small Business Website Design Orange County | BBL Studio',
+    description:
+      'Business website design in Orange County by BBL Studio. Multi-page custom sites built for credibility and inquiries. Custom quote after consultation.',
     h1: 'Business website design in Orange County.',
   },
   {
     path: '/commercial-web-design',
-    title: 'Commercial Website Design Orange County | BBL',
-    description: 'Commercial website design in Orange County starting at $8,500. Six to ten custom pages with conversion focused structure and tracking.',
+    title: 'Commercial Website Design Orange County | BBL Studio',
+    description:
+      'Commercial website design in Orange County by BBL Studio. Larger custom sites with stronger architecture and conversion-focused structure. Custom quote after consultation.',
     h1: 'Commercial website design in Orange County.',
+  },
+  {
+    path: '/med-spa-website-design',
+    title: 'Med Spa Website Design | BBL Studio',
+    description:
+      'Med spa website design by BBL Studio. Clear offers, credible presentation, and booking-ready inquiry paths for aesthetic and wellness practices in Orange County.',
+    h1: 'Med spa website design.',
+  },
+  {
+    path: '/salon-website-design',
+    title: 'Salon Website Design | BBL Studio',
+    description:
+      'Salon website design by BBL Studio. Distinctive sites for hair, beauty, and wellness salons that need a polished first impression and clear next step.',
+    h1: 'Salon website design.',
+  },
+  {
+    path: '/booking-website-design',
+    title: 'Booking Website Design | BBL Studio',
+    description:
+      'Booking-focused website design by BBL Studio. Sites structured so visitors can understand the offer and take the next scheduling step.',
+    h1: 'Booking website design.',
+  },
+  {
+    path: '/website-redesign',
+    title: 'Website Redesign | BBL Studio',
+    description:
+      'Website redesign by BBL Studio. Replace an outdated or unclear site with a custom design that presents the offer clearly and supports inquiries.',
+    h1: 'Website redesign.',
+  },
+  {
+    path: '/ux-audit',
+    title: 'UX Audit | BBL Studio',
+    description:
+      'UX audit by BBL Studio. A structured review of clarity, navigation, and conversion paths before a redesign or rebuild.',
+    h1: 'UX audit.',
+  },
+  {
+    path: '/healthcare-ux-design',
+    title: 'Healthcare UX Design | BBL Studio',
+    description:
+      'Healthcare UX and website design by BBL Studio for practices that need clarity, trust, and a careful public presentation.',
+    h1: 'Healthcare UX design.',
   },
   {
     path: '/work',
     title: 'Selected Website Design Work | BBL Studio',
-    description: 'Live BBL website work: Raysan IP, 7 Stud Farm, and IP Law Nerds. Visit each site as it exists today.',
+    description:
+      'Live BBL Studio website work: Raysan IP, 7 Stud Farm, and IP Law Nerds. Visit each site as it exists today.',
     h1: 'Work you can visit.',
   },
   {
     path: '/work/raysan-ip',
-    title: 'Raysan IP Website Case Study | BBL',
-    description: 'BBL designed the Raysan IP brand and website for a global intellectual property information platform. Review the live site and the studio approach.',
-    h1: 'Raysan IP.',
+    title: 'Raysan IP Website Case Study | BBL Studio',
+    description:
+      'Case study: BBL Studio led strategy, brand, and commercial website design for Raysan IP, a global intellectual property information platform. Visit the live site.',
+    h1: 'Raysan IP website case study.',
   },
   {
     path: '/work/7-stud-farm',
-    title: '7 Stud Farm Website Case Study | BBL',
-    description: 'BBL created brand direction and a website for 7 Stud Farm, an international sport horse breeding program.',
-    h1: '7 Stud Farm.',
+    title: '7 Stud Farm Website Case Study | BBL Studio',
+    description:
+      'Case study: BBL Studio created brand direction and a business website for 7 Stud Farm, an international sport horse breeding program. Visit the live site.',
+    h1: '7 Stud Farm website case study.',
   },
   {
     path: '/work/ip-law-nerds',
-    title: 'IP Law Nerds Website Case Study | BBL',
-    description: 'BBL designed brand expression and a website for IP Law Nerds, an approachable intellectual property practice.',
-    h1: 'IP Law Nerds.',
+    title: 'IP Law Nerds Website Case Study | BBL Studio',
+    description:
+      'Case study: BBL Studio designed brand expression and a business website for IP Law Nerds, an approachable intellectual property practice. Visit the live site.',
+    h1: 'IP Law Nerds website case study.',
   },
   {
     path: '/about',
-    title: 'About BBL | Boutique Brand & Launch Studio',
-    description: 'BBL is a premium website design studio in Orange County. Learn what the studio offers, who it serves, and how engagements work.',
+    title: 'About BBL Studio | Boutique Brand & Launch Studio',
+    description:
+      'BBL Studio is a premium website design studio in Orange County. Learn what the studio offers, who it serves, and how engagements work.',
     h1: 'A studio for websites that need to work.',
   },
   {
     path: '/contact',
-    title: 'Contact BBL | Website Design in Orange County',
-    description: 'Start a BBL website project. Email hello@bbl.studio or call (949) 524-2324. Orange County website design studio.',
+    title: 'Contact BBL Studio | Website Design in Orange County',
+    description:
+      'Contact BBL Studio. Book a consultation, email hello@bbl.studio, or call (949) 524-2324. Orange County website design studio.',
     h1: 'Ready to build a more distinctive business?',
-  },
-  {
-    path: '/orange-county/irvine-web-design',
-    title: 'Irvine Web Design | BBL Orange County',
-    description: 'Website design for Irvine businesses. BBL plans landing pages and commercial sites for professional, medical, and growth-focused companies.',
-    h1: 'Irvine web design.',
-  },
-  {
-    path: '/orange-county/newport-beach-web-design',
-    title: 'Newport Beach Web Design | BBL Orange County',
-    description: 'Website design for Newport Beach businesses. BBL builds polished sites for hospitality, professional services, and coastal brands.',
-    h1: 'Newport Beach web design.',
-  },
-  {
-    path: '/orange-county/costa-mesa-web-design',
-    title: 'Costa Mesa Web Design | BBL Orange County',
-    description: 'Website design for Costa Mesa businesses. BBL designs commercial sites for retail, restaurants, and creative companies near South Coast Plaza.',
-    h1: 'Costa Mesa web design.',
-  },
-  {
-    path: '/orange-county/laguna-beach-web-design',
-    title: 'Laguna Beach Web Design | BBL Orange County',
-    description: 'Website design for Laguna Beach businesses. BBL creates distinctive sites for galleries, hospitality, and boutique coastal brands.',
-    h1: 'Laguna Beach web design.',
-  },
-  {
-    path: '/orange-county/tustin-web-design',
-    title: 'Tustin Web Design | BBL Orange County',
-    description: 'Website design for Tustin businesses. BBL builds clear, credible sites for local services, trades, and growing family companies.',
-    h1: 'Tustin web design.',
   },
 ];
 
@@ -167,20 +198,20 @@ export function pageByPath(path: string) {
 
 export const HOME_FAQS = [
   {
-    q: 'What is BBL?',
-    a: 'BBL is a boutique website design studio serving businesses in Orange County, California.',
+    q: 'What is BBL Studio?',
+    a: 'BBL Studio is a boutique website design studio serving businesses in Orange County, California.',
   },
   {
-    q: 'What website services does BBL offer?',
-    a: 'BBL offers Simple Landing Pages, Business Websites, Commercial Websites, and optional Brand Identity services.',
+    q: 'What website services does BBL Studio offer?',
+    a: 'BBL Studio designs custom landing pages, business websites, and commercial websites, with optional brand identity work when needed.',
   },
   {
-    q: 'How much does a BBL website cost?',
-    a: 'BBL landing pages start at $3,000, business websites start at $5,500, and commercial websites start at $8,500. Final pricing depends on project scope and functionality.',
+    q: 'How much does a BBL Studio website cost?',
+    a: 'BBL Studio provides a custom quote after consultation based on pages, functionality, and content readiness.',
   },
   {
-    q: 'Does BBL provide website design in Orange County?',
-    a: 'Yes. BBL provides premium website design services for businesses throughout Orange County.',
+    q: 'Does BBL Studio provide website design in Orange County?',
+    a: 'Yes. BBL Studio provides custom website design services for businesses throughout Orange County.',
   },
 ] as const;
 
@@ -207,23 +238,23 @@ export function breadcrumbsFor(path: string) {
 export const CORE_FAQS = [
   ...HOME_FAQS,
   {
-    q: 'What is included in a BBL website project?',
-    a: 'A BBL website project includes custom page design, responsive layouts, forms, basic on page SEO, analytics, launch support, and a defined number of revision rounds. Scope is confirmed in writing before work begins.',
+    q: 'What is included in a BBL Studio website project?',
+    a: 'A BBL Studio website project includes custom page design, responsive layouts, forms, basic on-page SEO, analytics, launch support, and a defined number of revision rounds. Scope is confirmed in writing before work begins.',
   },
   {
-    q: 'Does BBL design landing pages?',
-    a: 'Yes. The Simple Landing Page engagement starts at $3,000 and covers one focused page designed to present an offer clearly and guide visitors toward the next action.',
+    q: 'Does BBL Studio design landing pages?',
+    a: 'Yes. Landing page engagements cover one focused page designed to present an offer clearly and guide visitors toward the next action. Scope and pricing are confirmed after consultation.',
   },
   {
-    q: 'Does BBL build commercial websites?',
-    a: 'Yes. Business Website starts at $5,500. Commercial Website starts at $8,500 for businesses that need stronger content architecture, customer journeys, and conversion focused functionality.',
+    q: 'Does BBL Studio build commercial websites?',
+    a: 'Yes. Business and commercial website engagements are available for companies that need multi-page sites with stronger architecture and conversion-focused functionality.',
   },
   {
-    q: 'Does BBL provide branding with website design?',
-    a: 'Brand Identity is an optional add on starting at $3,500. When the website needs a stronger visual foundation, BBL can create a focused identity system covering logo, color, typography, and visual direction.',
+    q: 'Does BBL Studio provide branding with website design?',
+    a: 'Brand Identity is an optional add-on. When the website needs a stronger visual foundation, BBL Studio can create a focused identity system covering logo, color, typography, and visual direction.',
   },
   {
     q: 'How long does a website project take?',
-    a: 'Focused landing page launches may finish in 14 days when scope, content, and approvals are ready. Broader website work typically takes two to four weeks. Larger or custom work is scheduled after the scope is confirmed.',
+    a: '[OWNER REVIEW] Timeline depends on scope, content readiness, and feedback. Exact ranges are confirmed in writing after consultation.',
   },
 ] as const;

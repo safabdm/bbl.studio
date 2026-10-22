@@ -8,6 +8,7 @@
   <meta name="robots" content="index, follow" />
   <link rel="canonical" href="https://www.bbl.studio/booking" />
   <meta name="theme-color" content="#0A0A0A" />
+  <!-- GSC_VERIFICATION / BING_VERIFICATION / GA4_MEASUREMENT_ID injected at build when set -->
   <link rel="icon" href="/favicon.ico?v=bbl-logo-20260924c" sizes="any" />
   <link rel="icon" href="/favicon.svg?v=bbl-logo-20260924c" type="image/svg+xml" />
   <link rel="apple-touch-icon" href="/apple-touch-icon.png?v=bbl-logo-20260924c" />
@@ -352,6 +353,14 @@
         confirmEl.hidden = false;
         document.querySelector('#when').textContent = `${data.when} · ${data.timezoneLabel}`;
         document.querySelector('#status').textContent = data.message;
+        try {
+          if (typeof window.gtag === 'function') {
+            window.gtag('event', 'book_consultation', {
+              event_category: 'booking',
+              event_label: 'consultation',
+            });
+          }
+        } catch (_) {}
       } catch {
         showError(form, 'The booking could not be sent. Please try again.');
         submit.disabled = false;

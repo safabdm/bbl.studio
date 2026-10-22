@@ -13,6 +13,7 @@ export function organizationNode() {
     description: PRIMARY_DESCRIPTION,
     email: EMAIL,
     telephone: '+1-949-524-2324',
+    // Service-area studio — no street address (virtual office is not a storefront).
     areaServed: [
       { '@type': 'AdministrativeArea', name: 'Orange County' },
       { '@type': 'City', name: 'Irvine' },
@@ -37,17 +38,12 @@ export function organizationNode() {
     ],
     hasOfferCatalog: {
       '@type': 'OfferCatalog',
-      name: 'BBL website engagements',
+      name: 'BBL Studio website engagements',
       itemListElement: PUBLIC_PROJECT_OFFERS.map((offer) => ({
         '@type': 'Offer',
         priceCurrency: 'USD',
-        ...(offer.cents > 0
-          ? {
-              price: String(offer.cents / 100),
-              priceSpecification: { '@type': 'PriceSpecification', priceCurrency: 'USD', minPrice: String(offer.cents / 100), description: 'Starting price' },
-            }
-          : {}),
-        itemOffered: { '@type': 'Service', name: offer.name, description: offer.description },
+        // Public dollar prices omitted pending owner decision; describe scope only.
+        itemOffered: { '@type': 'Service', name: offer.name, description: offer.lede },
       })),
     },
   };
@@ -58,7 +54,8 @@ export function websiteNode() {
     '@type': 'WebSite',
     '@id': `${SITE_URL}/#website`,
     url: `${SITE_URL}/`,
-    name: 'BBL',
+    name: 'BBL Studio',
+    alternateName: 'BBL Boutique Brand & Launch Studio',
     publisher: { '@id': ORG_ID },
     inLanguage: 'en-US',
   };

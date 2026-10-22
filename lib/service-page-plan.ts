@@ -1,14 +1,18 @@
 /**
- * Contract for the next SEO pull request.
- * These paths stay unpublished and must return 404 until real HTML exists.
- * Do not add them to the sitemap or to a rewrite.
+ * City doorway URLs stay unpublished as standalone pages — they 301 to the OC hub.
+ * Buyer/service pages are published via prerender (see lib/public-marketing.ts).
  */
 
-export const UNPUBLISHED_SERVICE_PATHS = [
-  '/business-website-design',
-  '/landing-page-design',
-  '/commercial-web-design',
+export const CITY_DOORWAY_PATHS = [
+  '/orange-county/irvine-web-design',
+  '/orange-county/newport-beach-web-design',
+  '/orange-county/costa-mesa-web-design',
+  '/orange-county/laguna-beach-web-design',
+  '/orange-county/tustin-web-design',
 ] as const;
+
+/** @deprecated Use CITY_DOORWAY_PATHS — service pages are now published. */
+export const UNPUBLISHED_SERVICE_PATHS = [] as const;
 
 export const SERVICE_PAGE_REQUIREMENTS = [
   'Server-delivered HTML',
@@ -16,7 +20,6 @@ export const SERVICE_PAGE_REQUIREMENTS = [
   'Unique meta description',
   'Unique H1',
   'Self-referencing canonical',
-  'Published starting price',
   'Internal links',
   'Booking CTA',
   'Contact CTA',

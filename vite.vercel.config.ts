@@ -19,6 +19,7 @@ export default defineConfig({
   build: {
     outDir: 'out',
     emptyOutDir: true,
+    sourcemap: false,
     cssMinify: true,
     modulePreload: {
       resolveDependencies(_filename, deps) {
