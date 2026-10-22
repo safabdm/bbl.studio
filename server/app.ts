@@ -55,6 +55,10 @@ import {
   handleOutlookConnect,
   handleOutlookDisconnect,
   handleOutreachAnalytics,
+  handleDaily20Get,
+  handleDaily20BulkApprove,
+  handleFollowUpDrafts,
+  handleSendWindowSet,
   handleSendControlsAction,
   handleSendControlsGet,
   handleSenderPreference,
@@ -1045,6 +1049,32 @@ app.post('/api/admin/crm/inbox/import-replies', async (c) => {
 });
 app.get('/api/admin/crm/outreach-analytics', async (c) => {
   const result = await handleOutreachAnalytics(Boolean(requireAdmin(c)));
+  return c.json(result.body, result.status);
+});
+app.get('/api/admin/crm/daily-20', async (c) => {
+  const url = new URL(c.req.url);
+  const result = await handleDaily20Get(Boolean(requireAdmin(c)), {
+    refresh: url.searchParams.get('refresh') || undefined,
+  });
+  return c.json(result.body, result.status);
+});
+app.post('/api/admin/crm/daily-20/approve', async (c) => {
+  const body = await c.req.json().catch(() => ({}));
+  const result = await handleDaily20BulkApprove(Boolean(requireAdmin(c)), body);
+  return c.json(result.body, result.status);
+});
+app.get('/api/admin/crm/follow-ups', async (c) => {
+  const result = await handleFollowUpDrafts(Boolean(requireAdmin(c)), {});
+  return c.json(result.body, result.status);
+});
+app.post('/api/admin/crm/follow-ups', async (c) => {
+  const body = await c.req.json().catch(() => ({}));
+  const result = await handleFollowUpDrafts(Boolean(requireAdmin(c)), body);
+  return c.json(result.body, result.status);
+});
+app.post('/api/admin/crm/send-window', async (c) => {
+  const body = await c.req.json().catch(() => ({}));
+  const result = await handleSendWindowSet(Boolean(requireAdmin(c)), body);
   return c.json(result.body, result.status);
 });
 

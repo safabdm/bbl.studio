@@ -43,15 +43,6 @@ import {
   type LeadQueueFilter,
 } from './lead-queue.js';
 import { safetySnapshot, type SafetyEnv } from './crm-safety.js';
-
-/** Narrow wide env intersections for safetySnapshot (same pattern as discoverySafetyEnv). */
-function asSafetyEnv(env: Record<string, unknown> | NodeJS.ProcessEnv): SafetyEnv {
-  return {
-    EMAIL_OUTREACH_ENABLED: env.EMAIL_OUTREACH_ENABLED as string | undefined,
-    EMAIL_DRY_RUN: env.EMAIL_DRY_RUN as string | undefined,
-    MANUAL_SEND_LIVE_ENABLED: env.MANUAL_SEND_LIVE_ENABLED as string | undefined,
-  };
-}
 import {
   cancelSending,
   enqueueApprovedRecipients,
@@ -62,9 +53,31 @@ import {
   recordBounceOrComplaint,
   resumeSending,
   countResendRisk,
+  writeSendControls,
   type SendControlsEnv,
 } from './send-controls.js';
 import { dbWriteKv } from './crm-db.js';
+import {
+  bulkApproveDaily20,
+  getDaily20Dashboard,
+  type Daily20Env,
+} from './daily-20-pipeline.js';
+import {
+  generateFollowUpDrafts,
+  listFollowUpDrafts,
+  listInterestedNotify,
+  recordInterestedFromInbox,
+} from './follow-up-drafts.js';
+import { fetchEmailHistory, fetchLeads } from './crm-lead-client.js';
+
+/** Narrow wide env intersections for safetySnapshot (same pattern as discoverySafetyEnv). */
+function asSafetyEnv(env: Record<string, unknown> | NodeJS.ProcessEnv): SafetyEnv {
+  return {
+    EMAIL_OUTREACH_ENABLED: env.EMAIL_OUTREACH_ENABLED as string | undefined,
+    EMAIL_DRY_RUN: env.EMAIL_DRY_RUN as string | undefined,
+    MANUAL_SEND_LIVE_ENABLED: env.MANUAL_SEND_LIVE_ENABLED as string | undefined,
+  };
+}
 
 function adminOk(isAdmin: boolean): CrmJsonResult | null {
   if (isAdmin) return null;
@@ -482,13 +495,139 @@ export async function handleInboxImportReplies(
   );
   const imported = await importGraphReplies({ known_emails: emails }, env, fetchImpl);
   if (!imported.ok) return { status: 502, body: { ok: false, message: imported.message } };
+  const interested = await recordInterestedFromInbox(imported.items, env);
   return {
     status: 200,
     body: {
       ok: true,
       items: imported.items,
       marked_replied: imported.marked_replied,
-      message: `Imported ${imported.items.length} reply(ies). Follow-ups should stop for matched senders.`,
+      interested_notify: interested,
+      message: interested.length
+        ? `Imported ${imported.items.length} reply(ies); ${interested.length} flagged Interested for owner (no auto-reply).`
+        : `Imported ${imported.items.length} reply(ies). Follow-ups should stop for matched senders.`,
+    },
+  };
+}
+
+export async function handleDaily20Get(
+  isAdmin: boolean,
+  query: { refresh?: string } = {},
+  env: Daily20Env = process.env,
+): Promise<CrmJsonResult> {
+  const denied = adminOk(isAdmin);
+  if (denied) return denied;
+  const dash = await getDaily20Dashboard(env, { refresh: query.refresh !== '0' });
+  const controls = await readSendControls(env);
+  return {
+    status: 200,
+    body: {
+      ok: true,
+      ...dash,
+      send_window: {
+        enforce: controls.enforce_send_window,
+        start_hour_pt: controls.window_start_hour_pt,
+        end_hour_pt: controls.window_end_hour_pt,
+        label: `${controls.window_start_hour_pt ?? 9}–${controls.window_end_hour_pt ?? 11} America/Los_Angeles`,
+      },
+      mail_app_interim:
+        'Mac operator may send via Mail.app when Graph is unavailable — document only; Graph/Resend remain primary in Settings. No auto-send.',
+      live_email_send: false,
+      safety: { ...safetySnapshot(asSafetyEnv(env)), FOLLOWUPS_LIVE: false },
+    },
+  };
+}
+
+export async function handleDaily20BulkApprove(
+  isAdmin: boolean,
+  body: { lead_ids?: string[]; select_all_qualified?: boolean },
+  env: Daily20Env = process.env,
+): Promise<CrmJsonResult> {
+  const denied = adminOk(isAdmin);
+  if (denied) return denied;
+  let ids = body.lead_ids || [];
+  if (body.select_all_qualified) {
+    const dash = await getDaily20Dashboard(env, { refresh: false });
+    ids = dash.cohort.qualified.map((q) => q.id);
+  }
+  if (!ids.length) {
+    return { status: 400, body: { ok: false, message: 'lead_ids or select_all_qualified required.' } };
+  }
+  const result = await bulkApproveDaily20(ids, env);
+  return {
+    status: 200,
+    body: {
+      ok: true,
+      ...result,
+      message: `${result.approved.length} approved for send queue prep; ${result.blocked.length} blocked.`,
+      live_email_send: false,
+    },
+  };
+}
+
+export async function handleFollowUpDrafts(
+  isAdmin: boolean,
+  body: { generate?: boolean } = {},
+  env: LeadQueueEnv = process.env,
+): Promise<CrmJsonResult> {
+  const denied = adminOk(isAdmin);
+  if (denied) return denied;
+  let created: Awaited<ReturnType<typeof generateFollowUpDrafts>> = [];
+  if (body.generate) {
+    const [leads, history] = await Promise.all([fetchLeads('', env), fetchEmailHistory(env)]);
+    created = await generateFollowUpDrafts(
+      {
+        leads: leads.data || [],
+        history: history.data || [],
+      },
+      env,
+    );
+  }
+  const drafts = await listFollowUpDrafts(env);
+  const interested = await listInterestedNotify(env);
+  return {
+    status: 200,
+    body: {
+      ok: true,
+      drafts,
+      created_count: created.length,
+      interested_notify: interested.filter((i) => !i.acknowledged),
+      message: 'Follow-up drafts are for owner approval only — never auto-sent.',
+      live_email_send: false,
+    },
+  };
+}
+
+export async function handleSendWindowSet(
+  isAdmin: boolean,
+  body: { enforce_send_window?: boolean; window_start_hour_pt?: number; window_end_hour_pt?: number },
+  env: SendControlsEnv = process.env,
+): Promise<CrmJsonResult> {
+  const denied = adminOk(isAdmin);
+  if (denied) return denied;
+  const controls = await readSendControls(env);
+  const next = await writeSendControls(
+    {
+      ...controls,
+      enforce_send_window:
+        body.enforce_send_window === undefined ? controls.enforce_send_window : Boolean(body.enforce_send_window),
+      window_start_hour_pt:
+        body.window_start_hour_pt === undefined
+          ? controls.window_start_hour_pt
+          : Math.min(23, Math.max(0, Math.round(body.window_start_hour_pt))),
+      window_end_hour_pt:
+        body.window_end_hour_pt === undefined
+          ? controls.window_end_hour_pt
+          : Math.min(24, Math.max(1, Math.round(body.window_end_hour_pt))),
+    },
+    env,
+  );
+  return {
+    status: 200,
+    body: {
+      ok: true,
+      controls: next,
+      message: `Send window ${next.window_start_hour_pt}–${next.window_end_hour_pt} PT (enforce=${next.enforce_send_window}).`,
     },
   };
 }
@@ -499,18 +638,22 @@ export async function handleOutreachAnalytics(
 ): Promise<CrmJsonResult> {
   const denied = adminOk(isAdmin);
   if (denied) return denied;
-  const [built, queue, controls, cap] = await Promise.all([
+  const [built, queue, controls, cap, dailyDash, followUps, interested] = await Promise.all([
     buildLeadQueue({}, env),
     readSendQueue(env),
     readSendControls(env),
     readDailyCapState(env),
+    getDaily20Dashboard(env, { refresh: false }).catch(() => null),
+    listFollowUpDrafts(env),
+    listInterestedNotify(env),
   ]);
 
   const hasData =
     built.items.length > 0 ||
     built.excluded.length > 0 ||
     queue.length > 0 ||
-    controls.submitted_count > 0;
+    controls.submitted_count > 0 ||
+    Boolean(dailyDash?.cohort.qualified.length);
 
   if (!hasData) {
     return {
@@ -533,7 +676,6 @@ export async function handleOutreachAnalytics(
     byStatus[item.outreach_status] = (byStatus[item.outreach_status] || 0) + 1;
   }
 
-  // Refresh suggestion (never auto-apply)
   await maybeSuggestCapRaise(
     {
       total_sends: controls.submitted_count,
@@ -544,6 +686,15 @@ export async function handleOutreachAnalytics(
   );
   const capFresh = await readDailyCapState(env);
 
+  const submitted = queue.filter((i) => i.status === 'submitted');
+  const failed = queue.filter((i) => i.status === 'failed');
+  const positive = interested.filter((i) => !i.acknowledged).length;
+  const booked = [...built.items, ...built.excluded].filter((i) => i.outreach_status === 'booked').length;
+  const won = [...built.items, ...built.excluded].filter((i) => i.outreach_status === 'won').length;
+  const replies = [...built.items, ...built.excluded].filter(
+    (i) => i.outreach_status === 'replied' || i.outreach_status === 'interested',
+  ).length;
+
   return {
     status: 200,
     body: {
@@ -551,13 +702,21 @@ export async function handleOutreachAnalytics(
       metrics_trusted: true,
       empty: false,
       metrics: {
+        discovered: dailyDash?.cohort.discovered_count ?? built.items.length + built.excluded.length,
+        qualified: dailyDash?.cohort.qualified.length ?? 0,
+        approved: dailyDash?.drafts_approved ?? built.items.filter((i) => i.queue_status === 'approved').length,
+        sent: submitted.length || controls.submitted_count,
+        failures: failed.length,
+        replies,
+        positive,
+        booked,
+        won,
         queue_eligible: built.items.length,
         queue_excluded: built.excluded.length,
-        approved: built.items.filter((i) => i.queue_status === 'approved').length,
-        submitted: queue.filter((i) => i.status === 'submitted').length,
         pending_send: queue.filter((i) => i.status === 'pending').length,
         bounced: controls.bounce_count,
         complaints: controls.complaint_count,
+        follow_up_drafts: followUps.filter((d) => d.status === 'draft').length,
         by_outreach_status: byStatus,
       },
       daily_cap: {
@@ -570,6 +729,7 @@ export async function handleOutreachAnalytics(
         paused: controls.paused,
         auto_paused: controls.auto_paused,
         paused_reason: controls.paused_reason,
+        send_window: `${controls.window_start_hour_pt ?? 9}–${controls.window_end_hour_pt ?? 11} PT`,
       },
     },
   };

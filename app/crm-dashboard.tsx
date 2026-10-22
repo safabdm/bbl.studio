@@ -327,6 +327,7 @@ const NAV: Array<{ group: string; items: Array<{ to: string; label: string; end?
     group: 'Pipeline',
     items: [
       { to: '/admin', label: 'Overview', end: true },
+      { to: '/admin/daily-review', label: 'Daily Review' },
       { to: '/admin/automation', label: 'Discover Leads' },
       { to: '/admin/lead-queue', label: 'Lead Queue' },
       { to: '/admin/campaigns', label: 'Email Campaigns' },
@@ -1438,6 +1439,242 @@ function AnalyticsPage() {
 }
 
 /* ------------------------------------------------------------------ */
+/* Daily Review (Mon–Fri top 20)                                       */
+/* ------------------------------------------------------------------ */
+
+type Daily20Candidate = {
+  id: string;
+  business_name: string;
+  email: string;
+  location?: string | null;
+  website?: string | null;
+  website_observation?: string | null;
+  score_total?: number | null;
+  niche_priority?: number;
+  preview_subject?: string | null;
+  preview_body?: string | null;
+  queue_status?: string;
+};
+
+type Daily20Response = {
+  cohort?: {
+    day_key: string;
+    weekday: boolean;
+    message: string;
+    discovered_count: number;
+    target_discover: number;
+    target_qualify: number;
+    qualified: Daily20Candidate[];
+  };
+  daily_cap?: { effective_cap: number; remaining: number; sent_today: number; day_key: string };
+  drafts_approved?: number;
+  send_window?: { label?: string };
+  mail_app_interim?: string;
+  message?: string;
+};
+
+function DailyReviewPage() {
+  const [data, setData] = useState<Daily20Response | null>(null);
+  const [error, setError] = useState('');
+  const [selected, setSelected] = useState<string[]>([]);
+  const [busy, setBusy] = useState('');
+  const [note, setNote] = useState('');
+  const [preview, setPreview] = useState<Daily20Candidate | null>(null);
+
+  const load = useCallback(() => {
+    void api<Daily20Response>('/api/admin/crm/daily-20')
+      .then((d) => {
+        setData(d);
+        setError('');
+        const ids = (d.cohort?.qualified || []).map((q) => q.id);
+        setSelected((prev) => prev.filter((id) => ids.includes(id)));
+      })
+      .catch((err) => setError(err instanceof Error ? err.message : 'Daily review unavailable.'));
+  }, []);
+
+  useEffect(load, [load]);
+
+  useEffect(() => {
+    if (!preview) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setPreview(null);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [preview]);
+
+  const qualified = data?.cohort?.qualified || [];
+  const selectAllQualified = () => setSelected(qualified.map((q) => q.id));
+
+  const bulkApprove = async (all = false) => {
+    setBusy(all ? 'all' : 'sel');
+    setNote('');
+    try {
+      const res = await api<{ message?: string; approved?: string[]; blocked?: unknown[] }>(
+        '/api/admin/crm/daily-20/approve',
+        {
+          method: 'POST',
+          body: JSON.stringify(
+            all ? { select_all_qualified: true } : { lead_ids: selected },
+          ),
+        },
+      );
+      setNote(res.message || `Approved ${res.approved?.length || 0}.`);
+      load();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Approve failed.');
+    } finally {
+      setBusy('');
+    }
+  };
+
+  const cap = data?.daily_cap;
+
+  return (
+    <>
+      <PageHeader
+        title="Daily Review"
+        description="Mon–Fri cohort: qualify best 20 (OC first). Observation-gated previews. Live send stays OFF until owner approval."
+        actions={
+          <>
+            <button type="button" className="crm-btn-secondary" disabled={Boolean(busy)} onClick={load}>Refresh</button>
+            <button type="button" className="crm-btn-secondary" disabled={!qualified.length || Boolean(busy)} onClick={selectAllQualified}>
+              Select All Qualified
+            </button>
+            <button type="button" className="crm-btn" disabled={!selected.length || Boolean(busy)} onClick={() => void bulkApprove(false)}>
+              {busy === 'sel' ? 'Approving…' : `Approve selected (${selected.length})`}
+            </button>
+          </>
+        }
+      />
+      {error ? <p className="crm-error">{error}</p> : null}
+      {note ? <p className="crm-ok">{note}</p> : null}
+      <div className="crm-tiles">
+        <div className="crm-tile">
+          <span>Day (PT)</span>
+          <strong>{data?.cohort?.day_key || '—'}</strong>
+          <em>{data?.cohort?.weekday ? 'weekday' : 'weekend idle'}</em>
+        </div>
+        <div className="crm-tile">
+          <span>Discovered pool</span>
+          <strong>{data?.cohort?.discovered_count ?? '—'}</strong>
+          <em>target ≥{data?.cohort?.target_discover ?? 30}</em>
+        </div>
+        <div className="crm-tile">
+          <span>Qualified</span>
+          <strong>{qualified.length}</strong>
+          <em>cap {data?.cohort?.target_qualify ?? 20}</em>
+        </div>
+        <div className="crm-tile">
+          <span>Daily send counter</span>
+          <strong>{cap ? `${cap.sent_today}/${cap.effective_cap}` : '—'}</strong>
+          <em>{cap ? `${cap.remaining} left · ${cap.day_key}` : 'LA midnight reset'}</em>
+        </div>
+      </div>
+      {data?.cohort?.message ? <p className="crm-banner">{data.cohort.message}</p> : null}
+      {data?.send_window?.label ? (
+        <p className="crm-muted crm-pad">Send window: {data.send_window.label}. Queued is never marked sent until provider confirm.</p>
+      ) : null}
+
+      <section className="crm-panel">
+        <div className="crm-panel-head">
+          <h2>Review queue</h2>
+          <button type="button" className="crm-btn-secondary" disabled={Boolean(busy) || !qualified.length} onClick={() => void bulkApprove(true)}>
+            {busy === 'all' ? 'Approving…' : 'Approve all qualified'}
+          </button>
+        </div>
+        {!qualified.length ? (
+          <Empty title="No qualified leads today">Run Discover Leads or sync CRM. Need website + public email + real observation.</Empty>
+        ) : (
+          <div className="crm-table-wrap">
+            <table className="crm-table">
+              <thead>
+                <tr>
+                  <th aria-label="Select" />
+                  <th>Name</th>
+                  <th>Location</th>
+                  <th>Website</th>
+                  <th>Email</th>
+                  <th>Score</th>
+                  <th>Findings</th>
+                  <th />
+                </tr>
+              </thead>
+              <tbody>
+                {qualified.map((row) => (
+                  <tr key={row.id}>
+                    <td>
+                      <input
+                        type="checkbox"
+                        checked={selected.includes(row.id)}
+                        onChange={() =>
+                          setSelected((prev) =>
+                            prev.includes(row.id) ? prev.filter((x) => x !== row.id) : [...prev, row.id],
+                          )
+                        }
+                        aria-label={`Select ${row.business_name}`}
+                      />
+                    </td>
+                    <td>{row.business_name}</td>
+                    <td>{row.location || '—'}</td>
+                    <td>
+                      {row.website ? (
+                        <a className="crm-link" href={row.website} target="_blank" rel="noreferrer">
+                          site
+                        </a>
+                      ) : (
+                        '—'
+                      )}
+                    </td>
+                    <td>{row.email}</td>
+                    <td>{row.score_total ?? '—'}</td>
+                    <td className="crm-muted">{row.website_observation || '—'}</td>
+                    <td className="crm-col-action">
+                      <button type="button" className="crm-btn-secondary" onClick={() => setPreview(row)}>Preview</button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </section>
+
+      {preview ? (
+        <div className="crm-drawer-backdrop" role="presentation" onClick={() => setPreview(null)}>
+          <aside className="crm-drawer" role="dialog" aria-modal="true" aria-label="Email preview" onClick={(e) => e.stopPropagation()}>
+            <div className="crm-panel-head">
+              <h2>{preview.business_name}</h2>
+              <button type="button" className="crm-btn-secondary" onClick={() => setPreview(null)}>Close</button>
+            </div>
+            <p className="crm-subhead">Subject</p>
+            <p>{preview.preview_subject}</p>
+            <p className="crm-subhead">Body</p>
+            <pre className="crm-code">{preview.preview_body}</pre>
+            <div className="crm-head-actions">
+              <button
+                type="button"
+                className="crm-btn"
+                disabled={Boolean(busy)}
+                onClick={() => {
+                  setSelected([preview.id]);
+                  void bulkApprove(false);
+                  setPreview(null);
+                }}
+              >
+                Approve
+              </button>
+              <Link className="crm-btn-secondary" to="/admin/campaigns">Edit in Email Campaigns</Link>
+            </div>
+          </aside>
+        </div>
+      ) : null}
+      {data?.mail_app_interim ? <p className="crm-muted crm-pad">{data.mail_app_interim}</p> : null}
+    </>
+  );
+}
+
+/* ------------------------------------------------------------------ */
 /* Lead Queue (Neon discovery + Mac CRM bridge)                        */
 /* ------------------------------------------------------------------ */
 
@@ -2136,7 +2373,10 @@ function SettingsPage() {
             <button type="button" className="crm-btn-secondary" disabled={Boolean(busy)} onClick={() => void setActive('resend')}>Use Resend</button>
             <button type="button" className="crm-btn-secondary" disabled={Boolean(busy)} onClick={() => void setActive('none')}>Sender off</button>
           </div>
-          <p className="crm-muted crm-pad">Active sender: <strong>{asText(sender?.active_sender, 'none')}</strong>. Mail.app is not supported.</p>
+          <p className="crm-muted crm-pad">
+            Active sender: <strong>{asText(sender?.active_sender, 'none')}</strong>. Graph/Resend are primary here.
+            Mac interim: Mail.app may be used by the operator when authorized — does not replace Graph connect.
+          </p>
         </section>
         <section className="crm-panel">
           <div className="crm-panel-head"><h2>Send safety + daily cap</h2></div>
@@ -2180,6 +2420,7 @@ export function CrmDashboard() {
       <Routes>
         {/* Relative paths: this <Routes> is mounted under <Route path="/admin/*"> in main.tsx. */}
         <Route index element={<OverviewPage />} />
+        <Route path="daily-review" element={<DailyReviewPage />} />
         <Route path="leads" element={<LeadQueuePage />} />
         <Route path="lead-queue" element={<LeadQueuePage />} />
         <Route path="campaigns" element={<CampaignsPage />} />

@@ -54,6 +54,15 @@ export type SendControlsState = {
   complaint_count: number;
   submitted_count: number;
   auto_paused: boolean;
+  /**
+   * When true (default), live process_one only allowed 9:00–11:00 America/Los_Angeles.
+   * Owner can disable for testing; never auto-sends.
+   */
+  enforce_send_window: boolean;
+  /** Inclusive start hour PT (default 9). */
+  window_start_hour_pt: number;
+  /** Exclusive end hour PT (default 11). */
+  window_end_hour_pt: number;
   updated_at: string;
 };
 
@@ -80,8 +89,34 @@ function emptyControls(ms = Date.now()): SendControlsState {
     complaint_count: 0,
     submitted_count: 0,
     auto_paused: false,
+    enforce_send_window: true,
+    window_start_hour_pt: 9,
+    window_end_hour_pt: 11,
     updated_at: nowIso(ms),
   };
+}
+
+/** Current hour (0–23) in America/Los_Angeles. */
+export function laHour(ms = Date.now()): number {
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'America/Los_Angeles',
+    hour: 'numeric',
+    hourCycle: 'h23',
+  }).formatToParts(new Date(ms));
+  const hour = Number(parts.find((p) => p.type === 'hour')?.value);
+  return Number.isFinite(hour) ? hour : 0;
+}
+
+/** True when now is within [start, end) PT. */
+export function isWithinSendWindow(
+  controls: Pick<SendControlsState, 'enforce_send_window' | 'window_start_hour_pt' | 'window_end_hour_pt'>,
+  nowMs = Date.now(),
+): boolean {
+  if (!controls.enforce_send_window) return true;
+  const hour = laHour(nowMs);
+  const start = controls.window_start_hour_pt ?? 9;
+  const end = controls.window_end_hour_pt ?? 11;
+  return hour >= start && hour < end;
 }
 
 export async function readSendControls(env: SendControlsEnv = process.env): Promise<SendControlsState> {
@@ -300,6 +335,14 @@ export async function processNextSend(
   }
   if (controls.paused) {
     return { processed: false, item: null, controls, message: controls.paused_reason || 'Sending paused.' };
+  }
+  if (!isWithinSendWindow(controls, nowMs)) {
+    return {
+      processed: false,
+      item: null,
+      controls,
+      message: `Outside send window (${controls.window_start_hour_pt ?? 9}–${controls.window_end_hour_pt ?? 11} America/Los_Angeles). Queue stays pending — not marked sent.`,
+    };
   }
 
   if (controls.next_eligible_at) {

@@ -318,6 +318,11 @@ describe('send controls', () => {
   });
 
   it('does not resend after refresh once submitted', async () => {
+    const { writeSendControls, readSendControls } = await import('./send-controls.ts');
+    await writeSendControls(
+      { ...(await readSendControls(memEnv)), enforce_send_window: false, paused: false, cancelled: false },
+      memEnv,
+    );
     const first = await enqueueApprovedRecipients(
       [
         {
@@ -332,10 +337,12 @@ describe('send controls', () => {
       memEnv,
     );
     assert.equal(first.added, 1);
+    // 10:00 America/Los_Angeles on a weekday (PDT = UTC-7)
+    const insideWindow = Date.parse('2026-10-22T17:00:00Z');
     const processed = await processNextSend(
       async (item) => ({ ok: true, provider_message_id: `mock_${item.id}` }),
       memEnv,
-      { allowLive: true, rng: () => 0 },
+      { allowLive: true, rng: () => 0, nowMs: insideWindow },
     );
     assert.equal(processed.processed, true);
     assert.equal(processed.item?.status, 'submitted');

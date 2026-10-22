@@ -616,6 +616,34 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
       const result = await handleOutreachAnalytics(admin);
       return send(res, result.status, result.body);
     }
+    if (matches(path, '/api/admin/crm/daily-20') && method === 'GET') {
+      if (!admin) return send(res, 401, { ok: false, message: 'Sign in required.' });
+      const url = new URL(req.url || '/', 'https://www.bbl.studio');
+      const { handleDaily20Get } = await loadOutreachStudioApi();
+      const result = await handleDaily20Get(admin, { refresh: url.searchParams.get('refresh') || undefined });
+      return send(res, result.status, result.body);
+    }
+    if (matches(path, '/api/admin/crm/daily-20/approve') && method === 'POST') {
+      if (!admin) return send(res, 401, { ok: false, message: 'Sign in required.' });
+      const body = await readJsonUnknown(req);
+      const { handleDaily20BulkApprove } = await loadOutreachStudioApi();
+      const result = await handleDaily20BulkApprove(admin, body as never);
+      return send(res, result.status, result.body);
+    }
+    if (matches(path, '/api/admin/crm/follow-ups') && (method === 'GET' || method === 'POST')) {
+      if (!admin) return send(res, 401, { ok: false, message: 'Sign in required.' });
+      const body = method === 'POST' ? await readJsonUnknown(req) : { generate: false };
+      const { handleFollowUpDrafts } = await loadOutreachStudioApi();
+      const result = await handleFollowUpDrafts(admin, body as never);
+      return send(res, result.status, result.body);
+    }
+    if (matches(path, '/api/admin/crm/send-window') && method === 'POST') {
+      if (!admin) return send(res, 401, { ok: false, message: 'Sign in required.' });
+      const body = await readJsonUnknown(req);
+      const { handleSendWindowSet } = await loadOutreachStudioApi();
+      const result = await handleSendWindowSet(admin, body as never);
+      return send(res, result.status, result.body);
+    }
 
     return send(res, 404, { ok: false, message: 'Not found.' });
   } catch (error) {
