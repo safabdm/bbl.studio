@@ -143,6 +143,40 @@ window.gtag=gtag;
   console.log('Injected analytics/verification tags into home + booking HTML.');
 }
 
+/**
+ * Vite builds the SPA shell from index.html (marketing-oriented meta).
+ * That file is copied to app.html for /admin, /client, /unsubscribe.
+ * Vercel already sends X-Robots-Tag: noindex on those routes; harden the
+ * document meta so the shell never claims the homepage canonical/index.
+ */
+function hardenAppShell() {
+  const file = join(outDir, 'app.html');
+  if (!existsSync(file)) {
+    console.error('out/app.html missing — expected after vite build copy');
+    process.exit(1);
+  }
+  let html = readFileSync(file, 'utf8');
+  html = html.replace(
+    /<meta\s+name="robots"[^>]*>/i,
+    '<meta name="robots" content="noindex, nofollow" />',
+  );
+  html = html.replace(
+    /<meta\s+name="googlebot"[^>]*>/i,
+    '<meta name="googlebot" content="noindex, nofollow" />',
+  );
+  if (!/name="robots"/i.test(html)) {
+    html = html.replace('</head>', '<meta name="robots" content="noindex, nofollow" />\n</head>');
+  }
+  html = html.replace(/<link\s+rel="canonical"[^>]*>\s*/i, '');
+  html = html.replace(/<title>[^<]*<\/title>/i, '<title>BBL Studio</title>');
+  if (!/name="robots" content="noindex/i.test(html)) {
+    console.error('Failed to set noindex on out/app.html');
+    process.exit(1);
+  }
+  writeFileSync(file, html, 'utf8');
+  console.log('Hardened out/app.html (noindex, no homepage canonical).');
+}
+
 function main() {
   if (!existsSync(outDir)) {
     console.error('out/ missing — run vite build first');
@@ -151,6 +185,7 @@ function main() {
   prerenderPages();
   writeSitemap();
   injectAnalyticsTags();
+  hardenAppShell();
   rejectSourceMaps();
   assertNoLeakage();
 }

@@ -252,7 +252,7 @@ export const MARKETING_PAGES: MarketingPage[] = [
     faqs: [
       {
         q: 'Which BBL Studio websites can I visit?',
-        a: 'Selected live work includes Raysan IP, 7 Stud Farm, and IP Law Nerds. Each project page covers challenge, role, process, solution, and a live site link. Outcomes stay marked TODO until the owner provides real metrics.',
+        a: 'Selected live work includes Raysan IP, 7 Stud Farm, and IP Law Nerds. Each project page covers challenge, role, process, solution, and a live site link.',
       },
     ],
   },

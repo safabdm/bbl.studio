@@ -40,7 +40,7 @@ export const PAGE_FAQS: Record<string, FaqItem[]> = {
   '/work': [
     {
       q: 'Which BBL websites can I visit?',
-      a: 'Selected live work includes Raysan IP, 7 Stud Farm, and IP Law Nerds. Each project page covers challenge, role, process, solution, and a live site link. Outcomes stay marked TODO until the owner provides real metrics.',
+      a: 'Selected live work includes Raysan IP, 7 Stud Farm, and IP Law Nerds. Each project page covers challenge, role, process, solution, and a live site link.',
     },
     CORE_FAQS[5],
   ],
@@ -86,10 +86,10 @@ export const PAGE_FAQS: Record<string, FaqItem[]> = {
   ],
 };
 
-/** Outcomes stay TODO until the owner supplies real metrics — never invent numbers. */
-export const OUTCOMES_TODO =
-  '[TODO: Owner has not provided real metrics. Do not invent traffic, ranking, conversion, revenue, or referral results for this project.]';
-
+/**
+ * Case study pages omit a public Outcomes section until the owner supplies
+ * real metrics. Never invent traffic, ranking, conversion, or revenue figures.
+ */
 export const caseStudies = {
   'raysan-ip': {
     ...projects[0],
@@ -102,7 +102,6 @@ export const caseStudies = {
       'The engagement treated the website as a commercial information product, not a law-firm lookalike. Structure, naming, and page hierarchy were planned so the offer is visible immediately and the brand can travel across markets without rewriting the story on every page. Design and build followed that architecture into a dark editorial system with restrained typography and a clear inquiry path.',
     solution:
       'A live commercial website and brand system for a global IP information platform: responsive layouts for desktop and mobile review, an international formal visual language with enough distinction to stand apart from generic professional templates, and a public inquiry path at raysanip.com.',
-    outcomes: OUTCOMES_TODO,
   },
   '7-stud-farm': {
     ...projects[1],
@@ -115,7 +114,6 @@ export const caseStudies = {
       'Brand direction set how images, type, and naming should sit together so the farm can add horses and stories later without redesigning the public face each season. The site was planned as photography-led and deliberately quiet, then designed and built so supporting copy stays short enough that a visitor can move from first look to inquiry without hunting.',
     solution:
       'A live business website at 7studfarm.com with large equestrian photography, restrained typography, a measured pace, and a clear path to inquire — one durable public face for bloodlines, photography, and the farm’s point of view.',
-    outcomes: OUTCOMES_TODO,
   },
   'ip-law-nerds': {
     ...projects[2],
@@ -128,6 +126,5 @@ export const caseStudies = {
       'Brand expression and website structure were planned together so the name, tone, and pages feel like one practice rather than a logo dropped onto a legal template. The site leads with voice and a clear service picture; design and build kept pages short enough that a first-time visitor can decide whether to inquire.',
     solution:
       'A live business website at iplawnerds.com with an open, readable layout, a direct voice, and color and type that support approachability without becoming casual — plus a clear inquiry path for founders and businesses looking for intellectual property help.',
-    outcomes: OUTCOMES_TODO,
   },
 } as const;

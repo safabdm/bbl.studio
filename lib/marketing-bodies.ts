@@ -399,10 +399,6 @@ export function bodyFor(page: MarketingPage): PageBody {
         { heading: 'Process', paragraphs: [study.process] },
         { heading: 'Solution', paragraphs: [study.solution] },
         {
-          heading: 'Outcomes',
-          paragraphs: [study.outcomes],
-        },
-        {
           heading: 'Live site',
           paragraphs: [`Visit the live website: ${study.href}`],
           links: [
