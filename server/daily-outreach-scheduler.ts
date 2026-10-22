@@ -21,7 +21,6 @@ import {
 import { notifyOwnerDailyReviewReady, type OwnerNotifyEnv } from './owner-notify.js';
 import {
   describeNextWeekdayRun,
-  isPacificTimeInRange,
   isPacificWeekday,
   pacificParts,
 } from './pacific-time.js';
@@ -60,6 +59,15 @@ export type SchedulerJobResult = {
   details?: Record<string, unknown>;
 };
 
+export type StageStamp = {
+  /** Intended Pacific wall-clock label (logical schedule for UI). */
+  intended_pt: string;
+  started_at: string | null;
+  finished_at: string | null;
+  status: SchedulerJobResult['status'] | 'pending' | null;
+  message: string | null;
+};
+
 export type SchedulerState = {
   last_job: SchedulerJobName | null;
   last_status: string | null;
@@ -69,8 +77,31 @@ export type SchedulerState = {
   last_error: string | null;
   /** Idempotency: job:day_key → ISO completed */
   completed: Record<string, string>;
+  /** Logical stage stamps for the current/last LA day (UI schedule even when Hobby runs stages back-to-back). */
+  stages: Partial<Record<SchedulerJobName, StageStamp>>;
+  stages_day_key: string | null;
+  /** Hobby: one Vercel cron fire/day runs the full morning pipeline. */
+  hobby_single_cron: boolean;
   updated_at: string;
 };
+
+/** Morning prep stages — Hobby runs these sequentially in one daily cron (never auto-send). */
+export const MORNING_PIPELINE_JOBS: SchedulerJobName[] = ['discover', 'verify', 'select', 'notify'];
+
+export const STAGE_INTENDED_PT: Record<SchedulerJobName, string> = {
+  discover: '07:00',
+  verify: '08:00',
+  select: '08:30',
+  notify: '09:00',
+  send_window: '09:00–11:00 (owner-approved only)',
+  replies: '12:00 / 15:00 (Pro / manual)',
+  followups: '10:00 (optional after notify)',
+};
+
+/** Vercel Hobby-compatible: once per day Mon–Fri at 14:00 UTC ≈ 7:00 AM PT (PDT). */
+export const OUTREACH_CRON_SCHEDULE = '0 14 * * 1-5';
+export const OUTREACH_CRON_SCHEDULE_NOTE =
+  '14:00 UTC Mon–Fri ≈ 7:00 AM PT during PDT (UTC-7); ≈ 6:00 AM PT during PST (UTC-8). Hobby allows one fire/day.';
 
 export type SchedulerEnv = Daily20Env &
   DiscoveryRunnerEnv &
@@ -101,13 +132,24 @@ function emptyState(): SchedulerState {
     last_day_key: null,
     last_error: null,
     completed: {},
+    stages: {},
+    stages_day_key: null,
+    hobby_single_cron: true,
     updated_at: nowIso(),
   };
 }
 
 export async function readSchedulerState(env: SchedulerEnv = process.env): Promise<SchedulerState> {
   const raw = await dbReadKv<SchedulerState | null>(SCHEDULER_STATE_KV, null, env);
-  return raw && typeof raw === 'object' ? { ...emptyState(), ...raw, completed: raw.completed || {} } : emptyState();
+  return raw && typeof raw === 'object'
+    ? {
+        ...emptyState(),
+        ...raw,
+        completed: raw.completed || {},
+        stages: raw.stages || {},
+        hobby_single_cron: true,
+      }
+    : emptyState();
 }
 
 async function writeSchedulerState(state: SchedulerState, env: SchedulerEnv): Promise<SchedulerState> {
@@ -130,30 +172,72 @@ export function isJobComplete(state: SchedulerState, job: SchedulerJobName, dayK
   return Boolean(state.completed[idempotencyKey(job, dayKey)]);
 }
 
+function ensureStagesDay(state: SchedulerState, dayKey: string): SchedulerState {
+  if (state.stages_day_key === dayKey) return state;
+  const stages: Partial<Record<SchedulerJobName, StageStamp>> = {};
+  for (const job of MORNING_PIPELINE_JOBS) {
+    stages[job] = {
+      intended_pt: STAGE_INTENDED_PT[job],
+      started_at: null,
+      finished_at: null,
+      status: 'pending',
+      message: null,
+    };
+  }
+  return { ...state, stages, stages_day_key: dayKey };
+}
+
+async function stampStageStart(
+  job: SchedulerJobName,
+  dayKey: string,
+  at: string,
+  env: SchedulerEnv,
+): Promise<void> {
+  let state = ensureStagesDay(await readSchedulerState(env), dayKey);
+  state.stages[job] = {
+    intended_pt: STAGE_INTENDED_PT[job],
+    started_at: at,
+    finished_at: null,
+    status: 'pending',
+    message: null,
+  };
+  await writeSchedulerState(state, env);
+}
+
+async function stampStageFinish(
+  job: SchedulerJobName,
+  dayKey: string,
+  result: SchedulerJobResult,
+  env: SchedulerEnv,
+): Promise<SchedulerState> {
+  let state = ensureStagesDay(await readSchedulerState(env), dayKey);
+  const prev = state.stages[job];
+  state.stages[job] = {
+    intended_pt: STAGE_INTENDED_PT[job],
+    started_at: prev?.started_at || result.at,
+    finished_at: result.at,
+    status: result.status,
+    message: result.message,
+  };
+  return state;
+}
+
 /**
- * Which jobs are due for the current Pacific wall clock (Mon–Fri only).
- * Windows are intentionally small so a every-30m UTC dispatcher hits them once.
+ * Hobby plan: one cron fire/day. Morning pipeline is always the sequential prep jobs.
+ * Never includes send_window (owner-approval gated; not part of auto cron).
+ * Pro could split stages across multiple crons — see STAGE_INTENDED_PT.
+ */
+export function morningPipelineJobs(): SchedulerJobName[] {
+  return [...MORNING_PIPELINE_JOBS];
+}
+
+/**
+ * Jobs due for a weekday cron invocation.
+ * Hobby: full morning pipeline (discover→verify→select→notify). Never send_window.
  */
 export function jobsDueAt(ms = Date.now()): SchedulerJobName[] {
   if (!isPacificWeekday(ms)) return [];
-  const due: SchedulerJobName[] = [];
-  // 7:00–7:29 discover
-  if (isPacificTimeInRange(ms, 7, 0, 7, 30)) due.push('discover');
-  // 8:00–8:29 verify
-  if (isPacificTimeInRange(ms, 8, 0, 8, 30)) due.push('verify');
-  // 8:30–8:59 select
-  if (isPacificTimeInRange(ms, 8, 30, 9, 0)) due.push('select');
-  // 9:00–9:29 notify
-  if (isPacificTimeInRange(ms, 9, 0, 9, 30)) due.push('notify');
-  // 9:00–11:00 send window (idempotent per tick via process; not day-locked to one run)
-  if (isPacificTimeInRange(ms, 9, 0, 11, 0)) due.push('send_window');
-  // Midday + afternoon reply sweeps
-  if (isPacificTimeInRange(ms, 12, 0, 12, 30) || isPacificTimeInRange(ms, 15, 0, 15, 30)) {
-    due.push('replies');
-  }
-  // Follow-up draft gen once mid-morning after notify window
-  if (isPacificTimeInRange(ms, 10, 0, 10, 30)) due.push('followups');
-  return due;
+  return morningPipelineJobs();
 }
 
 export async function runSchedulerJob(
@@ -182,6 +266,13 @@ export async function runSchedulerJob(
       message: `Already completed ${job} for ${day_key} PT.`,
       at,
     };
+    state = await stampStageFinish(job, day_key, skip, env);
+    state.last_job = job;
+    state.last_status = skip.status;
+    state.last_message = skip.message;
+    state.last_at = at;
+    state.last_day_key = day_key;
+    await writeSchedulerState(state, env);
     await appendRun(skip, env);
     return skip;
   }
@@ -197,6 +288,8 @@ export async function runSchedulerJob(
     await appendRun(skip, env);
     return skip;
   }
+
+  await stampStageStart(job, day_key, at, env);
 
   try {
     let result: SchedulerJobResult;
@@ -410,9 +503,9 @@ export async function runSchedulerJob(
       };
     }
 
-    // Persist idempotency for day-locked successes
+    // Persist idempotency for day-locked successes + logical stage stamp
+    state = await stampStageFinish(job, day_key, result, env);
     if (result.status === 'completed' && dayLocked.includes(job)) {
-      state = await readSchedulerState(env);
       state.completed[idempotencyKey(job, day_key)] = at;
     }
     state.last_job = job;
@@ -421,19 +514,21 @@ export async function runSchedulerJob(
     state.last_at = at;
     state.last_day_key = day_key;
     state.last_error = result.status === 'failed' ? result.message : null;
+    state.hobby_single_cron = true;
     await writeSchedulerState(state, env);
     await appendRun(result, env);
     return result;
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Scheduler job failed';
     const failed: SchedulerJobResult = { job, day_key, status: 'failed', message, at };
-    state = await readSchedulerState(env);
+    state = await stampStageFinish(job, day_key, failed, env);
     state.last_job = job;
     state.last_status = 'failed';
     state.last_message = message;
     state.last_at = at;
     state.last_day_key = day_key;
     state.last_error = message;
+    state.hobby_single_cron = true;
     await writeSchedulerState(state, env);
     await appendRun(failed, env);
     return failed;
@@ -441,8 +536,8 @@ export async function runSchedulerJob(
 }
 
 /**
- * Dispatcher for Vercel cron — runs all due jobs for current PT clock.
- * Idempotent per job/day. Never prospect-sends without approval + flags.
+ * Dispatcher for Vercel Hobby cron — one fire/day runs morning pipeline sequentially.
+ * Idempotent per job/day. Never includes send_window. Never prospect-sends without approval + flags.
  */
 export async function dispatchOutreachCron(
   headers: { authorization?: string | null },
@@ -463,14 +558,19 @@ export async function dispatchOutreachCron(
   if (env.OUTREACH_SCHEDULER_ENABLED !== undefined && env.OUTREACH_SCHEDULER_ENABLED !== '' && !truthy(env.OUTREACH_SCHEDULER_ENABLED)) {
     return {
       status: 200,
-      body: { ok: true, skipped: true, message: 'OUTREACH_SCHEDULER_ENABLED is off.', live_email_send: false },
+      body: { ok: true, skipped: true, message: 'OUTREACH_SCHEDULER_ENABLED is off.', live_email_send: false, auto_send: false },
     };
   }
 
   const nowMs = opts.nowMs ?? Date.now();
-  const due = opts.forceJobs?.length ? opts.forceJobs : jobsDueAt(nowMs);
+  // Default: morning pipeline only. forceJobs may include send_window for admin tests — still gated.
+  const weekdayDue = opts.forceJobs?.length
+    ? opts.forceJobs
+    : isPacificWeekday(nowMs)
+      ? morningPipelineJobs()
+      : [];
   const results: SchedulerJobResult[] = [];
-  for (const job of due) {
+  for (const job of weekdayDue) {
     results.push(
       await runSchedulerJob(job, env, {
         nowMs,
@@ -487,20 +587,28 @@ export async function dispatchOutreachCron(
       ok: !results.some((r) => r.status === 'failed'),
       day_key: laDayKey(nowMs),
       pacific: pacificParts(nowMs),
-      due,
+      cron_schedule: OUTREACH_CRON_SCHEDULE,
+      cron_schedule_note: OUTREACH_CRON_SCHEDULE_NOTE,
+      hobby_single_cron: true,
+      morning_pipeline: MORNING_PIPELINE_JOBS,
+      due: weekdayDue,
       results,
+      stages: state.stages,
+      stages_day_key: state.stages_day_key,
       state: {
         last_job: state.last_job,
         last_status: state.last_status,
         last_message: state.last_message,
         last_at: state.last_at,
         last_error: state.last_error,
+        hobby_single_cron: true,
       },
       live_email_send: false,
       auto_send: false,
-      message: due.length
-        ? `Processed ${results.length} job(s).`
-        : 'No outreach jobs due at this Pacific time.',
+      send_window_in_cron: false,
+      message: weekdayDue.length
+        ? `Hobby morning pipeline: processed ${results.length} stage(s) sequentially (no auto-send).`
+        : 'Weekend PT — no outreach morning pipeline.',
     },
   };
 }
@@ -515,22 +623,35 @@ export async function getSchedulerDashboard(env: SchedulerEnv = process.env, now
     listInterestedNotify(env),
     listFollowUpDrafts(env),
   ]);
+  // Logical intended PT times for UI (stages may run back-to-back on Hobby).
+  const nextCron = describeNextWeekdayRun(7, 0, nowMs); // ≈14:00 UTC / 7am PDT
   const nextDiscover = describeNextWeekdayRun(7, 0, nowMs);
+  const nextVerify = describeNextWeekdayRun(8, 0, nowMs);
   const nextSelect = describeNextWeekdayRun(8, 30, nowMs);
   const nextNotify = describeNextWeekdayRun(9, 0, nowMs);
   return {
     ok: true as const,
     mac_independent: true,
+    hobby_single_cron: true,
+    cron_schedule: OUTREACH_CRON_SCHEDULE,
+    cron_schedule_note: OUTREACH_CRON_SCHEDULE_NOTE,
     mail_app_note:
       'Mail.app is Mac-only interim and cannot run when Mac is asleep. Scheduler prep uses Vercel cron + Neon; post-approval send uses Graph/Resend when enabled.',
     auto_send: false,
+    send_window_in_cron: false,
     scheduler_enabled: env.OUTREACH_SCHEDULER_ENABLED === undefined || truthy(env.OUTREACH_SCHEDULER_ENABLED),
     pacific_now: pacificParts(nowMs),
     next_runs: {
+      /** Single Hobby cron fire (logical discover slot). */
+      cron: nextCron,
       discover: nextDiscover,
+      verify: nextVerify,
       select: nextSelect,
       notify: nextNotify,
     },
+    stages: state.stages,
+    stages_day_key: state.stages_day_key,
+    stage_intended_pt: STAGE_INTENDED_PT,
     last_successful_run: (Array.isArray(runs) ? runs : []).find((r) => r.status === 'completed') || null,
     last_error: state.last_error,
     state,
@@ -551,7 +672,7 @@ export async function getSchedulerDashboard(env: SchedulerEnv = process.env, now
     },
     send_window: {
       enforce: controls.enforce_send_window,
-      label: `${controls.window_start_hour_pt ?? 9}–${controls.window_end_hour_pt ?? 11} PT`,
+      label: `${controls.window_start_hour_pt ?? 9}–${controls.window_end_hour_pt ?? 11} PT (owner-approved only; not in Hobby cron)`,
     },
   };
 }

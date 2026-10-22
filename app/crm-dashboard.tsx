@@ -1473,12 +1473,22 @@ type Daily20Response = {
   message?: string;
   scheduler?: {
     mac_independent?: boolean;
+    hobby_single_cron?: boolean;
+    cron_schedule?: string;
+    cron_schedule_note?: string;
     auto_send?: boolean;
+    send_window_in_cron?: boolean;
     next_runs?: {
+      cron?: { at_pt?: string };
       discover?: { at_pt?: string };
+      verify?: { at_pt?: string };
       select?: { at_pt?: string };
       notify?: { at_pt?: string };
     };
+    stages?: Record<
+      string,
+      { intended_pt?: string; status?: string | null; finished_at?: string | null; message?: string | null }
+    >;
     last_successful_run?: { job?: string; at?: string; message?: string; day_key?: string } | null;
     last_error?: string | null;
     daily_counter?: { sent_today?: number; effective_cap?: number; remaining?: number };
@@ -1601,9 +1611,24 @@ function DailyReviewPage() {
           <div className="crm-panel-head"><h2>Scheduler (Vercel cron · Mac-independent)</h2></div>
           <div className="crm-checks">
             <CheckRow ok={data.scheduler.mac_independent !== false} label="Runs when Mac asleep" value="Vercel cron + Neon" />
+            <CheckRow ok={data.scheduler.hobby_single_cron !== false} label="Hobby cron" value={data.scheduler.cron_schedule || '0 14 * * 1-5'} />
             <CheckRow ok={data.scheduler.auto_send === false} label="Auto-send" value="OFF — owner approve required" />
-            <CheckRow ok={null} label="Next discover" value={data.scheduler.next_runs?.discover?.at_pt || '—'} />
-            <CheckRow ok={null} label="Next select/notify" value={`${data.scheduler.next_runs?.select?.at_pt || '—'} · notify ${data.scheduler.next_runs?.notify?.at_pt || '—'}`} />
+            <CheckRow ok={data.scheduler.send_window_in_cron === false} label="Send in cron" value="Never — owner-approval gated" />
+            <CheckRow ok={null} label="Next cron fire" value={data.scheduler.next_runs?.cron?.at_pt || data.scheduler.next_runs?.discover?.at_pt || '—'} />
+            <CheckRow
+              ok={null}
+              label="Logical stages (PT)"
+              value={`discover ${data.scheduler.stages?.discover?.intended_pt || '07:00'} · verify ${data.scheduler.stages?.verify?.intended_pt || '08:00'} · select ${data.scheduler.stages?.select?.intended_pt || '08:30'} · notify ${data.scheduler.stages?.notify?.intended_pt || '09:00'}`}
+            />
+            <CheckRow
+              ok={null}
+              label="Last stage statuses"
+              value={
+                ['discover', 'verify', 'select', 'notify']
+                  .map((j) => `${j}:${data.scheduler?.stages?.[j]?.status || 'pending'}`)
+                  .join(' · ')
+              }
+            />
             <CheckRow
               ok={Boolean(data.scheduler.last_successful_run)}
               label="Last successful job"
@@ -1624,6 +1649,7 @@ function DailyReviewPage() {
               value={`submitted ${data.scheduler.tracking?.submitted ?? 0} · failed ${data.scheduler.tracking?.failed ?? 0} · bounced ${data.scheduler.tracking?.bounced ?? 0} · interested ${data.scheduler.tracking?.interested ?? 0}`}
             />
           </div>
+          {data.scheduler.cron_schedule_note ? <p className="crm-muted crm-pad">{data.scheduler.cron_schedule_note}</p> : null}
           {data.scheduler.mail_app_note ? <p className="crm-muted crm-pad">{data.scheduler.mail_app_note}</p> : null}
         </section>
       ) : null}

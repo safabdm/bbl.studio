@@ -1,5 +1,6 @@
 /**
- * Daily outreach scheduler — mocked cron, idempotency, exclusions, no auto-send.
+ * Daily outreach scheduler — Hobby single-cron, sequential morning pipeline,
+ * idempotency, exclusions, no auto-send.
  */
 import assert from 'node:assert/strict';
 import { describe, it, beforeEach } from 'node:test';
@@ -14,14 +15,17 @@ import {
 } from './daily-20-pipeline.ts';
 import { fixtureCrmLead, fixtureDiscoveredLead } from './lead-queue.ts';
 import {
+  MORNING_PIPELINE_JOBS,
+  OUTREACH_CRON_SCHEDULE,
   dispatchOutreachCron,
   idempotencyKey,
   isJobComplete,
   jobsDueAt,
+  morningPipelineJobs,
   readSchedulerState,
   runSchedulerJob,
 } from './daily-outreach-scheduler.ts';
-import { isPacificTimeInRange, pacificParts } from './pacific-time.ts';
+import { pacificParts } from './pacific-time.ts';
 import { notifyOwnerDailyReviewReady } from './owner-notify.ts';
 
 const memEnv = {
@@ -115,24 +119,59 @@ describe('hard exclusions (Batch 1 + Daily-20 19 + AKA HOLD)', () => {
   });
 });
 
-describe('PT job windows + cron dispatcher', () => {
-  it('maps Pacific wall clock to due jobs', () => {
-    // 2026-10-23 Friday: PDT UTC-7
-    // 7:10 PT = 14:10 UTC
-    const discoverMs = Date.parse('2026-10-23T14:10:00Z');
-    assert.deepEqual(jobsDueAt(discoverMs), ['discover']);
-    assert.ok(isPacificTimeInRange(discoverMs, 7, 0, 7, 30));
+describe('Hobby single-cron + morning pipeline', () => {
+  it('cron schedule fires once per weekday (Hobby-safe)', () => {
+    // Once at minute 0 of hour 14 UTC, Mon–Fri — not */30 and not an hour range.
+    assert.equal(OUTREACH_CRON_SCHEDULE, '0 14 * * 1-5');
+    assert.ok(!OUTREACH_CRON_SCHEDULE.includes('*/'));
+    assert.ok(!/\d+-\d+/.test(OUTREACH_CRON_SCHEDULE.split(' ')[1] || ''));
+  });
 
-    const selectMs = Date.parse('2026-10-23T15:40:00Z'); // 8:40 PT
-    assert.ok(jobsDueAt(selectMs).includes('select'));
-
-    const notifyMs = Date.parse('2026-10-23T16:10:00Z'); // 9:10 PT
-    const dueNotify = jobsDueAt(notifyMs);
-    assert.ok(dueNotify.includes('notify'));
-    assert.ok(dueNotify.includes('send_window'));
+  it('weekday cron due list is full morning pipeline; never send_window', () => {
+    // 2026-10-23 Friday: any weekday PT time → full pipeline (Hobby single fire)
+    const morningMs = Date.parse('2026-10-23T14:00:00Z'); // 7:00 PT PDT
+    const middayMs = Date.parse('2026-10-23T16:10:00Z'); // 9:10 PT
+    assert.deepEqual(jobsDueAt(morningMs), ['discover', 'verify', 'select', 'notify']);
+    assert.deepEqual(jobsDueAt(middayMs), MORNING_PIPELINE_JOBS);
+    assert.deepEqual(morningPipelineJobs(), MORNING_PIPELINE_JOBS);
+    assert.ok(!jobsDueAt(morningMs).includes('send_window'));
+    assert.ok(!jobsDueAt(middayMs).includes('replies'));
 
     const weekend = Date.parse('2026-10-24T16:00:00Z'); // Sat
     assert.deepEqual(jobsDueAt(weekend), []);
+  });
+
+  it('dispatch runs discover→verify→select→notify sequentially with stage stamps', async () => {
+    const nowMs = Date.parse('2026-10-23T14:00:00Z');
+    const ok = await dispatchOutreachCron(
+      { authorization: 'Bearer cron-test-secret' },
+      memEnv,
+      {
+        nowMs,
+        fixturesOnly: true,
+        fetchImpl: async () => new Response(JSON.stringify({ id: 'mock' }), { status: 200 }),
+      },
+    );
+    assert.equal(ok.status, 200);
+    assert.equal(ok.body.hobby_single_cron, true);
+    assert.equal(ok.body.auto_send, false);
+    assert.equal(ok.body.send_window_in_cron, false);
+    assert.equal(ok.body.cron_schedule, '0 14 * * 1-5');
+    assert.deepEqual(ok.body.due, ['discover', 'verify', 'select', 'notify']);
+    const results = ok.body.results as Array<{ job: string; status: string }>;
+    assert.deepEqual(
+      results.map((r) => r.job),
+      ['discover', 'verify', 'select', 'notify'],
+    );
+    assert.ok(results.every((r) => r.status === 'completed' || r.status === 'idempotent_skip'));
+    assert.ok(!results.some((r) => r.job === 'send_window'));
+
+    const stages = ok.body.stages as Record<string, { intended_pt: string; status: string }>;
+    assert.equal(stages.discover?.intended_pt, '07:00');
+    assert.equal(stages.verify?.intended_pt, '08:00');
+    assert.equal(stages.select?.intended_pt, '08:30');
+    assert.equal(stages.notify?.intended_pt, '09:00');
+    assert.ok(['completed', 'idempotent_skip'].includes(stages.notify?.status));
   });
 
   it('is idempotent for the same job/day', async () => {
@@ -144,9 +183,11 @@ describe('PT job windows + cron dispatcher', () => {
     const state = await readSchedulerState(memEnv);
     assert.equal(isJobComplete(state, 'select', first.day_key), true);
     assert.equal(idempotencyKey('select', first.day_key), `select:${first.day_key}`);
+    assert.equal(state.stages.select?.status, 'idempotent_skip');
+    assert.equal(state.hobby_single_cron, true);
   });
 
-  it('cron requires CRON_SECRET and never auto-sends', async () => {
+  it('cron requires CRON_SECRET and never auto-sends (even if send_window forced)', async () => {
     const denied = await dispatchOutreachCron({ authorization: 'Bearer wrong' }, memEnv, {
       nowMs: Date.parse('2026-10-23T16:10:00Z'),
       fixturesOnly: true,
