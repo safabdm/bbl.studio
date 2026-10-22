@@ -11,8 +11,15 @@ import {
   absoluteUrl,
   type MarketingPage,
 } from '../lib/public-marketing.ts';
-import { breadcrumbNode, faqNode, graph, serviceNode, webpageNode } from '../lib/schema.ts';
-import { breadcrumbsFor, type PageSeo } from '../lib/site.ts';
+import {
+  breadcrumbNode,
+  creativeWorkNode,
+  faqNode,
+  graph,
+  serviceNode,
+  webpageNode,
+} from '../lib/schema.ts';
+import { breadcrumbsFor, projects, type PageSeo } from '../lib/site.ts';
 
 function escapeHtml(value: string) {
   return value
@@ -114,6 +121,12 @@ function jsonLdFor(page: MarketingPage) {
   if (page.kind === 'service' || page.kind === 'buyer' || page.kind === 'geo') {
     nodes.push(serviceNode(page.h1.replace(/\.$/, ''), page.path, page.description));
   }
+  if (page.kind === 'work') {
+    const project = projects.find((item) => item.path === page.path);
+    if (project) {
+      nodes.push(creativeWorkNode(project.name, project.path, page.description, project.image));
+    }
+  }
   if (page.faqs && page.faqs.length) {
     nodes.push(faqNode(page.faqs));
   }
@@ -137,6 +150,7 @@ h2{font-size:24px;letter-spacing:-.6px;font-weight:600;margin:8px 0 12px}
 p{margin:0 0 12px;color:rgba(230,225,215,.78);font-size:15px}
 ul{margin:0 0 12px;padding-left:18px;color:rgba(230,225,215,.78)}li{margin:6px 0}
 .links{display:flex;flex-wrap:wrap;gap:10px;margin-top:12px}.links a{display:inline-flex;min-height:44px;align-items:center;padding:0 14px;border:1px solid rgba(230,225,215,.2);border-radius:12px;text-decoration:none;font-size:13px}
+.work-shot{margin:16px 0 0;padding:0;border:0}.work-shot img{display:block;width:100%;height:auto;border-radius:14px;border:1px solid rgba(230,225,215,.12)}
 .primary{display:inline-flex;min-height:48px;align-items:center;padding:0 20px;background:#FF5A36;color:#141414;border-radius:14px;font-weight:700;text-decoration:none;margin-top:20px}
 details{border-top:1px solid rgba(230,225,215,.12);padding:16px 0}summary{cursor:pointer;font-size:15px}details p{margin-top:10px}
 .inquiry{margin-top:40px;padding:24px;border:1px solid rgba(230,225,215,.16);border-radius:18px;background:#141414}
@@ -183,10 +197,13 @@ gtag('config','${escapeHtml(opts.ga4)}',{anonymize_ip:true,allow_google_signals:
         ? `<ul>${section.bullets.map((b) => `<li>${escapeHtml(b)}</li>`).join('')}</ul>`
         : '';
       const paras = section.paragraphs.map((p) => `<p>${escapeHtml(p)}</p>`).join('');
+      const image = section.image
+        ? `<figure class="work-shot"><img src="${escapeHtml(section.image.src)}" alt="${escapeHtml(section.image.alt)}" width="${section.image.width || 1100}" height="${section.image.height || 688}" loading="lazy" decoding="async" /></figure>`
+        : '';
       return `<section>
   ${section.eyebrow ? `<div class="eyebrow">${escapeHtml(section.eyebrow)}</div>` : ''}
   <h2>${escapeHtml(section.heading)}</h2>
-  ${paras}${bullets}${links}
+  ${paras}${image}${bullets}${links}
 </section>`;
     })
     .join('\n');

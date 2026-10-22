@@ -40,7 +40,7 @@ export const PAGE_FAQS: Record<string, FaqItem[]> = {
   '/work': [
     {
       q: 'Which BBL websites can I visit?',
-      a: 'Selected live work includes Raysan IP, 7 Stud Farm, and IP Law Nerds. Each project page describes the challenge, audience, and deliverables. The live websites are linked from those pages.',
+      a: 'Selected live work includes Raysan IP, 7 Stud Farm, and IP Law Nerds. Each project page covers challenge, role, process, solution, and a live site link. Outcomes stay marked TODO until the owner provides real metrics.',
     },
     CORE_FAQS[5],
   ],
@@ -86,62 +86,48 @@ export const PAGE_FAQS: Record<string, FaqItem[]> = {
   ],
 };
 
+/** Outcomes stay TODO until the owner supplies real metrics — never invent numbers. */
+export const OUTCOMES_TODO =
+  '[TODO: Owner has not provided real metrics. Do not invent traffic, ranking, conversion, revenue, or referral results for this project.]';
+
 export const caseStudies = {
   'raysan-ip': {
     ...projects[0],
     overview:
       'Raysan IP is a global intellectual property information platform. BBL planned the brand and website so a specialized information business could present itself with the same clarity it expects from the work it publishes.',
     challenge:
-      'Intellectual property information is easy to bury under legal jargon or a generic professional template. The site needed to look serious enough for an international audience without becoming a brochure that hides what the platform actually does.',
-    audience:
-      'Companies, counsel, and professionals who need a trustworthy place to understand IP information. Visitors arrive with a specific question and little patience for decoration that does not help them decide whether to inquire.',
-    strategy:
-      'The website was treated as a commercial information product, not a law-firm lookalike. Structure, naming, and page hierarchy were designed so the offer is visible immediately and the brand can travel across markets without rewriting the story on every page.',
-    design:
-      'A dark editorial system, restrained typography, and a calm layout keep attention on the platform rather than on studio flourishes. The visual language is international and formal, with enough distinction that the site does not disappear among other professional services.',
-    deliverables: [
-      'Brand system for a global IP information platform',
-      'Commercial website structure and page design',
-      'Responsive layouts for desktop and mobile review',
-      'Inquiry path and live launch',
-    ],
+      'Intellectual property information is easy to bury under legal jargon or a generic professional template. The site needed to look serious enough for an international audience of companies, counsel, and professionals — without becoming a brochure that hides what the platform actually does.',
+    role: 'BBL Studio led strategy, brand, and commercial website design through launch for Raysan IP.',
+    process:
+      'The engagement treated the website as a commercial information product, not a law-firm lookalike. Structure, naming, and page hierarchy were planned so the offer is visible immediately and the brand can travel across markets without rewriting the story on every page. Design and build followed that architecture into a dark editorial system with restrained typography and a clear inquiry path.',
+    solution:
+      'A live commercial website and brand system for a global IP information platform: responsive layouts for desktop and mobile review, an international formal visual language with enough distinction to stand apart from generic professional templates, and a public inquiry path at raysanip.com.',
+    outcomes: OUTCOMES_TODO,
   },
   '7-stud-farm': {
     ...projects[1],
     overview:
       '7 Stud Farm is an international sport horse breeding program. BBL provided brand direction and a website that lets the program present bloodlines, photography, and the farm’s point of view in one place.',
     challenge:
-      'Equestrian programs often inherit a patchwork of photos, PDFs, and social posts. Buyers and partners needed a single, durable site that felt as considered as the horses themselves, without turning the farm into a luxury cliché.',
-    audience:
-      'International buyers, breeders, and partners who evaluate programs through photography, pedigree, and tone. Many will never visit the farm first. The website is often the first complete impression.',
-    strategy:
-      'The site is photography-led and deliberately quiet. Brand direction set how images, type, and naming should sit together so the farm can add horses and stories later without redesigning the public face each season.',
-    design:
-      'Large images, restrained type, and a measured pace. The layout gives the photography room and keeps supporting copy short enough that a visitor can move from first look to inquiry without hunting.',
-    deliverables: [
-      'Brand direction for an international breeding program',
-      'Business website design and build',
-      'Responsive presentation of farm photography',
-      'Live website at 7studfarm.com',
-    ],
+      'Equestrian programs often inherit a patchwork of photos, PDFs, and social posts. International buyers, breeders, and partners — many of whom will never visit the farm first — needed a single, durable site that felt as considered as the horses themselves, without turning the farm into a luxury cliché.',
+    role: 'BBL Studio provided brand direction and business website design and build for 7 Stud Farm.',
+    process:
+      'Brand direction set how images, type, and naming should sit together so the farm can add horses and stories later without redesigning the public face each season. The site was planned as photography-led and deliberately quiet, then designed and built so supporting copy stays short enough that a visitor can move from first look to inquiry without hunting.',
+    solution:
+      'A live business website at 7studfarm.com with large equestrian photography, restrained typography, a measured pace, and a clear path to inquire — one durable public face for bloodlines, photography, and the farm’s point of view.',
+    outcomes: OUTCOMES_TODO,
   },
   'ip-law-nerds': {
     ...projects[2],
     overview:
       'IP Law Nerds is an approachable intellectual property practice. BBL designed the brand expression and website so the firm could sound like itself: direct, human, and still serious about the work.',
     challenge:
-      'Legal websites often default to marble, Latin, and distance. This practice needed a public site that founders and growing companies would actually read, without undermining the credibility required for IP counsel.',
-    audience:
-      'Founders, operators, and businesses looking for intellectual property help who are wary of firms that feel inaccessible. They need to understand the practice quickly and know how to start a conversation.',
-    strategy:
-      'The site leads with voice and a clear service picture. Brand expression and website structure were planned together so the name, tone, and pages feel like one practice rather than a logo dropped onto a legal template.',
-    design:
-      'An open, readable layout with a direct voice. Color and type support approachability without becoming casual. The pages stay short enough that a first-time visitor can decide whether to inquire.',
-    deliverables: [
-      'Brand expression for an IP practice',
-      'Business website design and build',
-      'Responsive layouts and inquiry path',
-      'Live website at iplawnerds.com',
-    ],
+      'Legal websites often default to marble, Latin, and distance. This practice needed a public site that founders, operators, and growing companies would actually read — without undermining the credibility required for IP counsel.',
+    role: 'BBL Studio designed brand expression and the business website for IP Law Nerds.',
+    process:
+      'Brand expression and website structure were planned together so the name, tone, and pages feel like one practice rather than a logo dropped onto a legal template. The site leads with voice and a clear service picture; design and build kept pages short enough that a first-time visitor can decide whether to inquire.',
+    solution:
+      'A live business website at iplawnerds.com with an open, readable layout, a direct voice, and color and type that support approachability without becoming casual — plus a clear inquiry path for founders and businesses looking for intellectual property help.',
+    outcomes: OUTCOMES_TODO,
   },
 } as const;

@@ -19,6 +19,7 @@ export type BodySection = {
   paragraphs: string[];
   bullets?: string[];
   links?: { href: string; label: string }[];
+  image?: { src: string; alt: string; width?: number; height?: number };
 };
 
 export type PageBody = {
@@ -250,9 +251,12 @@ export function bodyFor(page: MarketingPage): PageBody {
           ],
         },
         {
-          heading: 'Selected work.',
+          heading: 'Related work.',
           paragraphs: [portfolioNote],
-          links: projects.map((p) => ({ href: p.path, label: p.name })),
+          links: [
+            ...projects.map((p) => ({ href: p.path, label: p.name })),
+            { href: BOOK, label: 'Book a consultation' },
+          ],
         },
       ],
     };
@@ -271,11 +275,22 @@ export function bodyFor(page: MarketingPage): PageBody {
           'Launch support and agreed revisions',
         ]),
         {
-          heading: 'Related.',
+          heading: 'Related work.',
+          paragraphs: [
+            portfolioNote,
+            'Landing-page engagements share the same clarity and inquiry-path standards as the live business and commercial sites below.',
+          ],
+          links: [
+            { href: '/work/raysan-ip', label: 'Raysan IP' },
+            { href: '/work', label: 'All selected work' },
+            { href: BOOK, label: 'Book a consultation' },
+          ],
+        },
+        {
+          heading: 'Related services.',
           paragraphs: [],
           links: [
             { href: '/business-website-design', label: 'Business websites' },
-            { href: '/work', label: 'Selected work' },
             { href: '/orange-county-web-design', label: 'Orange County web design' },
             { href: BOOK, label: 'Book a consultation' },
           ],
@@ -297,7 +312,7 @@ export function bodyFor(page: MarketingPage): PageBody {
           'Launch support',
         ]),
         {
-          heading: 'See live work.',
+          heading: 'Related work.',
           paragraphs: [portfolioNote],
           links: [
             { href: '/work/7-stud-farm', label: '7 Stud Farm' },
@@ -322,7 +337,7 @@ export function bodyFor(page: MarketingPage): PageBody {
           'Agreed revision rounds',
         ]),
         {
-          heading: 'See live work.',
+          heading: 'Related work.',
           paragraphs: [portfolioNote],
           links: [
             { href: '/work/raysan-ip', label: 'Raysan IP' },
@@ -362,20 +377,37 @@ export function bodyFor(page: MarketingPage): PageBody {
     if (!study) {
       return { intro: page.description, sections: [] };
     }
+    const relatedServices =
+      study.servicePath === '/business-website-design'
+        ? [
+            { href: '/business-website-design', label: 'Business website design' },
+            { href: '/orange-county-web-design', label: 'Orange County web design' },
+          ]
+        : [
+            { href: '/commercial-web-design', label: 'Commercial web design' },
+            { href: '/landing-page-design', label: 'Landing page design' },
+          ];
     return {
       intro: study.overview,
       sections: [
-        { heading: 'Challenge', paragraphs: [study.challenge] },
-        { heading: 'Audience', paragraphs: [study.audience] },
-        { heading: 'Strategy', paragraphs: [study.strategy] },
-        { heading: 'Design', paragraphs: [study.design] },
-        { heading: 'Deliverables', paragraphs: [], bullets: [...study.deliverables] },
         {
-          heading: 'Visit the live site.',
-          paragraphs: [`Live website: ${study.href}`],
+          heading: 'Challenge',
+          paragraphs: [study.challenge],
+          image: { src: study.image, alt: study.alt, width: 1100, height: 688 },
+        },
+        { heading: 'Role', paragraphs: [study.role] },
+        { heading: 'Process', paragraphs: [study.process] },
+        { heading: 'Solution', paragraphs: [study.solution] },
+        {
+          heading: 'Outcomes',
+          paragraphs: [study.outcomes],
+        },
+        {
+          heading: 'Live site',
+          paragraphs: [`Visit the live website: ${study.href}`],
           links: [
             { href: study.href, label: `Open ${study.name}` },
-            { href: study.servicePath, label: study.service },
+            ...relatedServices,
             { href: '/work', label: 'All work' },
             { href: BOOK, label: 'Book a consultation' },
           ],

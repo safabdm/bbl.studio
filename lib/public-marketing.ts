@@ -252,7 +252,7 @@ export const MARKETING_PAGES: MarketingPage[] = [
     faqs: [
       {
         q: 'Which BBL Studio websites can I visit?',
-        a: 'Selected live work includes Raysan IP, 7 Stud Farm, and IP Law Nerds. Each project page describes the engagement. Live websites are linked from those pages.',
+        a: 'Selected live work includes Raysan IP, 7 Stud Farm, and IP Law Nerds. Each project page covers challenge, role, process, solution, and a live site link. Outcomes stay marked TODO until the owner provides real metrics.',
       },
     ],
   },
@@ -260,8 +260,8 @@ export const MARKETING_PAGES: MarketingPage[] = [
     path: '/work/raysan-ip',
     title: 'Raysan IP Website Case Study | BBL Studio',
     description:
-      'BBL Studio designed the Raysan IP brand and website for a global intellectual property information platform. Review the live site and the studio approach.',
-    h1: 'Raysan IP.',
+      'Case study: BBL Studio led strategy, brand, and commercial website design for Raysan IP, a global intellectual property information platform. Visit the live site.',
+    h1: 'Raysan IP website case study.',
     file: 'work/raysan-ip.html',
     kind: 'work',
   },
@@ -269,8 +269,8 @@ export const MARKETING_PAGES: MarketingPage[] = [
     path: '/work/7-stud-farm',
     title: '7 Stud Farm Website Case Study | BBL Studio',
     description:
-      'BBL Studio created brand direction and a website for 7 Stud Farm, an international sport horse breeding program.',
-    h1: '7 Stud Farm.',
+      'Case study: BBL Studio created brand direction and a business website for 7 Stud Farm, an international sport horse breeding program. Visit the live site.',
+    h1: '7 Stud Farm website case study.',
     file: 'work/7-stud-farm.html',
     kind: 'work',
   },
@@ -278,8 +278,8 @@ export const MARKETING_PAGES: MarketingPage[] = [
     path: '/work/ip-law-nerds',
     title: 'IP Law Nerds Website Case Study | BBL Studio',
     description:
-      'BBL Studio designed brand expression and a website for IP Law Nerds, an approachable intellectual property practice.',
-    h1: 'IP Law Nerds.',
+      'Case study: BBL Studio designed brand expression and a business website for IP Law Nerds, an approachable intellectual property practice. Visit the live site.',
+    h1: 'IP Law Nerds website case study.',
     file: 'work/ip-law-nerds.html',
     kind: 'work',
   },
