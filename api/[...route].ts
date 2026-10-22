@@ -149,6 +149,15 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
       });
       return send(res, result.status, result.body);
     }
+    if (matches(path, '/api/crm/outreach/cron') && method === 'GET') {
+      const { handleOutreachSchedulerCron } = await loadOutreachStudioApi();
+      const result = await handleOutreachSchedulerCron({
+        authorization: Array.isArray(req.headers.authorization)
+          ? req.headers.authorization[0]
+          : req.headers.authorization,
+      });
+      return send(res, result.status, result.body);
+    }
 
     if (matches(path, '/api/book/slots') && method === 'GET') {
       const config = bookingConfig(process.env);
@@ -642,6 +651,19 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
       const body = await readJsonUnknown(req);
       const { handleSendWindowSet } = await loadOutreachStudioApi();
       const result = await handleSendWindowSet(admin, body as never);
+      return send(res, result.status, result.body);
+    }
+    if (matches(path, '/api/admin/crm/scheduler') && method === 'GET') {
+      if (!admin) return send(res, 401, { ok: false, message: 'Sign in required.' });
+      const { handleSchedulerStatus } = await loadOutreachStudioApi();
+      const result = await handleSchedulerStatus(admin);
+      return send(res, result.status, result.body);
+    }
+    if (matches(path, '/api/admin/crm/scheduler/run') && method === 'POST') {
+      if (!admin) return send(res, 401, { ok: false, message: 'Sign in required.' });
+      const body = await readJsonUnknown(req);
+      const { handleSchedulerRunJob } = await loadOutreachStudioApi();
+      const result = await handleSchedulerRunJob(admin, body as never);
       return send(res, result.status, result.body);
     }
 

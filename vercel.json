@@ -113,6 +113,7 @@
   ],
   "crons": [
     { "path": "/api/book/reminders", "schedule": "0 16 * * *" },
-    { "path": "/api/crm/discovery/cron", "schedule": "0 15 * * *" }
+    { "path": "/api/crm/discovery/cron", "schedule": "0 15 * * *" },
+    { "path": "/api/crm/outreach/cron", "schedule": "*/30 14-22 * * 1-5" }
   ]
 }

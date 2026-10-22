@@ -30,6 +30,42 @@ export const BATCH_1_BLOCKLIST_EMAILS = [
   'info@lashtasticbyhana.com',
 ] as const;
 
+/**
+ * Daily-20 Batch 1 ranks 1–19 SENT (campaign daily-20-batch-1-2026-10-22).
+ * Hard exclude from future cohorts.
+ */
+export const DAILY_20_BATCH_1_SENT_EMAILS = [
+  'admin@cellemedical.com',
+  'info@newportbeachmedspa.com',
+  'info@nuglowwellnessmedspa.com',
+  'contactus@myskinmedicalspa.com',
+  'hello@globarmedspa.com',
+  'info@envylasermedspa.com',
+  'support@aobaesthetics.com',
+  'staff@execesthetics.com',
+  'info@thewellspaoc.com',
+  'info@lagunaaesthetics.com',
+  'info@goldcoastaesthetics.com',
+  'platinummedspa@gmail.com',
+  'info@thewellnesscommons.com',
+  'sylvia@lunaglowmedspa.com',
+  'info@iconiquemedspa.com',
+  'purelux.newportbeach@gmail.com',
+  'suncare2022@gmail.com',
+  'info@shapeandskinmedical.com',
+  'info@ocirvinemicroblading.com',
+] as const;
+
+/** AKA #20 HOLD — co-located with Tiffany Scott; never auto-include. */
+export const HOLD_BLOCKLIST_EMAILS = ['info@akahairsalon.com'] as const;
+
+/** Union of forever-exclude emails (Batch 1 + Daily-20 SENT + HOLD). */
+export const HARD_EXCLUDE_EMAILS: readonly string[] = [
+  ...BATCH_1_BLOCKLIST_EMAILS,
+  ...DAILY_20_BATCH_1_SENT_EMAILS,
+  ...HOLD_BLOCKLIST_EMAILS,
+];
+
 /** Competitor / own domains — never cold-email. */
 export const COMPETITOR_DOMAINS = [
   'bbl.studio',
@@ -85,6 +121,19 @@ export function isWeekdayLa(ms = Date.now()): boolean {
 export function isBatch1Email(email: string): boolean {
   const e = email.trim().toLowerCase();
   return (BATCH_1_BLOCKLIST_EMAILS as readonly string[]).includes(e);
+}
+
+export function isHardExcludedEmail(email: string): boolean {
+  const e = email.trim().toLowerCase();
+  return HARD_EXCLUDE_EMAILS.includes(e);
+}
+
+export function hardExcludeReason(email: string): string | null {
+  const e = email.trim().toLowerCase();
+  if ((BATCH_1_BLOCKLIST_EMAILS as readonly string[]).includes(e)) return 'batch_1_sent';
+  if ((DAILY_20_BATCH_1_SENT_EMAILS as readonly string[]).includes(e)) return 'daily_20_batch_1_sent';
+  if ((HOLD_BLOCKLIST_EMAILS as readonly string[]).includes(e)) return 'hold_aka';
+  return null;
 }
 
 export function isCompetitorDomain(emailOrDomain: string | null | undefined): boolean {
@@ -160,8 +209,12 @@ export async function buildDaily20Cohort(
     let reason = alreadyExcluded || item.excluded_reason;
 
     if (!reason && !email) reason = 'missing_public_email';
-    if (!reason && isBatch1Email(email)) reason = 'batch_1_sent';
+    if (!reason) {
+      const hard = hardExcludeReason(email);
+      if (hard) reason = hard;
+    }
     if (!reason && isCompetitorDomain(email)) reason = 'competitor_or_platform';
+    if (!reason && /hold/i.test(String(item.queue_status || ''))) reason = 'owner_hold';
     if (!reason && !item.website_observation?.trim()) reason = 'missing_website_observation';
     // Prefer having a website URL when discovery-sourced
     if (!reason && item.sources.includes('discovery') && !item.website?.trim()) {

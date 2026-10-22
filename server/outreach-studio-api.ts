@@ -69,6 +69,12 @@ import {
   recordInterestedFromInbox,
 } from './follow-up-drafts.js';
 import { fetchEmailHistory, fetchLeads } from './crm-lead-client.js';
+import {
+  dispatchOutreachCron,
+  getSchedulerDashboard,
+  runSchedulerJob,
+  type SchedulerJobName,
+} from './daily-outreach-scheduler.js';
 
 /** Narrow wide env intersections for safetySnapshot (same pattern as discoverySafetyEnv). */
 function asSafetyEnv(env: Record<string, unknown> | NodeJS.ProcessEnv): SafetyEnv {
@@ -519,11 +525,13 @@ export async function handleDaily20Get(
   if (denied) return denied;
   const dash = await getDaily20Dashboard(env, { refresh: query.refresh !== '0' });
   const controls = await readSendControls(env);
+  const scheduler = await getSchedulerDashboard(env);
   return {
     status: 200,
     body: {
       ok: true,
       ...dash,
+      scheduler,
       send_window: {
         enforce: controls.enforce_send_window,
         start_hour_pt: controls.window_start_hour_pt,
@@ -531,10 +539,41 @@ export async function handleDaily20Get(
         label: `${controls.window_start_hour_pt ?? 9}–${controls.window_end_hour_pt ?? 11} America/Los_Angeles`,
       },
       mail_app_interim:
-        'Mac operator may send via Mail.app when Graph is unavailable — document only; Graph/Resend remain primary in Settings. No auto-send.',
+        'Mail.app is Mac-only interim and cannot run when Mac is asleep. Daily prep uses Vercel cron + Neon; post-approval send uses Graph/Resend. No auto-send.',
       live_email_send: false,
       safety: { ...safetySnapshot(asSafetyEnv(env)), FOLLOWUPS_LIVE: false },
     },
+  };
+}
+
+export async function handleSchedulerStatus(isAdmin: boolean, env = process.env): Promise<CrmJsonResult> {
+  const denied = adminOk(isAdmin);
+  if (denied) return denied;
+  const scheduler = await getSchedulerDashboard(env);
+  return { status: 200, body: { ...scheduler, live_email_send: false } };
+}
+
+/** Vercel cron — Bearer CRON_SECRET. Mac-independent dispatcher. */
+export async function handleOutreachSchedulerCron(
+  headers: { authorization?: string | null },
+  env = process.env,
+): Promise<CrmJsonResult> {
+  return dispatchOutreachCron(headers, env);
+}
+
+/** Admin manual trigger for a single job (still never auto-sends prospects without flags). */
+export async function handleSchedulerRunJob(
+  isAdmin: boolean,
+  body: { job?: SchedulerJobName; force?: boolean },
+  env = process.env,
+): Promise<CrmJsonResult> {
+  const denied = adminOk(isAdmin);
+  if (denied) return denied;
+  if (!body.job) return { status: 400, body: { ok: false, message: 'job required.' } };
+  const result = await runSchedulerJob(body.job, env, { force: Boolean(body.force) });
+  return {
+    status: result.status === 'failed' ? 502 : 200,
+    body: { ok: result.status !== 'failed', result, live_email_send: false, auto_send: false },
   };
 }
 

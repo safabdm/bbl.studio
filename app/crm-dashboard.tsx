@@ -1471,6 +1471,26 @@ type Daily20Response = {
   send_window?: { label?: string };
   mail_app_interim?: string;
   message?: string;
+  scheduler?: {
+    mac_independent?: boolean;
+    auto_send?: boolean;
+    next_runs?: {
+      discover?: { at_pt?: string };
+      select?: { at_pt?: string };
+      notify?: { at_pt?: string };
+    };
+    last_successful_run?: { job?: string; at?: string; message?: string; day_key?: string } | null;
+    last_error?: string | null;
+    daily_counter?: { sent_today?: number; effective_cap?: number; remaining?: number };
+    tracking?: {
+      pending_send?: number;
+      submitted?: number;
+      failed?: number;
+      bounced?: number;
+      interested?: number;
+    };
+    mail_app_note?: string;
+  };
 };
 
 function DailyReviewPage() {
@@ -1574,6 +1594,38 @@ function DailyReviewPage() {
       {data?.cohort?.message ? <p className="crm-banner">{data.cohort.message}</p> : null}
       {data?.send_window?.label ? (
         <p className="crm-muted crm-pad">Send window: {data.send_window.label}. Queued is never marked sent until provider confirm.</p>
+      ) : null}
+
+      {data?.scheduler ? (
+        <section className="crm-panel">
+          <div className="crm-panel-head"><h2>Scheduler (Vercel cron · Mac-independent)</h2></div>
+          <div className="crm-checks">
+            <CheckRow ok={data.scheduler.mac_independent !== false} label="Runs when Mac asleep" value="Vercel cron + Neon" />
+            <CheckRow ok={data.scheduler.auto_send === false} label="Auto-send" value="OFF — owner approve required" />
+            <CheckRow ok={null} label="Next discover" value={data.scheduler.next_runs?.discover?.at_pt || '—'} />
+            <CheckRow ok={null} label="Next select/notify" value={`${data.scheduler.next_runs?.select?.at_pt || '—'} · notify ${data.scheduler.next_runs?.notify?.at_pt || '—'}`} />
+            <CheckRow
+              ok={Boolean(data.scheduler.last_successful_run)}
+              label="Last successful job"
+              value={
+                data.scheduler.last_successful_run
+                  ? `${data.scheduler.last_successful_run.job} · ${data.scheduler.last_successful_run.day_key || ''} · ${fmtRelative(data.scheduler.last_successful_run.at)}`
+                  : 'None yet'
+              }
+            />
+            <CheckRow
+              ok={data.scheduler.last_error ? false : null}
+              label="Last error"
+              value={data.scheduler.last_error || '—'}
+            />
+            <CheckRow
+              ok={true}
+              label="Tracking"
+              value={`submitted ${data.scheduler.tracking?.submitted ?? 0} · failed ${data.scheduler.tracking?.failed ?? 0} · bounced ${data.scheduler.tracking?.bounced ?? 0} · interested ${data.scheduler.tracking?.interested ?? 0}`}
+            />
+          </div>
+          {data.scheduler.mail_app_note ? <p className="crm-muted crm-pad">{data.scheduler.mail_app_note}</p> : null}
+        </section>
       ) : null}
 
       <section className="crm-panel">

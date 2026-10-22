@@ -59,6 +59,9 @@ import {
   handleDaily20BulkApprove,
   handleFollowUpDrafts,
   handleSendWindowSet,
+  handleSchedulerStatus,
+  handleSchedulerRunJob,
+  handleOutreachSchedulerCron,
   handleSendControlsAction,
   handleSendControlsGet,
   handleSenderPreference,
@@ -1075,6 +1078,19 @@ app.post('/api/admin/crm/follow-ups', async (c) => {
 app.post('/api/admin/crm/send-window', async (c) => {
   const body = await c.req.json().catch(() => ({}));
   const result = await handleSendWindowSet(Boolean(requireAdmin(c)), body);
+  return c.json(result.body, result.status);
+});
+app.get('/api/admin/crm/scheduler', async (c) => {
+  const result = await handleSchedulerStatus(Boolean(requireAdmin(c)));
+  return c.json(result.body, result.status);
+});
+app.post('/api/admin/crm/scheduler/run', async (c) => {
+  const body = await c.req.json().catch(() => ({}));
+  const result = await handleSchedulerRunJob(Boolean(requireAdmin(c)), body);
+  return c.json(result.body, result.status);
+});
+app.get('/api/crm/outreach/cron', async (c) => {
+  const result = await handleOutreachSchedulerCron({ authorization: c.req.header('authorization') });
   return c.json(result.body, result.status);
 });
 
