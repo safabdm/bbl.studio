@@ -45,7 +45,8 @@ import {
   type CrmSyncStoreEnv,
 } from './crm-sync-store.js';
 
-export const DEFAULT_BATCH_CAP = 10;
+/** Default max recipients per live manual send (env MANUAL_SEND_BATCH_CAP, max 100). */
+export const DEFAULT_BATCH_CAP = 25;
 export const DEDUPE_WINDOW_MS = 30 * 24 * 60 * 60 * 1000;
 
 export type ResendSendEnv = SafetyEnv &

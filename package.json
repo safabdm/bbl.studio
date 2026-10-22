@@ -17,7 +17,7 @@
     "typecheck": "tsc --noEmit",
     "test:unsubscribe": "tsx --test server/unsubscribe.test.ts",
     "test:booking": "tsx --test server/booking.test.ts",
-    "test:crm": "tsx --test server/crm-safety.test.ts server/crm-campaigns.test.ts server/outreach-policy.test.ts server/preview-token.test.ts server/resend-send.test.ts server/freelance-score.test.ts server/resend-webhook.test.ts server/crm-freshness.test.ts server/crm-sync.test.ts server/crm-esm-imports.test.ts server/crm-discovery.test.ts",
+    "test:crm": "tsx --test server/crm-safety.test.ts server/crm-campaigns.test.ts server/outreach-policy.test.ts server/preview-token.test.ts server/resend-send.test.ts server/freelance-score.test.ts server/resend-webhook.test.ts server/crm-freshness.test.ts server/crm-sync.test.ts server/crm-esm-imports.test.ts server/crm-discovery.test.ts lib/mail-handoff.test.ts",
     "test:admin-auth": "tsx --test api/admin-auth.test.ts server/admin-auth.test.ts api/crm-sync-auth.test.ts",
     "test:routing": "tsx --test server/public-routing.test.ts",
     "test:serverless-init": "tsx --test server/project-root.test.ts server/crm-esm-imports.test.ts",

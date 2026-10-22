@@ -163,7 +163,7 @@ describe('resend-send gates', () => {
       ),
       true,
     );
-    assert.equal(DEFAULT_BATCH_CAP, 10);
+    assert.equal(DEFAULT_BATCH_CAP, 25);
 
     const liveEnv = {
       ...sessionEnv,

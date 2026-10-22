@@ -20,9 +20,21 @@ import type {
   EmailTemplate,
   PersonalizedPreview,
 } from '../server/crm-types';
+import {
+  OUTLOOK_MAC_LICENSE_NOTE,
+  OWA_URL,
+  buildMailtoUrl,
+  downloadEml,
+  downloadEmlPack,
+  type MailDraft,
+} from '../lib/mail-handoff';
 import { AdminHome, AdminPricing, AdminProject } from './portal-screens';
 import './crm.css';
 import './portal.css';
+
+/** Lead search page sizes — owner asked for >10; default 25, max 100. */
+const LEAD_PAGE_SIZES = [25, 50, 100] as const;
+const DEFAULT_LEAD_PAGE_SIZE = 25;
 
 /* ------------------------------------------------------------------ */
 /* Types + helpers                                                     */
@@ -335,7 +347,7 @@ const NAV: Array<{ group: string; items: Array<{ to: string; label: string; end?
   {
     group: 'Outreach',
     items: [
-      { to: '/admin/campaigns', label: 'Campaigns' },
+      { to: '/admin/campaigns', label: 'Prepare / Campaigns' },
       { to: '/admin/analytics', label: 'Analytics' },
       { to: '/admin/automation', label: 'Automation' },
       { to: '/admin/freelance', label: 'Freelance' },
@@ -585,10 +597,21 @@ const VIEWS: Array<{ id: string; label: string; test: (l: CrmLead) => boolean }>
   { id: 'no-email', label: 'No email', test: (l) => !isContactable(l) },
 ];
 
-function LeadDrawer({ lead, onClose, onCompose }: { lead: CrmLead; onClose: () => void; onCompose: () => void }) {
+function LeadDrawer({
+  lead,
+  onClose,
+  onCompose,
+  onPrepare,
+}: {
+  lead: CrmLead;
+  onClose: () => void;
+  onCompose: () => void;
+  onPrepare: () => void;
+}) {
   const dialogRef = useRef<HTMLElement | null>(null);
   useDialogA11y(true, onClose, dialogRef);
   const contactable = isContactable(lead);
+  const blocked = isBlocked(lead);
   const observation = lead.website_observation || lead.outreach_observation || '';
   const rows: Array<[string, ReactNode]> = [
     ['Contact', lead.contact_name || '—'],
@@ -644,9 +667,12 @@ function LeadDrawer({ lead, onClose, onCompose }: { lead: CrmLead; onClose: () =
             <p className="crm-notes">{lead.notes}</p>
           </>
         ) : null}
-        <div className="crm-drawer-foot">
-          <button type="button" className="crm-btn" disabled={!contactable || isBlocked(lead)} onClick={onCompose}>
-            Draft email
+        <div className="crm-drawer-foot crm-drawer-foot-actions">
+          <button type="button" className="crm-btn-secondary" disabled={!contactable || blocked} onClick={onPrepare}>
+            Prepare email
+          </button>
+          <button type="button" className="crm-btn" disabled={!contactable || blocked} onClick={onCompose}>
+            Campaign compose
           </button>
         </div>
       </aside>
@@ -654,36 +680,76 @@ function LeadDrawer({ lead, onClose, onCompose }: { lead: CrmLead; onClose: () =
   );
 }
 
+function uniqueSorted(values: Array<string | null | undefined>) {
+  return [...new Set(values.map((v) => String(v || '').trim()).filter(Boolean))].sort((a, b) =>
+    a.localeCompare(b),
+  );
+}
+
+function parsePageSize(raw: string | null): number {
+  const n = Number.parseInt(String(raw || ''), 10);
+  if (LEAD_PAGE_SIZES.includes(n as (typeof LEAD_PAGE_SIZES)[number])) return n;
+  return DEFAULT_LEAD_PAGE_SIZE;
+}
+
 function LeadsPage() {
   const navigate = useNavigate();
   const [params, setParams] = useSearchParams();
   const { data, leads, error, loading } = useLeads();
-  const [q, setQ] = useState('');
+  const [q, setQ] = useState(() => params.get('q') || '');
   const [sort, setSort] = useState<'activity' | 'name'>('activity');
   const [selected, setSelected] = useState<string[]>(() => readSelection());
   const [open, setOpen] = useState<CrmLead | null>(null);
   const view = VIEWS.find((v) => v.id === params.get('view')) || VIEWS[0];
+  const city = params.get('city') || '';
+  const niche = params.get('niche') || '';
+  const emailFilter = (params.get('email') || 'any') as 'any' | 'has' | 'missing';
+  const pageSize = parsePageSize(params.get('limit'));
+  const page = Math.max(1, Number.parseInt(params.get('page') || '1', 10) || 1);
 
+  const cities = useMemo(() => uniqueSorted(leads.map((l) => l.location)), [leads]);
+  const niches = useMemo(() => uniqueSorted(leads.map((l) => l.category)), [leads]);
   const counts = useMemo(() => Object.fromEntries(VIEWS.map((v) => [v.id, leads.filter(v.test).length])), [leads]);
 
   const filtered = useMemo(() => {
     const needle = q.trim().toLowerCase();
-    const rows = leads.filter(view.test).filter((lead) =>
-      !needle
-        ? true
-        : [lead.business_name, lead.contact_name, lead.email, lead.location, lead.category]
-            .filter(Boolean)
-            .some((value) => String(value).toLowerCase().includes(needle)),
-    );
+    const rows = leads
+      .filter(view.test)
+      .filter((lead) => {
+        if (city && String(lead.location || '').toLowerCase() !== city.toLowerCase()) return false;
+        if (niche && String(lead.category || '').toLowerCase() !== niche.toLowerCase()) return false;
+        if (emailFilter === 'has' && !isContactable(lead)) return false;
+        if (emailFilter === 'missing' && isContactable(lead)) return false;
+        if (!needle) return true;
+        return [lead.business_name, lead.contact_name, lead.email, lead.location, lead.category]
+          .filter(Boolean)
+          .some((value) => String(value).toLowerCase().includes(needle));
+      });
     return rows.sort((a, b) =>
       sort === 'name'
         ? a.business_name.localeCompare(b.business_name)
         : String(lastActivity(b) || '').localeCompare(String(lastActivity(a) || '')),
     );
-  }, [leads, view, q, sort]);
+  }, [leads, view, q, sort, city, niche, emailFilter]);
 
-  const selectable = filtered.filter((l) => isContactable(l) && !isBlocked(l)).map((l) => String(l.id));
+  const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
+  const safePage = Math.min(page, totalPages);
+  const pageRows = filtered.slice((safePage - 1) * pageSize, safePage * pageSize);
+
+  const selectable = pageRows.filter((l) => isContactable(l) && !isBlocked(l)).map((l) => String(l.id));
   const allSelected = selectable.length > 0 && selectable.every((id) => selected.includes(id));
+
+  function patchParams(patch: Record<string, string | null>) {
+    const next = new URLSearchParams(params);
+    for (const [key, value] of Object.entries(patch)) {
+      if (value == null || value === '' || (key === 'view' && value === 'all') || (key === 'email' && value === 'any') || (key === 'page' && value === '1') || (key === 'limit' && value === String(DEFAULT_LEAD_PAGE_SIZE))) {
+        next.delete(key);
+      } else {
+        next.set(key, value);
+      }
+    }
+    setParams(next);
+  }
 
   function update(next: string[]) {
     setSelected(next);
@@ -696,7 +762,12 @@ function LeadsPage() {
 
   function compose(ids = selected) {
     writeSelection(ids);
-    navigate('/admin/campaigns');
+    void navigate('/admin/campaigns');
+  }
+
+  function prepare(ids = selected) {
+    writeSelection(ids);
+    void navigate('/admin/campaigns?handoff=mail');
   }
 
   const connection = data?.connection;
@@ -705,7 +776,7 @@ function LeadsPage() {
     <>
       <PageHeader
         title="Leads"
-        description="Only leads with a verified email can be selected. Tracking stays Unknown until a provider event confirms it."
+        description="Search → select → prepare emails. Default page size is 25 (up to 100). Only verified emails can be selected; suppressions and recent contacts stay excluded."
       />
       <SyncNotice />
       {error ? <p className="crm-error">{error}</p> : null}
@@ -719,7 +790,7 @@ function LeadsPage() {
               role="tab"
               aria-selected={v.id === view.id}
               className={v.id === view.id ? 'active' : undefined}
-              onClick={() => setParams(v.id === 'all' ? {} : { view: v.id })}
+              onClick={() => patchParams({ view: v.id, page: '1' })}
             >
               {v.label}
               <span className="crm-count">{loading ? '' : counts[v.id]}</span>
@@ -727,13 +798,67 @@ function LeadsPage() {
           ))}
         </div>
         <div className="crm-filters">
-          <input type="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search" aria-label="Search leads" />
+          <input
+            type="search"
+            value={q}
+            onChange={(e) => {
+              setQ(e.target.value);
+              patchParams({ q: e.target.value, page: '1' });
+            }}
+            placeholder="Search name, city, niche, email"
+            aria-label="Search leads"
+          />
+          <select
+            value={city}
+            onChange={(e) => patchParams({ city: e.target.value, page: '1' })}
+            aria-label="Filter by city"
+          >
+            <option value="">All cities</option>
+            {cities.map((c) => (
+              <option key={c} value={c}>{c}</option>
+            ))}
+          </select>
+          <select
+            value={niche}
+            onChange={(e) => patchParams({ niche: e.target.value, page: '1' })}
+            aria-label="Filter by niche"
+          >
+            <option value="">All niches</option>
+            {niches.map((n) => (
+              <option key={n} value={n}>{n}</option>
+            ))}
+          </select>
+          <select
+            value={emailFilter}
+            onChange={(e) => patchParams({ email: e.target.value, page: '1' })}
+            aria-label="Filter by email presence"
+          >
+            <option value="any">Email: any</option>
+            <option value="has">Has email</option>
+            <option value="missing">Missing email</option>
+          </select>
           <select value={sort} onChange={(e) => setSort(e.target.value as 'activity' | 'name')} aria-label="Sort leads">
             <option value="activity">Recent activity</option>
             <option value="name">Name A–Z</option>
           </select>
+          <select
+            value={String(pageSize)}
+            onChange={(e) => patchParams({ limit: e.target.value, page: '1' })}
+            aria-label="Results per page"
+          >
+            {LEAD_PAGE_SIZES.map((n) => (
+              <option key={n} value={n}>{n} per page</option>
+            ))}
+          </select>
         </div>
       </div>
+
+      {!loading && filtered.length ? (
+        <output className="crm-result-meta">
+          Showing {(safePage - 1) * pageSize + 1}–{Math.min(safePage * pageSize, filtered.length)} of {filtered.length}
+          {filtered.length !== leads.length ? ` (filtered from ${leads.length})` : ''}
+        </output>
+      ) : null}
 
       {loading ? (
         <div className="crm-skeleton" aria-busy="true" aria-label="Loading leads" />
@@ -743,7 +868,7 @@ function LeadsPage() {
             The Mac hasn't pushed CRM data. Run <code>scripts/crm-mac-sync/push_crm_sync.py</code> while the lead agent is online.
           </Empty>
         ) : (
-          <Empty title="No leads in this view">Try another view or clear the search.</Empty>
+          <Empty title="No leads in this view">Try another view or clear the search filters.</Empty>
         )
       ) : (
         <div className="crm-table-wrap">
@@ -755,8 +880,14 @@ function LeadsPage() {
                     type="checkbox"
                     checked={allSelected}
                     disabled={!selectable.length}
-                    onChange={() => update(allSelected ? selected.filter((id) => !selectable.includes(id)) : [...new Set([...selected, ...selectable])])}
-                    aria-label="Select all contactable leads in this view"
+                    onChange={() =>
+                      update(
+                        allSelected
+                          ? selected.filter((id) => !selectable.includes(id))
+                          : [...new Set([...selected, ...selectable])],
+                      )
+                    }
+                    aria-label="Select all contactable leads on this page"
                   />
                 </th>
                 <th>Business</th>
@@ -769,7 +900,7 @@ function LeadsPage() {
               </tr>
             </thead>
             <tbody>
-              {filtered.map((lead) => {
+              {pageRows.map((lead) => {
                 const id = String(lead.id);
                 const canSelect = isContactable(lead) && !isBlocked(lead);
                 return (
@@ -788,7 +919,7 @@ function LeadsPage() {
                       <button type="button" className="crm-row-link" onClick={(e) => { e.stopPropagation(); setOpen(lead); }}>
                         {lead.business_name}
                       </button>
-                      <div className="crm-muted crm-sub">{lead.location || lead.category || ''}</div>
+                      <div className="crm-muted crm-sub">{[lead.location, lead.category].filter(Boolean).join(' · ')}</div>
                     </td>
                     <td>
                       {isContactable(lead) ? (
@@ -808,25 +939,54 @@ function LeadsPage() {
               })}
             </tbody>
           </table>
-          <p className="crm-legend">
-            <span className="crm-dot yes">A</span> confirmed <span className="crm-dot unknown">A</span> unknown <span className="crm-dot no">A</span> no
-            <span className="crm-legend-sep">·</span> A accepted · D delivered · R replied · B booked
-          </p>
+          <div className="crm-table-foot">
+            <p className="crm-legend">
+              <span className="crm-dot yes">A</span> confirmed <span className="crm-dot unknown">A</span> unknown <span className="crm-dot no">A</span> no
+              <span className="crm-legend-sep">·</span> A accepted · D delivered · R replied · B booked
+            </p>
+            {totalPages > 1 ? (
+              <nav className="crm-pager" aria-label="Lead pages">
+                <button
+                  type="button"
+                  className="crm-icon-btn"
+                  disabled={safePage <= 1}
+                  onClick={() => patchParams({ page: String(safePage - 1) })}
+                  aria-label="Previous page"
+                >
+                  ‹
+                </button>
+                <span className="crm-muted">
+                  Page {safePage} / {totalPages}
+                </span>
+                <button
+                  type="button"
+                  className="crm-icon-btn"
+                  disabled={safePage >= totalPages}
+                  onClick={() => patchParams({ page: String(safePage + 1) })}
+                  aria-label="Next page"
+                >
+                  ›
+                </button>
+              </nav>
+            ) : null}
+          </div>
         </div>
       )}
 
       {selected.length ? (
-        <div className="crm-bulkbar" role="region" aria-label="Selection">
+        <section className="crm-bulkbar" aria-label="Selection">
           <span><strong>{selected.length}</strong> selected</span>
           <button type="button" className="crm-btn-ghost" onClick={() => update([])}>Clear</button>
-          <button type="button" className="crm-btn" onClick={() => compose()}>Compose email</button>
-        </div>
+          <button type="button" className="crm-btn-secondary" onClick={() => prepare()}>Prepare emails</button>
+          <button type="button" className="crm-btn" onClick={() => compose()}>Campaign compose</button>
+        </section>
       ) : null}
 
       {open ? (
         <LeadDrawer
           lead={open}
           onClose={() => setOpen(null)}
+          onPrepare={() => prepare([...new Set([...selected, String(open.id)])])}
           onCompose={() => compose([...new Set([...selected, String(open.id)])])}
         />
       ) : null}
@@ -856,8 +1016,19 @@ function Stepper({ step }: { step: number }) {
   );
 }
 
+function previewToDraft(item: PersonalizedPreview): MailDraft {
+  return {
+    to: String(item.email || ''),
+    subject: String(item.subject || ''),
+    body: String(item.body || ''),
+    business_name: String(item.business_name || ''),
+  };
+}
+
 function CampaignsPage() {
   const { overview } = useCrmStatus();
+  const [params, setParams] = useSearchParams();
+  const handoffMail = params.get('handoff') === 'mail';
   const [templates, setTemplates] = useState<EmailTemplate[]>([]);
   const [leads, setLeads] = useState<CrmLead[]>([]);
   const [selected, setSelected] = useState<string[]>(() => readSelection());
@@ -945,6 +1116,11 @@ function CampaignsPage() {
       setExclusions(data.exclusions || []);
       setPreviewIndex(0);
       setSendForReal(false);
+      setMessage(
+        handoffMail
+          ? 'Drafts ready for review. Open in Mail / download .eml — nothing was auto-sent.'
+          : 'Preview ready. Review personalizations before any send.',
+      );
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Preview failed.');
     } finally {
@@ -1023,12 +1199,24 @@ function CampaignsPage() {
   const liveCapable = Boolean(overview?.safety?.MANUAL_SEND_LIVE_ENABLED) && overview?.safety?.EMAIL_DRY_RUN === false;
   const policyBlocked = policyIssues.some((i) => i.severity === 'block');
   const includedPreviews = previews.filter((p) => !p.excluded);
+  const mailDrafts = includedPreviews.map(previewToDraft);
+
+  function setHandoff(on: boolean) {
+    const next = new URLSearchParams(params);
+    if (on) next.set('handoff', 'mail');
+    else next.delete('handoff');
+    setParams(next);
+  }
 
   return (
     <>
       <PageHeader
-        title="Campaigns"
-        description="Select recipients, write, preview every personalization, then confirm."
+        title={handoffMail ? 'Prepare emails' : 'Campaigns'}
+        description={
+          handoffMail
+            ? 'Review personalized drafts, then open in Mail.app or download .eml. CRM live blast stays off unless flags allow it.'
+            : 'Select recipients, write, preview every personalization, then confirm — or hand off to Mail / Outlook on the web.'
+        }
         actions={
           <>
             <button className="crm-btn-ghost" type="button" disabled={busy} onClick={() => void onSaveDraft()}>Save draft</button>
@@ -1036,10 +1224,26 @@ function CampaignsPage() {
           </>
         }
       />
+      <div className="crm-banner" role="note">
+        <strong>Outlook desktop unavailable.</strong> {OUTLOOK_MAC_LICENSE_NOTE}{' '}
+        <a className="crm-link" href={OWA_URL} target="_blank" rel="noreferrer">
+          Open Outlook on the web
+        </a>
+        {' · '}
+        Prefer Mail.app with hello@bbl.studio for “Open in Mail” / .eml.
+      </div>
       <div className={`crm-banner ${liveCapable ? 'warn' : ''}`} role="note">
         {liveCapable
           ? <><strong>Live sending flags are on.</strong> Check “Send for real” only after owner approval. Prices stay out of cold email.</>
-          : <><strong>Dry-run mode.</strong> Live outreach is off. Nothing is sent unless flags + “Send for real” are set.</>}
+          : <><strong>Dry-run mode.</strong> Live CRM Resend is off. Prefer Prepare emails → Mail.app / OWA. Nothing blasts unless flags + “Send for real” are set.</>}
+      </div>
+      <div className="crm-mode-toggle" role="tablist" aria-label="Outreach mode">
+        <button type="button" role="tab" aria-selected={handoffMail} className={handoffMail ? 'active' : undefined} onClick={() => setHandoff(true)}>
+          Prepare → Mail
+        </button>
+        <button type="button" role="tab" aria-selected={!handoffMail} className={!handoffMail ? 'active' : undefined} onClick={() => setHandoff(false)}>
+          Campaign (CRM)
+        </button>
       </div>
       <Stepper step={step} />
       {message ? <p className="crm-ok" role="status">{message}</p> : null}
@@ -1069,6 +1273,10 @@ function CampaignsPage() {
             ))}
             {exclusions.length > 12 ? <li className="crm-muted">+{exclusions.length - 12} more</li> : null}
           </ul>
+          <p className="crm-muted crm-pad">
+            Includes suppressions, unsubscribes, bounces, missing website observations, and contacts within 30 days
+            (Batch 1 SENT 6/6 stays excluded — do not resend).
+          </p>
         </div>
       ) : null}
 
@@ -1076,20 +1284,22 @@ function CampaignsPage() {
         <section className="crm-panel">
           <div className="crm-panel-head">
             <h2>Recipients <span className="crm-count">{selected.length}</span></h2>
-            <Link to="/admin/leads?view=ready" className="crm-link">{selected.length ? 'Edit in Leads' : 'Select in Leads'}</Link>
+            <Link to="/admin/leads?view=ready&limit=25" className="crm-link">{selected.length ? 'Edit in Leads' : 'Select in Leads'}</Link>
           </div>
           {recipients.length ? (
             <ul className="crm-chips">
-              {recipients.slice(0, 24).map((lead) => (
+              {recipients.slice(0, 50).map((lead) => (
                 <li key={String(lead.id)}>
                   {lead.business_name}
                   <button type="button" onClick={() => removeRecipient(String(lead.id))} aria-label={`Remove ${lead.business_name}`}>×</button>
                 </li>
               ))}
-              {recipients.length > 24 ? <li className="crm-muted">+{recipients.length - 24} more</li> : null}
+              {recipients.length > 50 ? <li className="crm-muted">+{recipients.length - 50} more</li> : null}
             </ul>
           ) : (
-            <p className="crm-muted crm-pad">No recipients yet. Pick contactable leads first.</p>
+            <Empty title="No recipients yet">
+              Search leads (25–100 per page), multi-select those with email, then return here. Prefer <strong>Prepare emails</strong> for Mail.app / OWA.
+            </Empty>
           )}
 
           <div className="crm-field-row">
@@ -1121,15 +1331,15 @@ function CampaignsPage() {
           </div>
           <div className="crm-actions">
             <button className="crm-btn" type="button" disabled={busy || !selected.length || !subject || !body} onClick={() => void onPreview()}>
-              {previewToken ? 'Refresh preview' : 'Preview'}
+              {previewToken ? 'Refresh drafts' : handoffMail ? 'Prepare emails' : 'Preview'}
             </button>
           </div>
         </section>
 
         <section className="crm-panel">
           <div className="crm-panel-head">
-            <h2>Preview</h2>
-            {previews.length > 1 ? (
+            <h2>{handoffMail ? 'Review cards' : 'Preview'}</h2>
+            {previews.length > 1 && !handoffMail ? (
               <div className="crm-pager">
                 <button type="button" className="crm-icon-btn" disabled={previewIndex === 0} onClick={() => setPreviewIndex((i) => i - 1)} aria-label="Previous recipient">‹</button>
                 <span className="crm-muted">{previewIndex + 1} / {previews.length}</span>
@@ -1137,21 +1347,67 @@ function CampaignsPage() {
               </div>
             ) : null}
           </div>
-          {!sample || !previewToken ? (
-            <Empty title={previews.length ? 'Preview is out of date' : 'No preview yet'}>
-              {previews.length ? 'You changed recipients or copy. Preview again to unlock sending.' : 'Preview personalizes the message for each recipient and unlocks sending.'}
+          {!previewToken || !includedPreviews.length ? (
+            <Empty title={previews.length && previewToken ? 'All drafts excluded' : previews.length ? 'Preview is out of date' : 'No drafts yet'}>
+              {previews.length && previewToken
+                ? 'Every selected lead was excluded (observation, suppression, or recent contact).'
+                : previews.length
+                  ? 'You changed recipients or copy. Prepare again to unlock Mail handoff.'
+                  : 'Prepare personalizes each recipient. Review before opening Mail or downloading .eml — nothing auto-sends.'}
             </Empty>
+          ) : handoffMail ? (
+            <>
+              <div className="crm-actions">
+                <button
+                  type="button"
+                  className="crm-btn"
+                  disabled={policyBlocked || !mailDrafts.length}
+                  onClick={() => downloadEmlPack(mailDrafts)}
+                >
+                  Download .eml pack ({mailDrafts.length})
+                </button>
+                <a className="crm-btn-secondary" href={OWA_URL} target="_blank" rel="noreferrer">
+                  Outlook on the web
+                </a>
+              </div>
+              <ul className="crm-review-cards">
+                {includedPreviews.map((item, index) => {
+                  const draft = previewToDraft(item);
+                  return (
+                    <li key={String(item.lead_id)} className="crm-review-card">
+                      <div className="crm-review-card-head">
+                        <strong>{item.business_name}</strong>
+                        <span className="crm-muted">{item.email}</span>
+                      </div>
+                      <p className="crm-review-subject">{item.subject}</p>
+                      <pre className="crm-review-body">{item.body}</pre>
+                      <div className="crm-actions">
+                        <a className="crm-btn-secondary" href={buildMailtoUrl(draft)}>
+                          Open in Mail
+                        </a>
+                        <button type="button" className="crm-btn-ghost" onClick={() => downloadEml(draft, index)}>
+                          Download .eml
+                        </button>
+                      </div>
+                    </li>
+                  );
+                })}
+              </ul>
+            </>
           ) : (
             <>
               <div className="crm-mail">
                 <dl>
                   <div><dt>From</dt><dd>BBL Studio &lt;hello@bbl.studio&gt;</dd></div>
-                  <div><dt>To</dt><dd>{sample.email} · {sample.business_name}</dd></div>
-                  <div><dt>Subject</dt><dd className="crm-mail-subject">{sample.subject}</dd></div>
+                  <div><dt>To</dt><dd>{sample?.email} · {sample?.business_name}</dd></div>
+                  <div><dt>Subject</dt><dd className="crm-mail-subject">{sample?.subject}</dd></div>
                 </dl>
-                <div className="crm-mail-body">{sample.body}</div>
+                <div className="crm-mail-body">{sample?.body}</div>
               </div>
               <div className="crm-actions">
+                <button type="button" className="crm-btn-secondary" disabled={policyBlocked || !mailDrafts.length} onClick={() => setHandoff(true)}>
+                  Switch to Mail handoff
+                </button>
                 <button
                   className="crm-btn"
                   type="button"
@@ -1188,7 +1444,7 @@ function CampaignsPage() {
               ))}
               {includedPreviews.length > 12 ? <li className="crm-muted">+{includedPreviews.length - 12} more</li> : null}
             </ul>
-            <p className="crm-muted">Missing website observations, unsubscribed, suppressed, bounced, and 30-day contacts are excluded. No prices in cold email.</p>
+            <p className="crm-muted">Missing website observations, unsubscribed, suppressed, bounced, and 30-day contacts are excluded. No prices in cold email. Batch 1 SENT leads stay out via contacted_within_30d.</p>
             <label className="crm-field" style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
               <input
                 type="checkbox"
@@ -1847,6 +2103,14 @@ function SettingsPage() {
           <p className="crm-muted crm-pad">Green means safe. Change flags in Vercel environment variables, then redeploy.</p>
         </section>
       </div>
+      <section className="crm-panel">
+        <div className="crm-panel-head"><h2>Owner mail path</h2></div>
+        <p className="crm-muted">
+          {OUTLOOK_MAC_LICENSE_NOTE} Prefer{' '}
+          <a className="crm-link" href={OWA_URL} target="_blank" rel="noreferrer">Outlook on the web</a>
+          {' '}or Mail.app with hello@bbl.studio. Use Leads → Prepare emails for mailto / .eml handoff. CRM live Resend stays gated.
+        </p>
+      </section>
       {mac.length ? (
         <section className="crm-panel">
           <div className="crm-panel-head"><h2>Setup checklist</h2></div>
