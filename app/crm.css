@@ -212,6 +212,20 @@
 .crm-mail-subject{color:var(--c-text);font-weight:500}
 .crm-mail-body{padding:1rem .9rem;white-space:pre-wrap;line-height:1.6;font-size:.88rem;max-height:26rem;overflow:auto}
 
+/* Toolbar + drawer */
+.crm-toolbar{display:flex;align-items:center;gap:.75rem;flex-wrap:wrap}
+.crm-input{min-height:2.1rem;padding:.35rem .7rem;border:1px solid var(--c-line-2);border-radius:8px;background:var(--c-panel);color:var(--c-text);font:inherit;font-size:.88rem;min-width:min(18rem,100%)}
+.crm-input:focus{outline:2px solid var(--c-accent-bg);outline-offset:1px;border-color:var(--c-accent)}
+.crm-faint{color:var(--c-faint)}
+.crm-field{display:flex;flex-direction:column;gap:.35rem;margin-top:1rem}
+.crm-field label{font-size:.78rem;color:var(--c-dim)}
+.crm-drawer-backdrop{position:fixed;inset:0;z-index:90;background:rgba(20,20,20,.28);display:flex;justify-content:flex-end;animation:crm-fade .15s ease}
+.crm-drawer{width:min(26rem,100%);height:100%;background:var(--c-panel);border-left:1px solid var(--c-line);padding:1.25rem 1.35rem;overflow:auto;animation:crm-fade .15s ease}
+.crm-col-action .crm-btn-secondary{margin:.1rem 0 .1rem .25rem}
+@keyframes crm-fade{from{opacity:0}to{opacity:1}}
+@media (prefers-reduced-motion:reduce){.crm-drawer-backdrop,.crm-drawer,.crm-main{animation:none}}
+.crm-main{animation:crm-fade .15s ease}
+
 /* Modal */
 .crm-modal-backdrop{position:fixed;inset:0;z-index:80;display:grid;place-items:center;padding:1rem;background:rgba(20,20,20,.32)}
 .crm-modal{width:min(32rem,100%);border:1px solid var(--c-line-2);border-radius:14px;background:var(--c-panel);padding:1.25rem 1.35rem;max-height:min(85svh,40rem);overflow:auto}
