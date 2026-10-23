@@ -71,6 +71,7 @@ import {
 import { fetchEmailHistory, fetchLeads } from './crm-lead-client.js';
 import {
   dispatchOutreachCron,
+  getOutreachReadinessSnapshot,
   getSchedulerDashboard,
   runSchedulerJob,
   type SchedulerJobName,
@@ -562,6 +563,11 @@ export async function handleOutreachSchedulerCron(
   return dispatchOutreachCron(headers, env, {
     source: opts.source || 'vercel',
   });
+}
+
+/** Public readiness booleans — no secret values. */
+export async function handleOutreachReadiness(env = process.env): Promise<CrmJsonResult> {
+  return { status: 200, body: getOutreachReadinessSnapshot(env) };
 }
 
 /** Admin manual trigger for a single job (still never auto-sends prospects without flags). */

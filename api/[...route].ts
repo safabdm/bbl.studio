@@ -149,6 +149,11 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
       });
       return send(res, result.status, result.body);
     }
+    if (matches(path, '/api/crm/outreach/ready') && method === 'GET') {
+      const { handleOutreachReadiness } = await loadOutreachStudioApi();
+      const result = await handleOutreachReadiness(process.env);
+      return send(res, result.status, result.body);
+    }
     if (matches(path, '/api/crm/outreach/cron') && method === 'GET') {
       const { handleOutreachSchedulerCron } = await loadOutreachStudioApi();
       const url = new URL(req.url || '/', 'http://localhost');

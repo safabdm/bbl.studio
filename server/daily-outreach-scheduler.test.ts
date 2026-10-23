@@ -22,6 +22,7 @@ import {
   OUTREACH_CRON_SCHEDULE_PST_BACKUP,
   SCHEDULER_SOURCE_OF_TRUTH,
   dispatchOutreachCron,
+  getOutreachReadinessSnapshot,
   getSchedulerDashboard,
   idempotencyKey,
   isJobComplete,
@@ -309,6 +310,22 @@ describe('PT-gated morning pipeline (GHA primary)', () => {
     assert.match(dash.next_runs.cron.at_pt, /America\/Los_Angeles/);
     assert.equal(dash.next_runs.cron.dayKey, '2026-01-14');
     assert.equal(pacificParts(Date.parse(dash.next_runs.cron.at_utc)).hour, 7);
+  });
+
+  it('readiness snapshot exposes booleans only (send stays safe by default)', () => {
+    const snap = getOutreachReadinessSnapshot({
+      ...memEnv,
+      OUTREACH_CRON_SEND_ENABLED: 'false',
+      GOOGLE_PLACES_API_KEY: '',
+    });
+    assert.equal(snap.auto_send, false);
+    assert.equal(snap.config.cron_secret_configured, true);
+    assert.equal(snap.config.places_configured, false);
+    assert.equal(snap.config.outreach_cron_send_enabled, false);
+    assert.equal(snap.config.email_dry_run, true);
+    assert.equal(snap.safety.live_cron_send_allowed, false);
+    assert.ok(snap.deploy_blockers.includes('GOOGLE_PLACES_API_KEY'));
+    assert.ok(!JSON.stringify(snap).includes(memEnv.CRON_SECRET));
   });
 });
 

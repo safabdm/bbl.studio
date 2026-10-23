@@ -15,10 +15,14 @@ import {
   getDaily20Dashboard,
   type Daily20Env,
 } from './daily-20-pipeline.js';
+import { crmDatabaseUrl, isDurableDbConfigured } from './crm-db.js';
 import { upsertDiscoveredLead } from './crm-discovery-store.js';
+import { isPlacesConfigured } from './crm-discovery-places.js';
 import { upsertStudioDraftFromLead } from './email-studio.js';
 import { fixtureDiscoveredLead } from './lead-queue.js';
 import { laDayKey, readDailyCapState, remainingSends, effectiveCap } from './daily-cap.js';
+import { isDryRun, isManualLiveSendEnabled, safetySnapshot } from './crm-safety.js';
+import { graphConfigured } from './graph-sender.js';
 import {
   generateFollowUpDrafts,
   listFollowUpDrafts,
@@ -269,8 +273,60 @@ export function jobsDueAt(ms = Date.now()): SchedulerJobName[] {
   return morningPipelineJobs();
 }
 
-export function isMorningPipelineComplete(state: SchedulerState, dayKey: string): boolean {
-  return MORNING_PIPELINE_JOBS.every((job) => isJobComplete(state, job, dayKey));
+export function isMorningPipelineComplete(state: SchedulerState, jobDayKey: string): boolean {
+  return MORNING_PIPELINE_JOBS.every((job) => isJobComplete(state, job, jobDayKey));
+}
+
+/**
+ * Public readiness booleans (no secret values). Safe for Production probes.
+ */
+export function getOutreachReadinessSnapshot(env: SchedulerEnv = process.env) {
+  const cronSend = truthy(env.OUTREACH_CRON_SEND_ENABLED);
+  const safety = safetySnapshot(env);
+  const admin = String(env.ADMIN_EMAIL || env.BBL_EMAIL || '').trim();
+  return {
+    ok: true as const,
+    auto_send: false,
+    prospect_send_allowed: false,
+    source_of_truth: SCHEDULER_SOURCE_OF_TRUTH,
+    timezone: PACIFIC_TZ,
+    dispatch_window_pt: '07:00–08:59',
+    github_actions_cron: GITHUB_ACTIONS_CRON_SCHEDULE,
+    vercel_backup_crons: [OUTREACH_CRON_SCHEDULE, OUTREACH_CRON_SCHEDULE_PST_BACKUP],
+    config: {
+      database_url_configured: Boolean(crmDatabaseUrl(env)),
+      durable_db_configured: isDurableDbConfigured(env),
+      cron_secret_configured: Boolean(String(env.CRON_SECRET || '').trim()),
+      places_configured: isPlacesConfigured(env),
+      resend_configured: Boolean(String(env.RESEND_API_KEY || '').trim()),
+      business_postal_configured: Boolean(String(env.BUSINESS_POSTAL_ADDRESS || '').trim()),
+      admin_email_configured: Boolean(admin),
+      admin_email_fallback: admin ? null : 'hello@bbl.studio',
+      app_origin_configured: Boolean(String(env.APP_ORIGIN || '').trim()),
+      scheduler_enabled:
+        env.OUTREACH_SCHEDULER_ENABLED === undefined ||
+        env.OUTREACH_SCHEDULER_ENABLED === '' ||
+        truthy(env.OUTREACH_SCHEDULER_ENABLED),
+      outreach_cron_send_enabled: cronSend,
+      email_dry_run: isDryRun(env),
+      manual_send_live_enabled: isManualLiveSendEnabled(env),
+      graph_configured: graphConfigured(env),
+    },
+    safety: {
+      ...safety,
+      OUTREACH_CRON_SEND_ENABLED: cronSend,
+      /** True only if cron-send flag AND manual live AND not dry-run — still never auto-approves. */
+      live_cron_send_allowed: cronSend && safety.live_manual_send_allowed,
+    },
+    deploy_blockers: [
+      !crmDatabaseUrl(env) && 'CRM_DATABASE_URL_or_DATABASE_URL',
+      !String(env.CRON_SECRET || '').trim() && 'CRON_SECRET',
+      !isPlacesConfigured(env) && 'GOOGLE_PLACES_API_KEY',
+      !String(env.BUSINESS_POSTAL_ADDRESS || '').trim() && 'BUSINESS_POSTAL_ADDRESS',
+      // Resend optional (log fallback) — listed as warn not blocker
+    ].filter(Boolean) as string[],
+    notify_channel: String(env.RESEND_API_KEY || '').trim() ? 'resend' : 'log',
+  };
 }
 
 /**

@@ -62,6 +62,7 @@ import {
   handleSchedulerStatus,
   handleSchedulerRunJob,
   handleOutreachSchedulerCron,
+  handleOutreachReadiness,
   handleSendControlsAction,
   handleSendControlsGet,
   handleSenderPreference,
@@ -1087,6 +1088,10 @@ app.get('/api/admin/crm/scheduler', async (c) => {
 app.post('/api/admin/crm/scheduler/run', async (c) => {
   const body = await c.req.json().catch(() => ({}));
   const result = await handleSchedulerRunJob(Boolean(requireAdmin(c)), body);
+  return c.json(result.body, result.status);
+});
+app.get('/api/crm/outreach/ready', async (c) => {
+  const result = await handleOutreachReadiness(process.env);
   return c.json(result.body, result.status);
 });
 app.get('/api/crm/outreach/cron', async (c) => {
