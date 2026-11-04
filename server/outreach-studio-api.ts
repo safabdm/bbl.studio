@@ -319,6 +319,9 @@ export async function handleSendControlsAction(
   if (denied) return denied;
   const action = body.action;
   if (!action) return { status: 400, body: { ok: false, message: 'action required.' } };
+  if (process.env.MARKETING_AUTOMATION_ENABLED === 'true' && ['enqueue','process_one'].includes(action)) {
+    return { status: 409, body: { ok:false, message:'The first-five campaign owns the send queue. Use its status and pause controls to avoid duplicate campaigns.' } };
+  }
 
   if (action === 'pause') {
     const controls = await pauseSending(body.reason || 'Paused by owner', env);
@@ -376,6 +379,9 @@ export async function handleSendControlsAction(
     };
   }
   if (action === 'process_one') {
+    if (!body.allow_live) {
+      return { status: 200, body: { ok: true, processed: false, live_email_send: false, message: 'Dry run: queue and send counters unchanged.' } };
+    }
     // Real ESP only when allow_live AND existing CRM safety gates. Otherwise mocked provider.
     if (body.allow_live && !safetySnapshot(asSafetyEnv(env)).live_manual_send_allowed) {
       return {

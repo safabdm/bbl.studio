@@ -37,7 +37,6 @@ import {
   isPacificWeekday,
   pacificParts,
 } from './pacific-time.js';
-import { safetySnapshot } from './crm-safety.js';
 import {
   processNextSend,
   readSendControls,
@@ -50,6 +49,7 @@ import { fetchEmailHistory, fetchLeads } from './crm-lead-client.js';
 import { importGraphReplies } from './graph-sender.js';
 import { recordInterestedFromInbox } from './follow-up-drafts.js';
 import { buildLeadQueue } from './lead-queue.js';
+import type { PolicyEnv } from './outreach-policy.js';
 
 export const SCHEDULER_STATE_KV = 'outreach:scheduler_state';
 export const SCHEDULER_RUNS_KV = 'outreach:scheduler_runs';
@@ -129,6 +129,7 @@ export const OUTREACH_CRON_SCHEDULE_NOTE =
   'Primary: GitHub Actions (PT-gated 07:00–08:59 America/Los_Angeles). Vercel Hobby backups: 0 14 * * 1-5 (≈7am PDT) + 0 15 * * 1-5 (≈7am PST). Idempotent per job:LA-day.';
 
 export type SchedulerEnv = Daily20Env &
+  PolicyEnv &
   DiscoveryRunnerEnv &
   OwnerNotifyEnv &
   SendControlsEnv &

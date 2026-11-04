@@ -219,6 +219,7 @@ export async function sendViaResend(
   }
   const response = await fetchImpl('https://api.resend.com/emails', {
     method: 'POST',
+    signal: AbortSignal.timeout(10000),
     headers: requestHeaders,
     body: JSON.stringify({
       from: fromAddress(env),

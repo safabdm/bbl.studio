@@ -58,7 +58,7 @@ function crmHeaders(req: IncomingMessage) {
   };
 }
 
-export const config = { maxDuration: 30 };
+export const config = { maxDuration: 60 };
 
 const PROJECT_PACKAGES = {
   pkg_landing: { name: 'Simple Landing Page', depositCents: 60000 },
@@ -148,6 +148,24 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
           : req.headers.authorization,
       });
       return send(res, result.status, result.body);
+    }
+    if (matches(path, '/api/admin/crm/marketing') && (method === 'GET' || method === 'POST')) {
+      if (!admin) return send(res,401,{ok:false,message:'Sign in required.'});
+      const { readMarketingState, updateMarketingControl }=await import('../server/marketing-automation.js');
+      const state=method==='POST' ? await updateMarketingControl(process.env,await readJsonUnknown(req) as {paused?:boolean;client_email?:string;evidence?:string}) : await readMarketingState(process.env);
+      return send(res,200,{ok:true,state});
+    }
+    if (matches(path, '/api/crm/marketing/ready') && method === 'GET') {
+      const { marketingConfigBlockers } = await import('../server/marketing-automation.js');
+      const blockers = marketingConfigBlockers(process.env);
+      return send(res,200,{ ok: blockers.length === 0, blockers, offer: { pages:3, price_usd:2000, first_clients:5 }, live_checked:false });
+    }
+    if (matches(path, '/api/crm/marketing/tick') && method === 'GET') {
+      const secret = process.env.CRON_SECRET || '';
+      if (!secret || req.headers.authorization !== `Bearer ${secret}`) return send(res,401,{ok:false,message:'Unauthorized.'});
+      const { runMarketingTick } = await import('../server/marketing-automation.js');
+      const result = await runMarketingTick(process.env);
+      return send(res,result.status === 'BLOCKED' ? 503 : 200,result);
     }
     if (matches(path, '/api/crm/outreach/ready') && method === 'GET') {
       const { handleOutreachReadiness } = await loadOutreachStudioApi();

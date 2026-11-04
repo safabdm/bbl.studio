@@ -9,6 +9,7 @@ import {
   type ReactNode,
 } from 'react';
 import { Link, NavLink, Route, Routes, useNavigate, useSearchParams } from 'react-router-dom';
+import { MarketingCampaignPage } from './marketing-campaign';
 import { BblWordmark } from '../components/bbl-mark';
 import { api, usePrivateIndexing } from '../lib/portal';
 import type {
@@ -328,6 +329,7 @@ const NAV: Array<{ group: string; items: Array<{ to: string; label: string; end?
     items: [
       { to: '/admin', label: 'Overview', end: true },
       { to: '/admin/daily-review', label: 'Daily Review' },
+      { to: '/admin/marketing', label: 'First five clients' },
       { to: '/admin/automation', label: 'Discover Leads' },
       { to: '/admin/lead-queue', label: 'Lead Queue' },
       { to: '/admin/campaigns', label: 'Email Campaigns' },
@@ -2523,6 +2525,7 @@ export function CrmDashboard() {
         {/* Relative paths: this <Routes> is mounted under <Route path="/admin/*"> in main.tsx. */}
         <Route index element={<OverviewPage />} />
         <Route path="daily-review" element={<DailyReviewPage />} />
+        <Route path="marketing" element={<MarketingCampaignPage />} />
         <Route path="leads" element={<LeadQueuePage />} />
         <Route path="lead-queue" element={<LeadQueuePage />} />
         <Route path="campaigns" element={<CampaignsPage />} />

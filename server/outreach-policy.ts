@@ -206,10 +206,15 @@ export function buildUnsubscribeUrl(
   if (!secret || !email) {
     return `${origin}/unsubscribe`;
   }
-  const token = makeUnsubscribeToken(email, leadId, secret);
+  // Discovery/queue IDs are strings; the public unsubscribe handler requires a
+  // positive integer. Keep legacy numeric IDs unchanged and map new IDs stably.
+  const numericId = /^\d+$/.test(String(leadId)) && Number.isSafeInteger(Number(leadId)) && Number(leadId)>0
+    ? Number(leadId)
+    : Number.parseInt(createHmac('sha256', secret).update(String(leadId)).digest('hex').slice(0,12),16)+1;
+  const token = makeUnsubscribeToken(email, numericId, secret);
   const params = new URLSearchParams({
     email: String(email).trim().toLowerCase(),
-    lead_id: String(leadId),
+    lead_id: String(numericId),
     token,
   });
   return `${origin}/unsubscribe?${params.toString()}`;

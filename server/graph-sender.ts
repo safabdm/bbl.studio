@@ -185,11 +185,28 @@ export async function exchangeGraphAuthCode(
 
 export async function resolveAccessToken(
   env: GraphSenderEnv = process.env,
+  fetchImpl: typeof fetch = fetch,
 ): Promise<{ ok: true; token: string } | { ok: false; message: string }> {
   const record = await readGraphTokens(env);
   if (!record) return { ok: false, message: 'Outlook not connected.' };
   const token = decryptSecret(record.access_token_enc);
   if (!token) return { ok: false, message: 'Stored Graph token could not be decrypted.' };
+  if (Date.parse(record.expires_at) < Date.now() + 60_000) {
+    const refresh = decryptSecret(record.refresh_token_enc);
+    if (!refresh || !graphConfigured(env)) return { ok: false, message: 'Outlook authorization expired; reconnect Outlook.' };
+    try {
+      const res = await fetchImpl(`https://login.microsoftonline.com/${encodeURIComponent(String(env.MICROSOFT_GRAPH_TENANT_ID))}/oauth2/v2.0/token`, {
+        method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams({ client_id: String(env.MICROSOFT_GRAPH_CLIENT_ID), client_secret: String(env.MICROSOFT_GRAPH_CLIENT_SECRET), grant_type: 'refresh_token', refresh_token: refresh, scope: GRAPH_SCOPES.join(' ') }),
+      });
+      const data = await res.json() as Record<string, unknown>;
+      if (!res.ok || !data.access_token) return { ok: false, message: 'Outlook token refresh failed; reconnect Outlook.' };
+      await saveGraphTokens({ access_token: String(data.access_token), refresh_token: String(data.refresh_token || refresh), expires_in: Number(data.expires_in), account_email: record.account_email }, env);
+      return { ok: true, token: String(data.access_token) };
+    } catch {
+      return { ok: false, message: 'Outlook token refresh unavailable; sending held.' };
+    }
+  }
   return { ok: true, token };
 }
 
@@ -206,7 +223,7 @@ export async function sendViaGraph(
   env: GraphSenderEnv = process.env,
   fetchImpl: typeof fetch = fetch,
 ): Promise<GraphSendResult> {
-  const access = await resolveAccessToken(env);
+  const access = await resolveAccessToken(env, fetchImpl);
   if (!access.ok) return { ok: false, message: access.message };
 
   const idempotency = createHash('sha256')
@@ -262,21 +279,22 @@ export async function importGraphReplies(
   env: GraphSenderEnv = process.env,
   fetchImpl: typeof fetch = fetch,
 ): Promise<{ ok: true; items: CrmInboxItem[]; marked_replied: string[] } | { ok: false; message: string }> {
-  const access = await resolveAccessToken(env);
+  const access = await resolveAccessToken(env, fetchImpl);
   if (!access.ok) return { ok: false, message: access.message };
 
   try {
-    const res = await fetchImpl(
-      'https://graph.microsoft.com/v1.0/me/mailFolders/Inbox/messages?$top=50&$select=id,conversationId,subject,bodyPreview,receivedDateTime,from,internetMessageHeaders',
-      {
-        headers: { Authorization: `Bearer ${access.token}` },
-      },
-    );
-    if (!res.ok) {
-      return { ok: false, message: `Graph mail read failed (${res.status}).` };
+    const messages: GraphMessage[] = [];
+    // Search all folders, including Junk/Deleted, and fail closed on incomplete pagination.
+    let next: string | undefined = 'https://graph.microsoft.com/v1.0/me/messages?$top=100&$orderby=receivedDateTime%20desc&$select=id,conversationId,subject,bodyPreview,receivedDateTime,from,internetMessageHeaders';
+    for (let page = 0; next && page < 50; page += 1) {
+      if (new URL(next).origin !== 'https://graph.microsoft.com') return { ok: false, message: 'Invalid Outlook pagination host.' };
+      const res = await fetchImpl(next, { headers: { Authorization: `Bearer ${access.token}` }, signal: AbortSignal.timeout(5000) });
+      if (!res.ok) return { ok: false, message: `Graph mail read failed (${res.status}).` };
+      const data = await res.json() as { value?: GraphMessage[]; '@odata.nextLink'?: string };
+      messages.push(...(Array.isArray(data.value) ? data.value : []));
+      next = data['@odata.nextLink'];
     }
-    const json = (await res.json()) as { value?: GraphMessage[] };
-    const messages = Array.isArray(json.value) ? json.value : [];
+    if (next) return { ok: false, message: 'Outlook scan incomplete; hold sending until pagination completes.' };
     const items: CrmInboxItem[] = [];
     const marked: string[] = [];
 
@@ -290,8 +308,12 @@ export async function importGraphReplies(
       const conv = msg.conversationId || '';
       const matchEmail = from && opts.known_emails?.has(from);
       const matchConv = conv && opts.known_conversation_ids?.has(conv);
-      const matchReply = Boolean(inReplyTo);
-      if (!matchEmail && !matchConv && !matchReply) continue;
+      const fromDomain = from.split('@')[1] || '';
+      const consumer = /^(gmail|googlemail|yahoo|hotmail|outlook|live|aol|icloud|me|protonmail|proton)\./i.test(fromDomain);
+      const sameBusinessEmails = !consumer && fromDomain
+        ? [...(opts.known_emails || [])].filter(email => email.split('@')[1] === fromDomain)
+        : [];
+      if (!matchEmail && !matchConv && !sameBusinessEmails.length) continue;
 
       items.push({
         id: `graph_${msg.id}`,
@@ -302,6 +324,7 @@ export async function importGraphReplies(
         source: 'gmail', // closest existing enum; Graph import
       });
       if (from) marked.push(from);
+      marked.push(...sameBusinessEmails);
     }
     return { ok: true, items, marked_replied: [...new Set(marked)] };
   } catch (err) {
