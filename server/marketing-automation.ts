@@ -2,6 +2,7 @@
  * Durable claims precede transmission. Uncertain attempts are never retried.
  * Each tick sends at most one message; initial + two delivered-only follow-ups.
  */
+import { planMarketingReply, type MarketingMessage, type MarketingConversation } from './marketing-conversation.js';
 import { createHash, randomUUID } from 'node:crypto';
 import { acquireCrmLease, releaseCrmLease, dbReadKv, dbWriteKv } from './crm-db.js';
 import { listDiscoveredLeads } from './crm-discovery-store.js';
@@ -26,11 +27,12 @@ export const MARKETING_LEASE = 'marketing:send';
 type Receipt = 'UNKNOWN' | 'DELIVERED' | 'BOUNCED' | 'COMPLAINED' | 'FAILED';
 export type MarketingAttempt = {
   id: string; leadId: string; email: string; business: string; domain: string;
-  step: number; claimedAt: string; subject: string; body: string;
+  replyTo?: string; step: number; claimedAt: string; subject: string; body: string;
   status: 'CLAIMED' | 'SUBMITTED' | 'UNCERTAIN';
   providerId: string | null; receipt: Receipt; checkedAt: string | null;
 };
 export type MarketingState = {
+  conversations?: MarketingConversation[];
   paused: boolean;
   attempts: MarketingAttempt[]; stoppedEmails: string[];
   clients: Array<{ email: string; evidence: string; confirmedAt: string }>;
@@ -88,7 +90,7 @@ export function renderMarketingEmail(item: Pick<LeadQueueItem, 'business_name' |
 
 export type MarketingDeps = {
   candidates(): Promise<LeadQueueItem[]>;
-  inbox(emails: Set<string>): Promise<{ ok: boolean; replies: string[]; optouts: string[] }>;
+  inbox(emails: Set<string>): Promise<{ ok: boolean; replies: string[]; optouts: string[]; messages?: MarketingMessage[] }>;
   bookings(): Promise<string[]>;
   providerReady(): Promise<boolean>;
   receipt(attempt: MarketingAttempt): Promise<Receipt>;
@@ -115,7 +117,7 @@ function liveDeps(env: MarketingEnv): MarketingDeps {
     async inbox(emails) {
       const result = await importGraphReplies({ known_emails: emails }, env);
       if (!result.ok) return { ok: false, replies: [], optouts: [] };
-      return { ok: true, replies: result.marked_replied,
+      return { ok: true, replies: result.marked_replied, messages: result.messages,
         optouts: result.items.filter(i => /\b(unsubscribe|remove me|stop emailing|no thanks|not interested)\b/i.test(`${i.subject} ${i.snippet}`)).map(i => i.from_email) };
     },
     async bookings() {
@@ -195,6 +197,33 @@ export async function runMarketingTick(env: MarketingEnv, deps?: MarketingDeps, 
     if (['Sat','Sun'].includes(pt.weekday) || pt.hour < 9 || pt.hour >= 16) return finish('IDLE','Outside weekday 09:00–16:00 Pacific send window.');
     if (state.attempts.filter(a => pacificParts(Date.parse(a.claimedAt)).dayKey === pt.dayKey).length >= 5) return finish('IDLE','Daily five-message cap reached.');
     const suppressions = new Set((await listDurableSuppressions(env)).map(s => emailKey(s.email)));
+    state.conversations ||= [];
+    // Respond only to a newer message from the exact contacted address, using complete text.
+    // Other addresses on the same business domain stop cold follow-ups but never trigger replies.
+    const messages = (inbox.messages || []).filter(m=>!m.automated && !suppressions.has(emailKey(m.email)))
+      .sort((a,b)=>Date.parse(b.receivedAt)-Date.parse(a.receivedAt));
+    for (const message of messages) {
+      const email=emailKey(message.email);
+      const original=state.attempts.find(a=>a.email===email && !a.replyTo && a.status==='SUBMITTED');
+      if (!original || !Number.isFinite(Date.parse(message.receivedAt)) || Date.parse(message.receivedAt)<=Date.parse(original.claimedAt) || Date.parse(message.receivedAt)>now) continue;
+      let conversation=state.conversations.find(c=>c.email===email);
+      if (!conversation) {conversation={email,processedIds:[],status:'DISCUSSING'};state.conversations.push(conversation);}
+      if (conversation.status==='READY' || conversation.processedIds.includes(message.id)) continue;
+      const plan=planMarketingReply(message);
+      // Mark all older messages as processed so an old question never follows a newer answer.
+      conversation.processedIds.push(...messages.filter(m=>emailKey(m.email)===email && Date.parse(m.receivedAt)<=Date.parse(message.receivedAt)).map(m=>m.id));
+      if (!plan) continue;
+      if (plan.ready) {
+        conversation.status='READY';conversation.evidence=plan.evidence;conversation.receivedAt=message.receivedAt;
+        if (!state.clients.some(c=>c.email===email)) state.clients.push({email,evidence:plan.evidence!,confirmedAt:new Date(now).toISOString()});
+      }
+      const attempt:MarketingAttempt={...original,id:randomUUID(),replyTo:message.id,step:0,claimedAt:new Date(now).toISOString(),subject:`Re: ${original.subject.replace(/^Re: /i,'')}`,body:plan.body+complianceFooter({email,leadId:original.leadId,env}),status:'CLAIMED',providerId:null,receipt:'UNKNOWN',checkedAt:null};
+      state.attempts.push(attempt);
+      await dbWriteKv(MARKETING_STATE,state,env);
+      const sent=await io.send(attempt);
+      attempt.status=sent.ok && sent.id?'SUBMITTED':'UNCERTAIN';attempt.providerId=sent.id || null;
+      return finish(sent.ok && sent.id?'SUBMITTED':'BLOCKED',plan.ready?'Client explicitly accepted the package and supplied a start brief; owner handoff ready.':'Routine scope reply submitted; waiting for client details and explicit acceptance.',sent.ok && sent.id?1:0);
+    }
     const snapshot = await readSnapshot(env);
     if (!deps && (!snapshot?.last_synced_at || now-Date.parse(snapshot.last_synced_at)>86400000)) return finish('BLOCKED','Import and refresh legacy contact history before live marketing.');
     const contacted = new Set([...(snapshot?.email_history || []).filter(h => !h.dry_run && (h.status === 'SENT' || h.accepted === 'YES')).map(h=>emailKey(h.email)), ...(snapshot?.leads || []).filter(l=>l.last_contacted_at || l.email_accepted === 'YES' || l.replied === 'YES' || l.booked === 'YES' || l.suppressed || l.unsubscribed).map(l=>emailKey(l.email))]);

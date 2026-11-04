@@ -263,6 +263,7 @@ export type GraphMessage = {
   conversationId?: string;
   subject?: string;
   bodyPreview?: string;
+  body?: { contentType?: string; content?: string };
   receivedDateTime?: string;
   from?: { emailAddress?: { address?: string } };
   internetMessageHeaders?: Array<{ name: string; value: string }>;
@@ -278,17 +279,17 @@ export async function importGraphReplies(
   } = {},
   env: GraphSenderEnv = process.env,
   fetchImpl: typeof fetch = fetch,
-): Promise<{ ok: true; items: CrmInboxItem[]; marked_replied: string[] } | { ok: false; message: string }> {
+): Promise<{ ok: true; items: CrmInboxItem[]; messages: Array<{id:string;email:string;subject:string;text:string;receivedAt:string;automated:boolean}>; marked_replied: string[] } | { ok: false; message: string }> {
   const access = await resolveAccessToken(env, fetchImpl);
   if (!access.ok) return { ok: false, message: access.message };
 
   try {
     const messages: GraphMessage[] = [];
     // Search all folders, including Junk/Deleted, and fail closed on incomplete pagination.
-    let next: string | undefined = 'https://graph.microsoft.com/v1.0/me/messages?$top=100&$orderby=receivedDateTime%20desc&$select=id,conversationId,subject,bodyPreview,receivedDateTime,from,internetMessageHeaders';
+    let next: string | undefined = 'https://graph.microsoft.com/v1.0/me/messages?$top=100&$orderby=receivedDateTime%20desc&$select=id,conversationId,subject,body,bodyPreview,receivedDateTime,from,internetMessageHeaders';
     for (let page = 0; next && page < 50; page += 1) {
       if (new URL(next).origin !== 'https://graph.microsoft.com') return { ok: false, message: 'Invalid Outlook pagination host.' };
-      const res = await fetchImpl(next, { headers: { Authorization: `Bearer ${access.token}` }, signal: AbortSignal.timeout(5000) });
+      const res = await fetchImpl(next, { headers: { Authorization: `Bearer ${access.token}`, Prefer: 'outlook.body-content-type="text"' }, signal: AbortSignal.timeout(5000) });
       if (!res.ok) return { ok: false, message: `Graph mail read failed (${res.status}).` };
       const data = await res.json() as { value?: GraphMessage[]; '@odata.nextLink'?: string };
       messages.push(...(Array.isArray(data.value) ? data.value : []));
@@ -297,6 +298,7 @@ export async function importGraphReplies(
     if (next) return { ok: false, message: 'Outlook scan incomplete; hold sending until pagination completes.' };
     const items: CrmInboxItem[] = [];
     const marked: string[] = [];
+    const fullMessages: Array<{id:string;email:string;subject:string;text:string;receivedAt:string;automated:boolean}> = [];
 
     for (const msg of messages) {
       const from = String(msg.from?.emailAddress?.address || '')
@@ -315,6 +317,7 @@ export async function importGraphReplies(
         : [];
       if (!matchEmail && !matchConv && !sameBusinessEmails.length) continue;
 
+      if (msg.body?.contentType?.toLowerCase() === "text" && msg.body.content && msg.receivedDateTime) fullMessages.push({id:msg.id,email:from,subject:msg.subject || "",text:msg.body.content,receivedAt:msg.receivedDateTime,automated:(msg.internetMessageHeaders || []).some(h=> /^(auto-submitted|x-autoreply|x-autorespond)$/i.test(h.name) && h.value.toLowerCase() !== "no") || /automatic reply|out of office|delivery status notification/i.test(msg.subject || "")});
       items.push({
         id: `graph_${msg.id}`,
         from_email: from,
@@ -326,7 +329,7 @@ export async function importGraphReplies(
       if (from) marked.push(from);
       marked.push(...sameBusinessEmails);
     }
-    return { ok: true, items, marked_replied: [...new Set(marked)] };
+    return { ok: true, items, messages:fullMessages, marked_replied: [...new Set(marked)] };
   } catch (err) {
     return { ok: false, message: err instanceof Error ? err.message : 'Graph import failed.' };
   }

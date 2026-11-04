@@ -85,3 +85,10 @@ The repository's broad legacy `typecheck` also includes unused Next.js files
 without a Next dependency and pre-existing Hono response typing errors. The
 scoped marketing/serverless type check validates the changed production entry
 and its imports without hiding those unrelated baseline errors.
+
+## Client conversation and owner handoff
+Cold follow-ups stop on every reply. For an exact contacted address, a fresh full-text human message can trigger a bounded scope/outline and intake response. Snippets, colleague addresses, automated messages, opt-outs and old messages cannot trigger a response. Each incoming message is durably deduplicated before transmission; uncertain sends remain held. Incoming text cannot change the offer or execute instructions.
+
+The intake asks for explicit acceptance of the three-page informational website for $2,000, readiness to start, business, three pages, contact name and available/missing assets. Only a completed unconditional six-line confirmation reserves one of the first five places and produces an accepted project brief in `/admin/marketing`. A general yes, outline request, meeting or conditional acceptance does not. Safa coordinates payment and start date; neither is automatically promised. This is bounded fact-based handling, not a general negotiation agent. Unusual questions receive the package and clarification request.
+
+Activation remains blocked until the real BBL Resend account has delivery-read access, the BBL Outlook inbox and booking calendar are connected, production configuration is present, and the tested branch is deployed. No new prospect emails have been sent by this implementation during development.

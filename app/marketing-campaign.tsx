@@ -32,10 +32,13 @@ export function MarketingCampaignPage() {
       <p>{state.lastRun ? state.lastRun.message : 'No cloud campaign run has been recorded yet. This does not confirm that sending is active.'}</p>
       <button disabled={busy} onClick={()=>void update({paused:!state.paused})}>{state.paused?'Resume checks':'Pause sending'}</button>{' '}
       <button disabled={busy} onClick={()=>void load()}>Refresh status</button>
+      <h2>Accepted projects ready for Safa</h2>
+      {(state.conversations || []).filter(c=>c.status==='READY').map(c=><article key={c.email}><h3>{c.email}</h3><p>Explicit acceptance and project brief received. Coordinate payment and start date.</p><pre style={{whiteSpace:'pre-wrap'}}>{c.evidence}</pre></article>)}
+      {!(state.conversations || []).some(c=>c.status==='READY') && <p>No accepted project brief yet.</p>}
       <h2>Message history</h2>
       <p>Submitted means accepted by the sending service. Delivered means confirmed by the recipient’s mail server; inbox placement and human reading are not guaranteed.</p>
       {state.attempts.length ? <table><thead><tr><th>Business</th><th>Message</th><th>Submission</th><th>Delivery</th></tr></thead><tbody>
-        {state.attempts.map(a=><tr key={a.id}><td>{a.business}<br/>{a.email}</td><td>{a.step===0?'First email':`Follow-up ${a.step}`}</td><td>{a.status==='SUBMITTED'?'Submitted':a.status==='CLAIMED'?'Needs reconciliation':'Outcome uncertain'}</td><td>{a.receipt==='UNKNOWN'?'Unverified':a.receipt.toLowerCase()}</td></tr>)}
+        {state.attempts.map(a=><tr key={a.id}><td>{a.business}<br/>{a.email}</td><td>{a.replyTo?'Client conversation':a.step===0?'First email':`Follow-up ${a.step}`}</td><td>{a.status==='SUBMITTED'?'Submitted':a.status==='CLAIMED'?'Needs reconciliation':'Outcome uncertain'}</td><td>{a.receipt==='UNKNOWN'?'Unverified':a.receipt.toLowerCase()}</td></tr>)}
       </tbody></table> : <p>No campaign messages have been submitted.</p>}
       <h2>Record a confirmed client</h2>
       <p>Use a real payment or your explicit confirmation. A reply or a consultation is not a confirmed client. Promotion stops at five.</p>

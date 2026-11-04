@@ -130,3 +130,17 @@ test('owner pause stops new messages',async()=>{
   const h=await harness();await updateMarketingControl(env,{paused:true});
   await runMarketingTick(env,h.deps,now);assert.equal(h.sends(),0);
 });
+
+test('routine reply is durable, deduplicated, and does not count as acceptance',async()=>{
+  const h=await harness();await runMarketingTick(env,h.deps,now);
+  h.deps.inbox=async()=>({ok:true,replies:[h.item.email],optouts:[],messages:[{id:'in1',email:h.item.email,subject:'Re: website',text:'Yes, send an outline please',receivedAt:new Date(now+1000).toISOString(),automated:false}]});
+  await runMarketingTick(env,h.deps,now+1800000);await runMarketingTick(env,h.deps,now+3600000);
+  const state=await readMarketingState(env);assert.equal(h.sends(),2);assert.equal(state.clients.length,0);assert.equal(state.attempts[1]!.replyTo,'in1');assert.match(state.attempts[1]!.body,/Ready to start/);
+});
+test('explicit completed acceptance creates one handoff and reserves one place',async()=>{
+  const h=await harness();await runMarketingTick(env,h.deps,now);
+  const text='I accept the three-page informational website for $2,000.\nReady to start: Yes\nBusiness: Test Salon\nThree pages: Home, Services, Contact\nContact name: Alex Smith\nAssets: Logo and photos available, text missing';
+  h.deps.inbox=async()=>({ok:true,replies:[h.item.email],optouts:[],messages:[{id:'in2',email:h.item.email,subject:'Re',text,receivedAt:new Date(now+1000).toISOString(),automated:false}]});
+  await runMarketingTick(env,h.deps,now+1800000);await runMarketingTick(env,h.deps,now+3600000);
+  const state=await readMarketingState(env);assert.equal(state.clients.length,1);assert.equal(state.conversations?.[0]?.status,'READY');assert.equal(h.sends(),2);
+});
