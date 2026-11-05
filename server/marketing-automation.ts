@@ -32,6 +32,7 @@ export type MarketingAttempt = {
   replyTo?: string; step: number; claimedAt: string; subject: string; body: string;
   status: 'CLAIMED' | 'SUBMITTED' | 'UNCERTAIN';
   providerId: string | null; receipt: Receipt; checkedAt: string | null;
+  website?: string | null; observation?: string | null;
 };
 export type MarketingState = {
   conversations?: MarketingConversation[];
@@ -256,8 +257,19 @@ export async function runMarketingTick(env: MarketingEnv, deps?: MarketingDeps, 
     const snapshot = await readSnapshot(env);
     if (!deps && !legacyHistoryReady(snapshot?.last_synced_at,await readLegacyBaseline(env),now)) return finish('BLOCKED','Import fresh legacy history or complete the verified old-sender retirement before live marketing.');
     const contacted = new Set([...(snapshot?.email_history || []).filter(h => !h.dry_run && (h.status === 'SENT' || h.accepted === 'YES')).map(h=>emailKey(h.email)), ...(snapshot?.leads || []).filter(l=>l.last_contacted_at || l.email_accepted === 'YES' || l.replied === 'YES' || l.booked === 'YES' || l.suppressed || l.unsubscribed).map(l=>emailKey(l.email))]);
-    let chosen: LeadQueueItem | undefined; let step = 0;
-    for (const item of candidates) {
+    let chosen: Pick<LeadQueueItem,'id'|'business_name'|'email'|'website'|'contact_name'|'website_observation'> | undefined; let step = 0;
+    // Follow-ups belong to a delivered sequence, not to the current discovery shortlist.
+    for (const email of new Set(state.attempts.filter(a=>!a.replyTo).map(a=>a.email))) {
+      if (state.stoppedEmails.includes(email) || suppressions.has(email)) continue;
+      const prior=state.attempts.filter(a=>a.email===email && !a.replyTo).sort((a,b)=>b.step-a.step)[0]!;
+      if (prior.status!=='SUBMITTED' || prior.receipt!=='DELIVERED' || prior.step>=2 || businessDaysBetweenLa(Date.parse(prior.claimedAt),now)<(prior.step===0?5:7)) continue;
+      const initial=state.attempts.find(a=>a.email===email && a.step===0 && !a.replyTo)!;
+      const observation=initial.observation || initial.body.match(/\nI noticed ([^\n]+)\.\n/)?.[1];
+      if (!observation) continue;
+      chosen={id:initial.leadId,business_name:initial.business,email,website:initial.website || (initial.domain?`https://${initial.domain}`:null),contact_name:null,website_observation:observation};
+      step=prior.step+1;break;
+    }
+    for (const item of chosen ? [] : candidates) {
       const email = emailKey(item.email);
       if (!item.contactable || state.stoppedEmails.includes(email) || suppressions.has(email)) continue;
       const prior = state.attempts.filter(a => a.email === email).sort((a,b)=>b.step-a.step);
@@ -277,7 +289,7 @@ export async function runMarketingTick(env: MarketingEnv, deps?: MarketingDeps, 
     if (!chosen) return finish('IDLE','No fresh qualified recipient or delivered follow-up is due.');
     const copy = renderMarketingEmail(chosen,step);
     const attempt: MarketingAttempt = { id: randomUUID(), leadId: chosen.id, email: emailKey(chosen.email), business: chosen.business_name,
-      domain: extractDomain(chosen.website) || '', step, claimedAt: new Date(now).toISOString(), ...copy,
+      domain: extractDomain(chosen.website) || '', website:chosen.website,observation:chosen.website_observation,step, claimedAt: new Date(now).toISOString(), ...copy,
       body: copy.body+complianceFooter({ email: chosen.email,leadId:chosen.id,env }), status:'CLAIMED',providerId:null,receipt:'UNKNOWN',checkedAt:null };
     state.attempts.push(attempt);
     await dbWriteKv(MARKETING_STATE,state,env); // durable claim BEFORE provider call

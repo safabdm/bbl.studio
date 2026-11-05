@@ -72,6 +72,15 @@ test('follow-up requires verified delivery and waits five business days',async()
   await runMarketingTick(env,h.deps,now+7*86400000);assert.equal(h.sends(),2); // previously verified delivery remains known
   const state=await readMarketingState(env);assert.equal(state.attempts[1]!.step,1);
 });
+test('delivered follow-up survives removal from the new-prospect shortlist',async()=>{
+  const h=await harness();await runMarketingTick(env,h.deps,now);
+  h.deps.candidates=async()=>[];
+  const result=await runMarketingTick(env,h.deps,now+7*86400000);
+  assert.equal(result.status,'SUBMITTED');assert.equal(h.sends(),2);
+  const state=await readMarketingState(env);
+  assert.equal(state.attempts[1]!.email,state.attempts[0]!.email);
+  assert.equal(state.attempts[1]!.step,1);
+});
 test('unknown delivery prevents follow-up and stops after 24 hours',async()=>{
   const h=await harness();h.deps.receipt=async()=> 'UNKNOWN';await runMarketingTick(env,h.deps,now);
   const r=await runMarketingTick(env,h.deps,now+7*86400000);assert.equal(r.status,'BLOCKED');assert.equal(h.sends(),1);
