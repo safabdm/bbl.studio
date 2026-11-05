@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { hasVerifiedMarketingNeed } from './marketing-automation.js';
 import { beforeEach, test } from 'node:test';
 import { resetMemoryCrmDb, dbWriteKv } from './crm-db.js';
 import { fixtureDiscoveredLead, buildLeadQueue } from './lead-queue.js';
@@ -14,6 +15,10 @@ const env: MarketingEnv & NodeJS.ProcessEnv = { CRM_DATABASE_MEMORY:'1', CRM_DAT
   UNSUBSCRIBE_SECRET:'test',SESSION_SECRET:'test',CRON_SECRET:'test',BUSINESS_POSTAL_ADDRESS:'120 Newport Center Drive, Newport Beach, CA 92660' };
 const now=Date.parse('2026-11-04T18:00:00Z'); // Wednesday 10am PST
 beforeEach(()=>resetMemoryCrmDb(env));
+test('booking fingerprint absence and builder footprints do not qualify a marketing need',()=>{
+  assert.equal(hasVerifiedMarketingNeed(fixtureDiscoveredLead({evidence:[{field:'booking',signal:'no_booking',detail:'No widget detected',source:'https://example.org'}],weak_website_signals:['Template footprint']})),false);
+  assert.equal(hasVerifiedMarketingNeed(fixtureDiscoveredLead({evidence:[{field:'website',signal:'verified_website_need',detail:'your website displays placeholder text',source:'https://example.org'}],weak_website_signals:['your website displays placeholder text']})),true);
+});
 async function harness() {
   const built=await buildLeadQueue({fixturesOnly:true,crmLeads:[],history:[],suppressedEmails:new Set(),
     discovered:[fixtureDiscoveredLead({id:'m1',business_name:'Test Salon',public_email:'owner@testsalon.com',website:'https://testsalon.com',problems:['booking requires a callback']})]},env);

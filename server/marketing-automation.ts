@@ -6,6 +6,7 @@ import { planMarketingReply, type MarketingMessage, type MarketingConversation }
 import { createHash, randomUUID } from 'node:crypto';
 import { acquireCrmLease, releaseCrmLease, dbReadKv, dbWriteKv } from './crm-db.js';
 import { listDiscoveredLeads } from './crm-discovery-store.js';
+import type { DiscoveredLead } from './crm-discovery-types.js';
 import { buildDaily20Cohort } from './daily-20-pipeline.js';
 import { type LeadQueueItem, extractDomain } from './lead-queue.js';
 import { readSnapshot } from './crm-sync-store.js';
@@ -96,6 +97,10 @@ export type MarketingDeps = {
   receipt(attempt: MarketingAttempt): Promise<Receipt>;
   send(attempt: MarketingAttempt): Promise<{ ok: boolean; id?: string }>;
 };
+export function hasVerifiedMarketingNeed(lead: DiscoveredLead): boolean {
+  return lead.evidence.some(e=>e.signal==='verified_website_need' && /^https:\/\//.test(e.source)
+    && e.detail.trim()===lead.weak_website_signals?.[0]?.trim());
+}
 function liveDeps(env: MarketingEnv): MarketingDeps {
   const readHeaders = { Authorization: `Bearer ${env.RESEND_READ_API_KEY || env.RESEND_API_KEY}` };
   const get = async (path: string) => {
@@ -108,7 +113,7 @@ function liveDeps(env: MarketingEnv): MarketingDeps {
       const [cohort, discovered] = await Promise.all([buildDaily20Cohort({}, env), listDiscoveredLeads({}, env)]);
       // Automatic qualification needs a fresh official-site contact source, not just a CRM note.
       return cohort.qualified.filter(item => discovered.some(d =>
-        d.id === item.discovery_id && d.enrichment.email_verified_public &&
+        d.id === item.discovery_id && hasVerifiedMarketingNeed(d) && d.enrichment.email_verified_public &&
         ['website_mailto','website_text'].includes(d.enrichment.email_source) &&
         emailKey(d.public_email || '') === emailKey(item.email) &&
         Date.now() - Date.parse(d.last_verified_at) >= 0 && Date.now() - Date.parse(d.last_verified_at) < 7 * 86400000 &&

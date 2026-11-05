@@ -16,6 +16,7 @@ import {
 } from './crm-discovery-types.js';
 
 export type WebsiteEvidence = {
+  verified_need?: string;
   fetched: boolean;
   final_url: string | null;
   status: number | null;
@@ -130,7 +131,13 @@ export async function fetchWebsiteEvidence(
     const mailto = extractMailto(html);
     const visible = extractEmails(html).filter((e) => !mailto.includes(e));
     const titleMatch = html.match(/<title[^>]*>([^<]*)<\/title>/i);
+    const visibleText=html.replace(/<(script|style)\b[^>]*>[\s\S]*?<\/\1>/gi,' ').replace(/<[^>]*>/g,' ').replace(/\s+/g,' ');
+    const verifiedNeed=/\b(?:email@example\.com|lorem ipsum)\b/i.test(visibleText)
+      ? 'your website displays placeholder text'
+      : /\b(?:coming soon|under construction)\b/i.test(visibleText)
+        ? 'your website displays a coming-soon or construction notice' : undefined;
     return {
+      verified_need: res.ok ? verifiedNeed : undefined,
       fetched: true,
       final_url: res.url || url,
       status: res.status,
@@ -193,6 +200,10 @@ export function scoreCandidate(
   const evidence: DiscoveryEvidenceItem[] = [];
   const problems: string[] = [];
   const weak: string[] = [];
+  if (web.fetched && !web.error && web.verified_need && web.final_url?.startsWith('https://')) {
+    weak.push(web.verified_need);
+    evidence.push({field:'website',signal:'verified_website_need',detail:web.verified_need,source:web.final_url});
+  }
   const W = DISCOVERY_SCORE_WEIGHTS;
 
   // Website (25): existence + fetchability + not broken
