@@ -7,6 +7,7 @@ import { dbWriteKv, dbReadKv, type CrmDbEnv } from './crm-db.js';
 export const OWNER_NOTIFY_KV = 'outreach:owner_notify_log';
 
 export type OwnerNotifyEnv = CrmDbEnv & {
+  MARKETING_AUTOMATION_ENABLED?: string;
   RESEND_API_KEY?: string;
   RESEND_FROM?: string;
   ADMIN_EMAIL?: string;
@@ -58,6 +59,10 @@ export async function notifyOwnerDailyReviewReady(
   const to = ownerInbox(env);
   const reviewUrl = `${adminOrigin(env)}/admin/daily-review`;
   const subject = `BBL Daily Review ready — ${opts.qualified_count} leads (${opts.day_key} PT)`;
+  if (env.MARKETING_AUTOMATION_ENABLED === 'true') {
+    await appendNotifyLog({at:nowIso(),channel:'skipped',to,subject,day_key:opts.day_key},env);
+    return {ok:true,channel:'skipped',to,subject};
+  }
   const body = [
     'Daily Outreach prep finished (server-side cron).',
     '',

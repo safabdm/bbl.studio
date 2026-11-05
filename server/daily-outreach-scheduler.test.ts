@@ -330,6 +330,15 @@ describe('PT-gated morning pipeline (GHA primary)', () => {
 });
 
 describe('owner notify (no prospect send)', () => {
+  it('keeps routine preparation quiet during autonomous marketing', async () => {
+    const result=await notifyOwnerDailyReviewReady(
+      {day_key:'2026-11-05',qualified_count:3,discovered_count:10},
+      {...memEnv,RESEND_API_KEY:'re_test',MARKETING_AUTOMATION_ENABLED:'true'},
+      async()=>{throw new Error('Routine owner email must not be sent');},
+    );
+    assert.equal(result.ok,true);
+    assert.equal(result.channel,'skipped');
+  });
   it('logs when RESEND_API_KEY missing; uses mocked Resend when set', async () => {
     const logged = await notifyOwnerDailyReviewReady(
       { day_key: '2026-10-23', qualified_count: 12, discovered_count: 40 },
