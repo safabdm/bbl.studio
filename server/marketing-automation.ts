@@ -7,6 +7,7 @@ import { createHash, randomUUID } from 'node:crypto';
 import { acquireCrmLease, releaseCrmLease, dbReadKv, dbWriteKv } from './crm-db.js';
 import { listDiscoveredLeads } from './crm-discovery-store.js';
 import type { DiscoveredLead } from './crm-discovery-types.js';
+import {readLegacyBaseline,legacyHistoryReady} from './marketing-legacy-baseline.js';
 import { buildDaily20Cohort } from './daily-20-pipeline.js';
 import { type LeadQueueItem, extractDomain } from './lead-queue.js';
 import { readSnapshot } from './crm-sync-store.js';
@@ -171,6 +172,7 @@ export async function checkMarketingIntegrations(env: MarketingEnv) {
   ]);
   const [provider, inbox, calendar, history, suppressions] = checks;
   const historyAt = history.status === 'fulfilled' ? history.value?.last_synced_at : null;
+  const baseline=await readLegacyBaseline(env);
   return {
     provider_and_bbl_identity: provider.status === 'fulfilled' && provider.value === true,
     full_inbox_read: inbox.status === 'fulfilled' && inbox.value.ok,
@@ -178,6 +180,8 @@ export async function checkMarketingIntegrations(env: MarketingEnv) {
     history_read: history.status === 'fulfilled',
     history_last_synced_at: historyAt || null,
     history_fresh: Boolean(historyAt && Date.now() - Date.parse(historyAt) < 86400000),
+    history_ready: legacyHistoryReady(historyAt,baseline),
+    retired_legacy_source: Boolean(baseline && baseline.snapshot_synced_at===historyAt),
     suppressions_read: suppressions.status === 'fulfilled',
     transmitted: 0,
   };
@@ -250,7 +254,7 @@ export async function runMarketingTick(env: MarketingEnv, deps?: MarketingDeps, 
       return finish(sent.ok && sent.id?'SUBMITTED':'BLOCKED',plan.ready?'Client explicitly accepted the package and supplied a start brief; owner handoff ready.':'Routine scope reply submitted; waiting for client details and explicit acceptance.',sent.ok && sent.id?1:0);
     }
     const snapshot = await readSnapshot(env);
-    if (!deps && (!snapshot?.last_synced_at || now-Date.parse(snapshot.last_synced_at)>86400000)) return finish('BLOCKED','Import and refresh legacy contact history before live marketing.');
+    if (!deps && !legacyHistoryReady(snapshot?.last_synced_at,await readLegacyBaseline(env),now)) return finish('BLOCKED','Import fresh legacy history or complete the verified old-sender retirement before live marketing.');
     const contacted = new Set([...(snapshot?.email_history || []).filter(h => !h.dry_run && (h.status === 'SENT' || h.accepted === 'YES')).map(h=>emailKey(h.email)), ...(snapshot?.leads || []).filter(l=>l.last_contacted_at || l.email_accepted === 'YES' || l.replied === 'YES' || l.booked === 'YES' || l.suppressed || l.unsubscribed).map(l=>emailKey(l.email))]);
     let chosen: LeadQueueItem | undefined; let step = 0;
     for (const item of candidates) {

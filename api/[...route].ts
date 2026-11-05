@@ -379,6 +379,13 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
       let body: Record<string, unknown>;
       try { body=JSON.parse(raw); } catch { return send(res,400,{ok:false,message:'Invalid history file.'}); }
       if (!body || Array.isArray(body) || typeof body !== 'object') return send(res,400,{ok:false,message:'Invalid history file.'});
+      if (body.kind === 'retire-legacy-source') {
+        const {readSnapshot}=await import('../server/crm-sync-store.js');
+        const {retireLegacySource}=await import('../server/marketing-legacy-baseline.js');
+        try {await retireLegacySource(body,(await readSnapshot(process.env))?.last_synced_at,process.env);}
+        catch {return send(res,400,{ok:false,message:'Fresh complete history and verified old-sender retirement required.'});}
+        return send(res,200,{ok:true,message:'Legacy source retired. Cloud history and live provider checks remain authoritative.'});
+      }
       if (body.kind === 'verified-opportunities') {
         const {parseVerifiedOpportunities}=await import('../server/marketing-verified-import.js');
         const {upsertDiscoveredLead}=await import('../server/crm-discovery-store.js');
