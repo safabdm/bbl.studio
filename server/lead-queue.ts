@@ -331,7 +331,8 @@ export async function buildLeadQueue(
       const byEmail = queueItemId({ email: partial.email });
       if (map.has(byEmail)) key = byEmail;
     }
-    if (!map.has(key) && partial.domain) {
+    const sharedMailboxDomain=/^(gmail\.com|googlemail\.com|outlook\.com|hotmail\.com|live\.com|msn\.com|yahoo\.[a-z.]+|ymail\.com|icloud\.com|me\.com|mac\.com|aol\.com|mail\.com|protonmail\.com|proton\.me|pm\.me|gmx\.[a-z.]+|yandex\.[a-z.]+|mail\.ru|fastmail\.com)$/i.test(partial.domain || '');
+    if (!map.has(key) && partial.domain && !sharedMailboxDomain) {
       for (const [k, v] of map) {
         if (v.domain && v.domain === partial.domain) {
           key = k;
