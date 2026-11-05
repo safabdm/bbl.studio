@@ -65,7 +65,10 @@ export async function ensureDiscoverySchema(env: CrmDbEnv = process.env): Promis
   if (isMemoryDb(env)) return;
   if (discoverySchemaReady) return;
   const sql = getSql(env);
-  await sql`
+  // Serialize first-use DDL across serverless instances; IF NOT EXISTS alone can race.
+  await sql.transaction([
+    sql`SELECT pg_advisory_xact_lock(184267, 1)`,
+    sql`
     CREATE TABLE IF NOT EXISTS crm_discovered_leads (
       id TEXT PRIMARY KEY,
       place_id TEXT NOT NULL UNIQUE,
@@ -80,16 +83,16 @@ export async function ensureDiscoverySchema(env: CrmDbEnv = process.env): Promis
       created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
       updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
     )
-  `;
-  await sql`
+    `,
+    sql`
     CREATE INDEX IF NOT EXISTS crm_discovered_leads_status_idx
     ON crm_discovered_leads (status)
-  `;
-  await sql`
+    `,
+    sql`
     CREATE INDEX IF NOT EXISTS crm_discovered_leads_score_idx
     ON crm_discovered_leads (score_total DESC)
-  `;
-  await sql`
+    `,
+    sql`
     CREATE TABLE IF NOT EXISTS crm_discovery_runs (
       id TEXT PRIMARY KEY,
       idempotency_key TEXT NOT NULL UNIQUE,
@@ -98,7 +101,8 @@ export async function ensureDiscoverySchema(env: CrmDbEnv = process.env): Promis
       created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
       finished_at TIMESTAMPTZ NULL
     )
-  `;
+    `,
+  ]);
   discoverySchemaReady = true;
 }
 

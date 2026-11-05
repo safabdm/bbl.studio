@@ -104,7 +104,10 @@ export async function ensureCrmSchema(env: CrmDbEnv = process.env): Promise<void
   }
   if (schemaReady) return;
   const sql = getSql(env);
-  await sql`
+  // Serialize first-use DDL across serverless instances; IF NOT EXISTS alone can race.
+  await sql.transaction([
+    sql`SELECT pg_advisory_xact_lock(184267, 1)`,
+    sql`
     CREATE TABLE IF NOT EXISTS crm_state (
       id TEXT PRIMARY KEY,
       snapshot JSONB NOT NULL,
@@ -112,25 +115,26 @@ export async function ensureCrmSchema(env: CrmDbEnv = process.env): Promise<void
       source_host TEXT NULL,
       updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
     )
-  `;
-  await sql`
+    `,
+    sql`
     CREATE TABLE IF NOT EXISTS crm_webhook_events (
       event_id TEXT PRIMARY KEY,
       event_type TEXT NULL,
       payload JSONB NULL,
       created_at TIMESTAMPTZ NOT NULL DEFAULT now()
     )
-  `;
-  await sql`
+    `,
+    sql`
     CREATE TABLE IF NOT EXISTS crm_kv (
       key TEXT PRIMARY KEY,
       value JSONB NOT NULL,
       updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
     )
-  `;
-  await sql`CREATE TABLE IF NOT EXISTS crm_leases (
+    `,
+    sql`CREATE TABLE IF NOT EXISTS crm_leases (
     key TEXT PRIMARY KEY, owner TEXT NOT NULL, expires_at TIMESTAMPTZ NOT NULL
-  )`;
+  )`,
+  ]);
   schemaReady = true;
 }
 
