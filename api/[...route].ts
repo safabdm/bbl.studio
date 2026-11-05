@@ -379,6 +379,14 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
       let body: Record<string, unknown>;
       try { body=JSON.parse(raw); } catch { return send(res,400,{ok:false,message:'Invalid history file.'}); }
       if (!body || Array.isArray(body) || typeof body !== 'object') return send(res,400,{ok:false,message:'Invalid history file.'});
+      if (body.kind === 'verified-opportunities') {
+        const {parseVerifiedOpportunities}=await import('../server/marketing-verified-import.js');
+        const {upsertDiscoveredLead}=await import('../server/crm-discovery-store.js');
+        let leads;
+        try { leads=parseVerifiedOpportunities(body); } catch { return send(res,400,{ok:false,message:'Valid fresh official-source opportunities required.'}); }
+        for (const lead of leads) await upsertDiscoveredLead(lead,process.env);
+        return send(res,200,{ok:true,message:`Imported ${leads.length} verified opportunities. No email sent.`});
+      }
       const { ingestCrmSync }=await import('../server/crm-sync-ingest.js');
       const result=await ingestCrmSync({...body,mode:'merge'},{rawBytes:Buffer.byteLength(raw,'utf8'),env:process.env});
       return send(res,result.ok?200:result.status,result);
