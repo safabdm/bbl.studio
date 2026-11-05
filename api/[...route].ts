@@ -371,6 +371,18 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
       });
     }
 
+    if (matches(path, '/api/admin/crm/history-import') && method === 'POST') {
+      if (!admin) return send(res,401,{ok:false,message:'Sign in required.'});
+      if (req.headers.origin !== new URL(process.env.APP_ORIGIN || 'https://www.bbl.studio').origin)
+        return send(res,403,{ok:false,message:'Use the studio settings page.'});
+      const raw=await readRawBody(req);
+      let body: Record<string, unknown>;
+      try { body=JSON.parse(raw); } catch { return send(res,400,{ok:false,message:'Invalid history file.'}); }
+      if (!body || Array.isArray(body) || typeof body !== 'object') return send(res,400,{ok:false,message:'Invalid history file.'});
+      const { ingestCrmSync }=await import('../server/crm-sync-ingest.js');
+      const result=await ingestCrmSync({...body,mode:'merge'},{rawBytes:Buffer.byteLength(raw,'utf8'),env:process.env});
+      return send(res,result.ok?200:result.status,result);
+    }
     if (matches(path, '/api/crm/sync') && method === 'POST') {
       const headers = crmHeaders(req);
       const auth = authorizeCrmSync(headers);

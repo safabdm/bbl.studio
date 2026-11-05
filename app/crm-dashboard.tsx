@@ -2508,6 +2508,19 @@ function SettingsPage() {
           </ol>
         </section>
       ) : null}
+      <section className="crm-panel crm-pad">
+        <h2>Refresh contact history</h2>
+        <p>Import a BBL history export. Existing contacts and delivery records are merged; this does not send email.</p>
+        <input aria-label="BBL history export" type="file" accept=".json,application/json" disabled={Boolean(busy)} onChange={async event => {
+          const file=event.target.files?.[0]; if (!file) return;
+          setBusy('history'); setNote('');
+          try {
+            const result=await api<{message?:string}>('/api/admin/crm/history-import',{method:'POST',body:await file.text()});
+            setNote(result.message || 'History refreshed.'); load();
+          } catch(error) { setNote(error instanceof Error?error.message:'History import failed.'); }
+          finally { setBusy(''); }
+        }} />
+      </section>
       <details className="crm-panel crm-details">
         <summary>Push-sync contract (Mac → website)</summary>
         <pre className="crm-code">{JSON.stringify(data?.contract || {}, null, 2)}</pre>
