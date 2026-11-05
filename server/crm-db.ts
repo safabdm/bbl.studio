@@ -12,6 +12,7 @@
  * Credentials: CRM_DATABASE_URL (preferred) or DATABASE_URL — server-side only.
  */
 import { neon, type NeonQueryFunction } from '@neondatabase/serverless';
+import { randomUUID } from 'node:crypto';
 import type { CrmSyncSnapshot } from './crm-types.js';
 import { emptySnapshot } from './crm-sync-store-empty.js';
 
@@ -103,7 +104,10 @@ export async function ensureCrmSchema(env: CrmDbEnv = process.env): Promise<void
   }
   if (schemaReady) return;
   const sql = getSql(env);
-  await sql`
+  // Serialize first-use DDL across serverless instances; IF NOT EXISTS alone can race.
+  await sql.transaction([
+    sql`SELECT pg_advisory_xact_lock(184267, 1)`,
+    sql`
     CREATE TABLE IF NOT EXISTS crm_state (
       id TEXT PRIMARY KEY,
       snapshot JSONB NOT NULL,
@@ -111,23 +115,57 @@ export async function ensureCrmSchema(env: CrmDbEnv = process.env): Promise<void
       source_host TEXT NULL,
       updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
     )
-  `;
-  await sql`
+    `,
+    sql`
     CREATE TABLE IF NOT EXISTS crm_webhook_events (
       event_id TEXT PRIMARY KEY,
       event_type TEXT NULL,
       payload JSONB NULL,
       created_at TIMESTAMPTZ NOT NULL DEFAULT now()
     )
-  `;
-  await sql`
+    `,
+    sql`
     CREATE TABLE IF NOT EXISTS crm_kv (
       key TEXT PRIMARY KEY,
       value JSONB NOT NULL,
       updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
     )
-  `;
+    `,
+    sql`CREATE TABLE IF NOT EXISTS crm_leases (
+    key TEXT PRIMARY KEY, owner TEXT NOT NULL, expires_at TIMESTAMPTZ NOT NULL
+  )`,
+  ]);
   schemaReady = true;
+}
+
+/** Atomic cross-instance lease. A timed-out send remains claimed separately. */
+export async function acquireCrmLease(key: string, env: CrmDbEnv, ttlSeconds = 120): Promise<string | null> {
+  await ensureCrmSchema(env);
+  const owner = randomUUID();
+  if (isMemoryDb(env)) {
+    const bank = memoryBank(env);
+    const prior = bank.kv.get(`lease:${key}`) as { expires: number } | undefined;
+    if (prior && prior.expires > Date.now()) return null;
+    bank.kv.set(`lease:${key}`, { owner, expires: Date.now() + ttlSeconds * 1000 });
+    return owner;
+  }
+  const sql = getSql(env);
+  const rows = await sql`INSERT INTO crm_leases(key, owner, expires_at)
+    VALUES (${key}, ${owner}, now() + ${ttlSeconds} * interval '1 second')
+    ON CONFLICT (key) DO UPDATE SET owner=EXCLUDED.owner, expires_at=EXCLUDED.expires_at
+    WHERE crm_leases.expires_at < now() RETURNING owner`;
+  return rows.length ? owner : null;
+}
+
+export async function releaseCrmLease(key: string, owner: string, env: CrmDbEnv): Promise<void> {
+  if (isMemoryDb(env)) {
+    const bank = memoryBank(env);
+    const prior = bank.kv.get(`lease:${key}`) as { owner: string } | undefined;
+    if (prior?.owner === owner) bank.kv.delete(`lease:${key}`);
+    return;
+  }
+  const sql = getSql(env);
+  await sql`DELETE FROM crm_leases WHERE key=${key} AND owner=${owner}`;
 }
 
 /** Durable JSON blob helpers — campaign drafts, send logs, etc. Never use local ./data on Vercel. */

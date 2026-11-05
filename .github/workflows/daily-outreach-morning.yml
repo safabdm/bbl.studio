@@ -1,0 +1,79 @@
+# Primary Daily Outreach morning pipeline (Mac-independent).
+# Source of truth for schedule — Vercel Hobby crons are backup only.
+#
+# Runs hourly Mon–Fri 13:05–17:05 UTC (covers 6–10 AM PT year-round).
+# Server gates on America/Los_Angeles 07:00–08:59 and runs
+# discover → verify → select → notify once per LA day (Neon idempotency).
+# Never auto-sends prospects.
+name: Daily Outreach Morning Pipeline
+
+on:
+  schedule:
+    # :05 past each hour 13–17 UTC, Mon–Fri
+    - cron: '5 13-17 * * 1-5'
+  workflow_dispatch:
+    inputs:
+      force_note:
+        description: 'Optional note (server still PT-gates unless already inside window)'
+        required: false
+        default: ''
+
+concurrency:
+  group: daily-outreach-morning
+  cancel-in-progress: false
+
+jobs:
+  morning-pipeline:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Trigger PT-gated outreach cron
+        env:
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+          # Production origin, e.g. https://www.bbl.studio (no trailing slash)
+          APP_ORIGIN: ${{ secrets.APP_ORIGIN }}
+          OUTREACH_CRON_URL: ${{ secrets.OUTREACH_CRON_URL }}
+        run: |
+          set -euo pipefail
+          if [ -z "${CRON_SECRET:-}" ]; then
+            echo "::error::CRON_SECRET repo secret is missing"
+            exit 1
+          fi
+          BASE="${OUTREACH_CRON_URL:-}"
+          if [ -z "$BASE" ]; then
+            if [ -z "${APP_ORIGIN:-}" ]; then
+              echo "::error::Set APP_ORIGIN or OUTREACH_CRON_URL repo secret"
+              exit 1
+            fi
+            BASE="${APP_ORIGIN%/}/api/crm/outreach/cron"
+          fi
+          URL="${BASE}?source=github-actions"
+          echo "Calling $URL (secret redacted)"
+          HTTP_CODE=$(curl -sS -o /tmp/outreach-cron.json -w "%{http_code}" \
+            -H "Authorization: Bearer ${CRON_SECRET}" \
+            -H "Accept: application/json" \
+            "$URL")
+          echo "HTTP $HTTP_CODE"
+          cat /tmp/outreach-cron.json
+          echo
+          # 200 = ran or intentional PT-window skip; 502 = stage failure
+          if [ "$HTTP_CODE" != "200" ] && [ "$HTTP_CODE" != "502" ]; then
+            echo "::error::Unexpected status $HTTP_CODE"
+            exit 1
+          fi
+          if [ "$HTTP_CODE" = "502" ]; then
+            echo "::error::Morning pipeline reported stage failure (see JSON body)"
+            exit 1
+          fi
+          # Soft-fail the job only on hard errors; skipped outside PT window is success
+          python3 - <<'PY'
+          import json, sys
+          body = json.load(open("/tmp/outreach-cron.json"))
+          if body.get("skipped"):
+              print("Skipped (expected outside 07:00–08:59 PT):", body.get("message") or body.get("reason"))
+              sys.exit(0)
+          if body.get("ok") is False:
+              print("Pipeline not ok:", body.get("message"))
+              sys.exit(1)
+          print("Pipeline ok. day_key=", body.get("day_key"), "complete=", body.get("morning_pipeline_complete"))
+          PY

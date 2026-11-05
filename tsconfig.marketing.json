@@ -1,0 +1,7 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": { "incremental": false, "allowImportingTsExtensions": true },
+  "include": [],
+  "files": ["api/[...route].ts", "server/marketing-automation.ts", "app/marketing-campaign.tsx"],
+  "exclude": ["node_modules"]
+}

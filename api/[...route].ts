@@ -31,6 +31,9 @@ async function loadCrmApi() {
 async function loadCrmDiscoveryApi() {
   return import('../server/crm-discovery-api.js');
 }
+async function loadOutreachStudioApi() {
+  return import('../server/outreach-studio-api.js');
+}
 async function loadResendWebhook() {
   return import('./resend-webhook.js');
 }
@@ -55,7 +58,7 @@ function crmHeaders(req: IncomingMessage) {
   };
 }
 
-export const config = { maxDuration: 30 };
+export const config = { maxDuration: 60 };
 
 const PROJECT_PACKAGES = {
   pkg_landing: { name: 'Simple Landing Page', depositCents: 60000 },
@@ -144,6 +147,49 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
           ? req.headers.authorization[0]
           : req.headers.authorization,
       });
+      return send(res, result.status, result.body);
+    }
+    if (matches(path, '/api/admin/crm/marketing') && (method === 'GET' || method === 'POST')) {
+      if (!admin) return send(res,401,{ok:false,message:'Sign in required.'});
+      const { readMarketingState, updateMarketingControl }=await import('../server/marketing-automation.js');
+      const state=method==='POST' ? await updateMarketingControl(process.env,await readJsonUnknown(req) as {paused?:boolean;client_email?:string;evidence?:string}) : await readMarketingState(process.env);
+      return send(res,200,{ok:true,state});
+    }
+    if (matches(path, '/api/admin/crm/marketing/integrations') && method === 'GET') {
+      if (!admin) return send(res,401,{ok:false,message:'Sign in required.'});
+      const { checkMarketingIntegrations } = await import('../server/marketing-automation.js');
+      return send(res,200,{ok:true,checks:await checkMarketingIntegrations(process.env)});
+    }
+    if (matches(path, '/api/crm/marketing/ready') && method === 'GET') {
+      const { marketingConfigBlockers } = await import('../server/marketing-automation.js');
+      const blockers = marketingConfigBlockers(process.env);
+      return send(res,200,{ ok: blockers.length === 0, blockers, offer: { pages:3, price_usd:2000, first_clients:5 }, live_checked:false });
+    }
+    if (matches(path, '/api/crm/marketing/tick') && method === 'GET') {
+      const secret = process.env.CRON_SECRET || '';
+      if (!secret || req.headers.authorization !== `Bearer ${secret}`) return send(res,401,{ok:false,message:'Unauthorized.'});
+      const { runMarketingTick } = await import('../server/marketing-automation.js');
+      const result = await runMarketingTick(process.env);
+      return send(res,result.status === 'BLOCKED' ? 503 : 200,result);
+    }
+    if (matches(path, '/api/crm/outreach/ready') && method === 'GET') {
+      const { handleOutreachReadiness } = await loadOutreachStudioApi();
+      const result = await handleOutreachReadiness(process.env);
+      return send(res, result.status, result.body);
+    }
+    if (matches(path, '/api/crm/outreach/cron') && method === 'GET') {
+      const { handleOutreachSchedulerCron } = await loadOutreachStudioApi();
+      const url = new URL(req.url || '/', 'http://localhost');
+      const source = url.searchParams.get('source') || undefined;
+      const result = await handleOutreachSchedulerCron(
+        {
+          authorization: Array.isArray(req.headers.authorization)
+            ? req.headers.authorization[0]
+            : req.headers.authorization,
+        },
+        process.env,
+        { source },
+      );
       return send(res, result.status, result.body);
     }
 
@@ -325,6 +371,18 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
       });
     }
 
+    if (matches(path, '/api/admin/crm/history-import') && method === 'POST') {
+      if (!admin) return send(res,401,{ok:false,message:'Sign in required.'});
+      if (req.headers.origin !== new URL(process.env.APP_ORIGIN || 'https://www.bbl.studio').origin)
+        return send(res,403,{ok:false,message:'Use the studio settings page.'});
+      const raw=await readRawBody(req);
+      let body: Record<string, unknown>;
+      try { body=JSON.parse(raw); } catch { return send(res,400,{ok:false,message:'Invalid history file.'}); }
+      if (!body || Array.isArray(body) || typeof body !== 'object') return send(res,400,{ok:false,message:'Invalid history file.'});
+      const { ingestCrmSync }=await import('../server/crm-sync-ingest.js');
+      const result=await ingestCrmSync({...body,mode:'merge'},{rawBytes:Buffer.byteLength(raw,'utf8'),env:process.env});
+      return send(res,result.ok?200:result.status,result);
+    }
     if (matches(path, '/api/crm/sync') && method === 'POST') {
       const headers = crmHeaders(req);
       const auth = authorizeCrmSync(headers);
@@ -486,6 +544,176 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
       const body = await readJsonUnknown(req);
       const { handleDiscoveryEnrich } = await loadCrmDiscoveryApi();
       const result = await handleDiscoveryEnrich(admin, body as never);
+      return send(res, result.status, result.body);
+    }
+
+    /* Outreach Studio */
+    if (matches(path, '/api/admin/crm/lead-queue') && method === 'GET') {
+      if (!admin) return send(res, 401, { ok: false, message: 'Sign in required.' });
+      const url = new URL(req.url || '/', 'https://www.bbl.studio');
+      const { handleLeadQueueList } = await loadOutreachStudioApi();
+      const result = await handleLeadQueueList(admin, {
+        q: url.searchParams.get('q') || undefined,
+        queue_status: (url.searchParams.get('queue_status') as never) || undefined,
+        source: (url.searchParams.get('source') as never) || undefined,
+        has_email:
+          url.searchParams.get('has_email') === '1'
+            ? true
+            : url.searchParams.get('has_email') === '0'
+              ? false
+              : undefined,
+        has_observation:
+          url.searchParams.get('has_observation') === '1'
+            ? true
+            : url.searchParams.get('has_observation') === '0'
+              ? false
+              : undefined,
+      });
+      return send(res, result.status, result.body);
+    }
+    if (matches(path, '/api/admin/crm/lead-queue/action') && method === 'POST') {
+      if (!admin) return send(res, 401, { ok: false, message: 'Sign in required.' });
+      const body = await readJsonUnknown(req);
+      const { handleLeadQueueAction } = await loadOutreachStudioApi();
+      const result = await handleLeadQueueAction(admin, body as never);
+      return send(res, result.status, result.body);
+    }
+    if (matches(path, '/api/admin/crm/lead-queue/audit') && method === 'GET') {
+      if (!admin) return send(res, 401, { ok: false, message: 'Sign in required.' });
+      const { handleLeadQueueAudit } = await loadOutreachStudioApi();
+      const result = await handleLeadQueueAudit(admin);
+      return send(res, result.status, result.body);
+    }
+    if (matches(path, '/api/admin/crm/email-studio') && method === 'GET') {
+      if (!admin) return send(res, 401, { ok: false, message: 'Sign in required.' });
+      const { handleEmailStudioList } = await loadOutreachStudioApi();
+      const result = await handleEmailStudioList(admin);
+      return send(res, result.status, result.body);
+    }
+    if (matches(path, '/api/admin/crm/email-studio/draft') && method === 'POST') {
+      if (!admin) return send(res, 401, { ok: false, message: 'Sign in required.' });
+      const body = await readJsonUnknown(req);
+      const { handleEmailStudioDraft } = await loadOutreachStudioApi();
+      const result = await handleEmailStudioDraft(admin, body as never);
+      return send(res, result.status, result.body);
+    }
+    if (matches(path, '/api/admin/crm/email-studio/approve') && method === 'POST') {
+      if (!admin) return send(res, 401, { ok: false, message: 'Sign in required.' });
+      const body = await readJsonUnknown(req);
+      const { handleEmailStudioApprove } = await loadOutreachStudioApi();
+      const result = await handleEmailStudioApprove(admin, body as never);
+      return send(res, result.status, result.body);
+    }
+    if (matches(path, '/api/admin/crm/daily-cap') && method === 'GET') {
+      if (!admin) return send(res, 401, { ok: false, message: 'Sign in required.' });
+      const { handleDailyCapGet } = await loadOutreachStudioApi();
+      const result = await handleDailyCapGet(admin);
+      return send(res, result.status, result.body);
+    }
+    if (matches(path, '/api/admin/crm/daily-cap') && method === 'POST') {
+      if (!admin) return send(res, 401, { ok: false, message: 'Sign in required.' });
+      const body = await readJsonUnknown(req);
+      const { handleDailyCapSet } = await loadOutreachStudioApi();
+      const result = await handleDailyCapSet(admin, body as never);
+      return send(res, result.status, result.body);
+    }
+    if (matches(path, '/api/admin/crm/send-controls') && method === 'GET') {
+      if (!admin) return send(res, 401, { ok: false, message: 'Sign in required.' });
+      const { handleSendControlsGet } = await loadOutreachStudioApi();
+      const result = await handleSendControlsGet(admin);
+      return send(res, result.status, result.body);
+    }
+    if (matches(path, '/api/admin/crm/send-controls') && method === 'POST') {
+      if (!admin) return send(res, 401, { ok: false, message: 'Sign in required.' });
+      const body = await readJsonUnknown(req);
+      const { handleSendControlsAction } = await loadOutreachStudioApi();
+      const result = await handleSendControlsAction(admin, body as never);
+      return send(res, result.status, result.body);
+    }
+    if (matches(path, '/api/admin/crm/outlook/connect') && method === 'POST') {
+      if (!admin) return send(res, 401, { ok: false, message: 'Sign in required.' });
+      const { handleOutlookConnect } = await loadOutreachStudioApi();
+      const result = await handleOutlookConnect(admin);
+      return send(res, result.status, result.body);
+    }
+    if (matches(path, '/api/admin/crm/outlook/callback') && method === 'GET') {
+      const url = new URL(req.url || '/', 'https://www.bbl.studio');
+      const { handleOutlookCallback } = await loadOutreachStudioApi();
+      const result = await handleOutlookCallback({
+        code: url.searchParams.get('code') || undefined,
+        state: url.searchParams.get('state') || undefined,
+        error: url.searchParams.get('error') || undefined,
+      });
+      if (result.status === 200 && result.body.ok === true) {
+        res.writeHead(303, { Location: '/admin/settings', 'Cache-Control': 'no-store', 'Referrer-Policy': 'no-referrer' });
+        return res.end();
+      }
+      return send(res, result.status, result.body);
+    }
+    if (matches(path, '/api/admin/crm/outlook/disconnect') && method === 'POST') {
+      if (!admin) return send(res, 401, { ok: false, message: 'Sign in required.' });
+      const { handleOutlookDisconnect } = await loadOutreachStudioApi();
+      const result = await handleOutlookDisconnect(admin);
+      return send(res, result.status, result.body);
+    }
+    if (matches(path, '/api/admin/crm/sender') && (method === 'GET' || method === 'POST')) {
+      if (!admin) return send(res, 401, { ok: false, message: 'Sign in required.' });
+      const body = method === 'POST' ? await readJsonUnknown(req) : {};
+      const { handleSenderPreference } = await loadOutreachStudioApi();
+      const result = await handleSenderPreference(admin, body as never);
+      return send(res, result.status, result.body);
+    }
+    if (matches(path, '/api/admin/crm/inbox/import-replies') && method === 'POST') {
+      if (!admin) return send(res, 401, { ok: false, message: 'Sign in required.' });
+      const { handleInboxImportReplies } = await loadOutreachStudioApi();
+      const result = await handleInboxImportReplies(admin);
+      return send(res, result.status, result.body);
+    }
+    if (matches(path, '/api/admin/crm/outreach-analytics') && method === 'GET') {
+      if (!admin) return send(res, 401, { ok: false, message: 'Sign in required.' });
+      const { handleOutreachAnalytics } = await loadOutreachStudioApi();
+      const result = await handleOutreachAnalytics(admin);
+      return send(res, result.status, result.body);
+    }
+    if (matches(path, '/api/admin/crm/daily-20') && method === 'GET') {
+      if (!admin) return send(res, 401, { ok: false, message: 'Sign in required.' });
+      const url = new URL(req.url || '/', 'https://www.bbl.studio');
+      const { handleDaily20Get } = await loadOutreachStudioApi();
+      const result = await handleDaily20Get(admin, { refresh: url.searchParams.get('refresh') || undefined });
+      return send(res, result.status, result.body);
+    }
+    if (matches(path, '/api/admin/crm/daily-20/approve') && method === 'POST') {
+      if (!admin) return send(res, 401, { ok: false, message: 'Sign in required.' });
+      const body = await readJsonUnknown(req);
+      const { handleDaily20BulkApprove } = await loadOutreachStudioApi();
+      const result = await handleDaily20BulkApprove(admin, body as never);
+      return send(res, result.status, result.body);
+    }
+    if (matches(path, '/api/admin/crm/follow-ups') && (method === 'GET' || method === 'POST')) {
+      if (!admin) return send(res, 401, { ok: false, message: 'Sign in required.' });
+      const body = method === 'POST' ? await readJsonUnknown(req) : { generate: false };
+      const { handleFollowUpDrafts } = await loadOutreachStudioApi();
+      const result = await handleFollowUpDrafts(admin, body as never);
+      return send(res, result.status, result.body);
+    }
+    if (matches(path, '/api/admin/crm/send-window') && method === 'POST') {
+      if (!admin) return send(res, 401, { ok: false, message: 'Sign in required.' });
+      const body = await readJsonUnknown(req);
+      const { handleSendWindowSet } = await loadOutreachStudioApi();
+      const result = await handleSendWindowSet(admin, body as never);
+      return send(res, result.status, result.body);
+    }
+    if (matches(path, '/api/admin/crm/scheduler') && method === 'GET') {
+      if (!admin) return send(res, 401, { ok: false, message: 'Sign in required.' });
+      const { handleSchedulerStatus } = await loadOutreachStudioApi();
+      const result = await handleSchedulerStatus(admin);
+      return send(res, result.status, result.body);
+    }
+    if (matches(path, '/api/admin/crm/scheduler/run') && method === 'POST') {
+      if (!admin) return send(res, 401, { ok: false, message: 'Sign in required.' });
+      const body = await readJsonUnknown(req);
+      const { handleSchedulerRunJob } = await loadOutreachStudioApi();
+      const result = await handleSchedulerRunJob(admin, body as never);
       return send(res, result.status, result.body);
     }
 

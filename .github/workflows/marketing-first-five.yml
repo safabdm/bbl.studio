@@ -1,0 +1,25 @@
+name: BBL First Five Marketing
+on:
+  schedule:
+    # Covers Pacific business hours across DST; server is the authority on hours/cap.
+    - cron: '17,47 0,16-23 * * *'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: bbl-first-five-marketing
+  cancel-in-progress: false
+jobs:
+  tick:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - name: Execute one bounded marketing tick
+        env:
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+        run: |
+          set -euo pipefail
+          test -n "${CRON_SECRET:-}" || { echo 'Missing CRON_SECRET'; exit 1; }
+          curl --fail-with-body --max-time 75 --retry 0 \
+            -H "Authorization: Bearer ${CRON_SECRET}" \
+            https://www.bbl.studio/api/crm/marketing/tick

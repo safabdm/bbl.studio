@@ -1,4 +1,18 @@
 /* BBL Studio CRM — flat, dense, owner-facing. Same palette as the site. */
+.marketing-campaign{max-width:1100px;margin:0 auto;padding:12px;font-family:Arial,sans-serif;color:var(--c-text,#161616);line-height:1.55}
+.marketing-campaign h1{margin:0;font-size:30px;letter-spacing:-.8px}
+.marketing-campaign header{border-bottom:1px solid var(--c-line,#ddd);margin-bottom:24px;padding-bottom:16px}
+.marketing-campaign h2{font-size:20px;margin:32px 0 12px}
+.marketing-campaign p{max-width:900px;color:var(--c-dim,#55554f)}
+.marketing-campaign button{border:1px solid #d6d5d0;border-radius:8px;background:#fff;padding:9px 15px;font:inherit;cursor:pointer}
+.marketing-campaign button:disabled{opacity:.5;cursor:default}
+.marketing-campaign table{border-collapse:collapse;width:100%;background:#fff;font-size:14px}
+.marketing-campaign th,.marketing-campaign td{padding:15px;text-align:left;border-bottom:1px solid #e5e4df}
+.marketing-campaign th{color:#666;font-weight:500}
+.marketing-campaign form{display:flex;align-items:end;gap:16px;flex-wrap:wrap;padding:20px;background:var(--c-panel,#f6f5f2);border:1px solid #e5e4df;border-radius:10px}
+.marketing-campaign label{display:flex;flex-direction:column;gap:6px;font-size:14px;flex:1;min-width:200px}
+.marketing-campaign input{padding:10px;border:1px solid #c9c8c3;border-radius:6px;font:inherit}
+.marketing-campaign [role=alert]{color:#b42318}
 .crm-shell{
   --c-bg:#f6f5f2;--c-panel:#ffffff;--c-raise:#ffffff;--c-line:rgba(20,20,20,.08);--c-line-2:rgba(20,20,20,.16);
   --c-text:#161616;--c-dim:#55554f;--c-faint:#8a8a83;--c-tint:rgba(20,20,20,.04);--c-tint-2:rgba(20,20,20,.07);
@@ -211,6 +225,20 @@
 .crm-mail dd{margin:0;overflow-wrap:anywhere}
 .crm-mail-subject{color:var(--c-text);font-weight:500}
 .crm-mail-body{padding:1rem .9rem;white-space:pre-wrap;line-height:1.6;font-size:.88rem;max-height:26rem;overflow:auto}
+
+/* Toolbar + drawer */
+.crm-toolbar{display:flex;align-items:center;gap:.75rem;flex-wrap:wrap}
+.crm-input{min-height:2.1rem;padding:.35rem .7rem;border:1px solid var(--c-line-2);border-radius:8px;background:var(--c-panel);color:var(--c-text);font:inherit;font-size:.88rem;min-width:min(18rem,100%)}
+.crm-input:focus{outline:2px solid var(--c-accent-bg);outline-offset:1px;border-color:var(--c-accent)}
+.crm-faint{color:var(--c-faint)}
+.crm-field{display:flex;flex-direction:column;gap:.35rem;margin-top:1rem}
+.crm-field label{font-size:.78rem;color:var(--c-dim)}
+.crm-drawer-backdrop{position:fixed;inset:0;z-index:90;background:rgba(20,20,20,.28);display:flex;justify-content:flex-end;animation:crm-fade .15s ease}
+.crm-drawer{width:min(26rem,100%);height:100%;background:var(--c-panel);border-left:1px solid var(--c-line);padding:1.25rem 1.35rem;overflow:auto;animation:crm-fade .15s ease}
+.crm-col-action .crm-btn-secondary{margin:.1rem 0 .1rem .25rem}
+@keyframes crm-fade{from{opacity:0}to{opacity:1}}
+@media (prefers-reduced-motion:reduce){.crm-drawer-backdrop,.crm-drawer,.crm-main{animation:none}}
+.crm-main{animation:crm-fade .15s ease}
 
 /* Modal */
 .crm-modal-backdrop{position:fixed;inset:0;z-index:80;display:grid;place-items:center;padding:1rem;background:rgba(20,20,20,.32)}
