@@ -462,7 +462,7 @@ export async function handleOutlookCallback(
   await dbWriteKv(OAUTH_STATE_KV, null, env);
   return {
     status: 200,
-    body: { ok: true, message: 'Outlook connected. Choose Graph as active sender in Settings.' },
+    body: { ok: true, message: 'Outlook connected. Sending controls are unchanged.' },
   };
 }
 

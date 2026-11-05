@@ -627,6 +627,10 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
         state: url.searchParams.get('state') || undefined,
         error: url.searchParams.get('error') || undefined,
       });
+      if (result.status === 200 && result.body.ok === true) {
+        res.writeHead(303, { Location: '/admin/settings', 'Cache-Control': 'no-store', 'Referrer-Policy': 'no-referrer' });
+        return res.end();
+      }
       return send(res, result.status, result.body);
     }
     if (matches(path, '/api/admin/crm/outlook/disconnect') && method === 'POST') {
