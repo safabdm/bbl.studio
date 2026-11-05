@@ -42,7 +42,7 @@ function resolveAppOrigin(env: GraphSenderEnv): string {
   );
 }
 
-const GRAPH_SCOPES = ['Mail.Send', 'Mail.Read', 'offline_access', 'openid', 'profile', 'email'];
+const GRAPH_SCOPES = ['Mail.Send', 'Mail.Read', 'User.Read', 'offline_access', 'openid', 'profile', 'email'];
 
 function nowIso(ms = Date.now()): string {
   return new Date(ms).toISOString().replace(/\.\d{3}Z$/, 'Z');
