@@ -158,6 +158,26 @@ function liveDeps(env: MarketingEnv): MarketingDeps {
   };
 }
 
+/** Owner-only setup probe. Never calls candidates, receipt or send. */
+export async function checkMarketingIntegrations(env: MarketingEnv) {
+  const io = liveDeps(env);
+  const checks = await Promise.allSettled([
+    io.providerReady(), io.inbox(new Set<string>()), io.bookings(), readSnapshot(env), listDurableSuppressions(env),
+  ]);
+  const [provider, inbox, calendar, history, suppressions] = checks;
+  const historyAt = history.status === 'fulfilled' ? history.value?.last_synced_at : null;
+  return {
+    provider_and_bbl_identity: provider.status === 'fulfilled' && provider.value === true,
+    full_inbox_read: inbox.status === 'fulfilled' && inbox.value.ok,
+    booking_calendar_read: calendar.status === 'fulfilled',
+    history_read: history.status === 'fulfilled',
+    history_last_synced_at: historyAt || null,
+    history_fresh: Boolean(historyAt && Date.now() - Date.parse(historyAt) < 86400000),
+    suppressions_read: suppressions.status === 'fulfilled',
+    transmitted: 0,
+  };
+}
+
 export async function runMarketingTick(env: MarketingEnv, deps?: MarketingDeps, now = Date.now()) {
   const blockers = marketingConfigBlockers(env);
   if (blockers.length) return { ok: false, status: 'BLOCKED', blockers, transmitted: 0 };

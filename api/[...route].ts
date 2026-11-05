@@ -155,6 +155,11 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
       const state=method==='POST' ? await updateMarketingControl(process.env,await readJsonUnknown(req) as {paused?:boolean;client_email?:string;evidence?:string}) : await readMarketingState(process.env);
       return send(res,200,{ok:true,state});
     }
+    if (matches(path, '/api/admin/crm/marketing/integrations') && method === 'GET') {
+      if (!admin) return send(res,401,{ok:false,message:'Sign in required.'});
+      const { checkMarketingIntegrations } = await import('../server/marketing-automation.js');
+      return send(res,200,{ok:true,checks:await checkMarketingIntegrations(process.env)});
+    }
     if (matches(path, '/api/crm/marketing/ready') && method === 'GET') {
       const { marketingConfigBlockers } = await import('../server/marketing-automation.js');
       const blockers = marketingConfigBlockers(process.env);
