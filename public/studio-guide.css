@@ -56,3 +56,61 @@
 .bbl-guide-action,.bbl-guide-chip,.bbl-guide-form button{transition:background-color .18s ease,border-color .18s ease,color .18s ease}
 .bbl-guide-action:hover,.bbl-guide-chip:hover,.bbl-guide-form button:not(:disabled):hover{background:var(--guide-orange);border-color:var(--guide-orange);color:#141414}
 @media(prefers-reduced-motion:reduce){.bbl-guide-action,.bbl-guide-chip,.bbl-guide-form button{transition:none}}
+
+/* Reference-style chat entry: icon only and a light rectangular invitation. */
+.bbl-guide-root{right:20px;bottom:max(20px,env(safe-area-inset-bottom))}
+.bbl-guide-toggle{width:56px;height:56px;min-height:56px;padding:0;border:0;border-radius:50%;background:#FF5A36;color:#141414;box-shadow:0 8px 28px #0004}
+.bbl-guide-toggle>svg{width:24px;height:24px;color:inherit}
+.bbl-guide-toggle:hover{background:#FF5A36;box-shadow:0 8px 28px #FF5A3640}
+.bbl-guide-nudge{bottom:76px;width:290px;max-width:calc(100vw - 40px);border:1px solid #dededb;border-radius:0;background:#fafaf8;color:#171717;box-shadow:0 14px 35px #0003}
+.bbl-guide-nudge-open{gap:0;padding:19px 30px 19px 18px;border-radius:0;font-family:Arial,sans-serif;font-size:14px;line-height:1.45}
+.bbl-guide-nudge-close{top:6px;right:6px;color:#171717;border-radius:0;width:24px;height:24px;font-size:21px}
+.bbl-guide-nudge-close:hover{background:#0000000a}
+.bbl-guide-head-icon{display:grid;place-items:center;flex:none;width:36px;height:36px;background:#FF5A36;color:#141414;border-radius:50%}
+.bbl-guide-head-icon svg{width:20px;height:20px}
+.bbl-guide-panel{border-radius:2px;bottom:76px}
+@media(max-width:700px){.bbl-guide-root{right:16px;bottom:max(16px,env(safe-area-inset-bottom))}.bbl-guide-nudge{max-width:calc(100vw - 32px)}.bbl-guide-nudge-open{font-size:14px}.bbl-guide-panel{bottom:72px}}
+/* Light chat surface follows the supplied reference, with BBL orange actions. */
+.bbl-guide-toggle,.bbl-guide-head-icon{color:#fff}
+.bbl-guide-panel{background:#fafaf8;color:#171717;border-color:#dededb;box-shadow:0 18px 56px #0004}
+.bbl-guide-head{background:#fff;border-bottom-color:#e4e4df}
+.bbl-guide-head h2{color:#171717}
+.bbl-guide-head p{color:#6b6b66}
+.bbl-guide-close{color:#171717;border-radius:0}
+.bbl-guide-thread{background:#fafaf8}
+.bbl-guide-message{background:#fff;color:#171717;border:1px solid #e9e9e4;border-radius:0}
+.bbl-guide-message.user{background:#eeeae2;color:#171717;border-color:#e0dbd0}
+.bbl-guide-actions{background:#fafaf8}
+.bbl-guide-chip{color:#171717;border-color:#d8d8d2;border-radius:0}
+.bbl-guide-action{background:#171717;color:#fff;border-color:#171717;border-radius:0}
+.bbl-guide-form{background:#fff;border-top-color:#e4e4df}
+.bbl-guide-form input{background:#fff;color:#171717;border-color:#d8d8d2;border-radius:0}
+.bbl-guide-form button{border-radius:0}
+.bbl-guide-booking{background:#fff}
+.bbl-guide-note{background:#fff;color:#777770}
+.bbl-guide-close:hover{background:#00000008}
+/* Keep BBL's dark surface while retaining the reference geometry. */
+.bbl-guide-panel{background:#171717;color:#E6E1D7;border-color:#E6E1D72b;box-shadow:0 18px 56px #0007}
+.bbl-guide-head{background:#1c1c1c;border-bottom-color:#E6E1D71f}
+.bbl-guide-head h2{color:#E6E1D7}
+.bbl-guide-head p{color:#bcb8af}
+.bbl-guide-close{color:#E6E1D7}
+.bbl-guide-thread,.bbl-guide-actions{background:#171717}
+.bbl-guide-message{background:#262626;color:#E6E1D7;border-color:#E6E1D71a}
+.bbl-guide-message.user{background:#E6E1D7;color:#141414;border-color:#E6E1D7}
+.bbl-guide-chip{color:#E6E1D7;border-color:#E6E1D74d}
+.bbl-guide-action{background:#E6E1D7;color:#141414;border-color:#E6E1D7}
+.bbl-guide-form,.bbl-guide-booking,.bbl-guide-note{background:#171717}
+.bbl-guide-form{border-top-color:#E6E1D71f}
+.bbl-guide-form input{background:#222;color:#E6E1D7;border-color:#E6E1D74d}
+.bbl-guide-note{color:#aaa59b}
+.bbl-guide-nudge{background:#222;color:#E6E1D7;border-color:#E6E1D73d;box-shadow:0 14px 35px #0006}
+.bbl-guide-nudge-close{color:#E6E1D7}
+.bbl-guide-close:hover,.bbl-guide-nudge-close:hover{background:#ffffff12}
+/* Match the site's soft corners when the chat is open. */
+.bbl-guide-panel{border-radius:13px}
+.bbl-guide-message{border-radius:8px}
+.bbl-guide-chip{border-radius:8px}
+.bbl-guide-action{border-radius:13px}
+.bbl-guide-form input,.bbl-guide-form button{border-radius:10px}
+.bbl-guide-close{border-radius:8px}
