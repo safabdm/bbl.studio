@@ -73,7 +73,7 @@ export default function UnsubscribePage() {
     <main className="unsub-page">
       <a className="skip-link" href="#content">Skip to content</a>
       <div className="unsub-shell" id="content">
-        <Link to="/" className="unsub-brand" aria-label="BBL Studio home">
+        <Link to="/" className="unsub-brand" aria-label="Business Brand Lab home">
           <BblWordmark />
         </Link>
         {state.status === 'loading' && (
@@ -87,8 +87,8 @@ export default function UnsubscribePage() {
             <h1>{state.already ? 'Already unsubscribed' : 'You are unsubscribed'}</h1>
             <p>
               {state.already
-                ? `${state.email} was already removed from BBL Studio outreach.`
-                : `${state.email} will no longer receive BBL Studio outreach emails.`}
+                ? `${state.email} was already removed from Business Brand Lab outreach.`
+                : `${state.email} will no longer receive Business Brand Lab outreach emails.`}
             </p>
             <p className="unsub-note">If this was a mistake, email hello@bbl.studio and we will help.</p>
           </section>

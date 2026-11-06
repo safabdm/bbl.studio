@@ -6,7 +6,7 @@ export function organizationNode() {
     '@type': ['Organization', 'ProfessionalService'],
     '@id': ORG_ID,
     name: STUDIO_NAME,
-    alternateName: ['BBL Studio', 'Boutique Brand & Launch Studio'],
+    alternateName: ['BBL'],
     url: `${SITE_URL}/`,
     image: `${SITE_URL}/og.png`,
     logo: `${SITE_URL}/apple-touch-icon.png`,
@@ -58,7 +58,8 @@ export function websiteNode() {
     '@type': 'WebSite',
     '@id': `${SITE_URL}/#website`,
     url: `${SITE_URL}/`,
-    name: 'BBL',
+    name: STUDIO_NAME,
+    alternateName: 'BBL',
     publisher: { '@id': ORG_ID },
     inLanguage: 'en-US',
   };

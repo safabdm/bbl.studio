@@ -68,7 +68,7 @@ function batchCap(env: ResendSendEnv): number {
 }
 
 function fromAddress(env: ResendSendEnv): string {
-  return String(env.RESEND_FROM || 'BBL Studio <hello@bbl.studio>').trim();
+  return String(env.RESEND_FROM || 'Business Brand Lab <hello@bbl.studio>').trim();
 }
 
 function nowIso(ms = Date.now()): string {

@@ -17,7 +17,7 @@ export function BblWordmark({ height = 34, variant = 'white' }: { height?: numbe
   return (
     <img
       src={variant === 'black' ? '/brand/bbl-wordmark-black.png?v=bbl-logo-20260924' : '/brand/bbl-wordmark-white.png?v=bbl-logo-20260924'}
-      alt="BBL Studio"
+      alt="Business Brand Lab"
       width={Math.round(height * 3.33)}
       height={height}
       decoding="async"

@@ -17,7 +17,7 @@ const PHONE_HREF = 'tel:+19495242324';
 const PHONE_LABEL = '(949) 524-2324';
 const EMAIL = 'hello@bbl.studio';
 const EMAIL_HREF = 'mailto:hello@bbl.studio';
-const STUDIO_LINE = 'BBL Boutique Brand & Launch Studio';
+const STUDIO_LINE = 'Business Brand Lab';
 
 const projects = [
   {
@@ -154,7 +154,7 @@ export default function Home() {
       <ScrollVideo />
       <div className="site-layer">
         <nav className="glass-nav" aria-label="Primary">
-          <a href="#top" className="brand" aria-label="BBL Studio"><BblWordmark height={42} /></a>
+          <a href="#top" className="brand" aria-label="Business Brand Lab"><BblWordmark height={42} /></a>
           <div className="nav-links">
             <a href="#services">Services</a>
             <a href="#work">Work</a>
@@ -188,7 +188,7 @@ export default function Home() {
 
         <section id="services" className="screen-section capability-screen" aria-labelledby="services-heading">
           <div className="top-row">
-            <p className="accent-badge" data-reveal>BOUTIQUE BRAND & LAUNCH STUDIO</p>
+            <p className="accent-badge" data-reveal>Business Brand Lab</p>
             <p className="intro-copy" data-reveal>{SERVICE_INTRO}</p>
           </div>
           <div className="capability-bottom">
@@ -336,8 +336,8 @@ export default function Home() {
           </div>
           <footer>
             <div className="footer-identity">
-              <a href="#top" className="footer-brand" aria-label="BBL Studio"><BblWordmark height={32} /></a>
-              <p>BBL Boutique Brand & Launch Studio, Orange County</p>
+              <a href="#top" className="footer-brand" aria-label="Business Brand Lab"><BblWordmark height={32} /></a>
+              <p>Business Brand Lab, Orange County</p>
             </div>
             <div className="footer-contacts">
               <a href={EMAIL_HREF} aria-label={`Email BBL at ${EMAIL}`}>

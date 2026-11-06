@@ -74,7 +74,7 @@ export async function notifyOwnerDailyReviewReady(
     `Open Daily Review: ${reviewUrl}`,
     '',
     'No prospect emails were sent. Approve in the dashboard before any send.',
-    '— BBL Studio Outreach Scheduler',
+    '— Business Brand Lab Outreach Scheduler',
   ]
     .filter(Boolean)
     .join('\n');
@@ -97,7 +97,7 @@ export async function notifyOwnerDailyReviewReady(
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        from: String(env.RESEND_FROM || 'BBL Studio <hello@bbl.studio>').trim(),
+        from: String(env.RESEND_FROM || 'Business Brand Lab <hello@bbl.studio>').trim(),
         to: [to],
         subject,
         text: body,

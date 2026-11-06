@@ -35,7 +35,7 @@ export function seedIfNeeded() {
     id: adminId,
     email: (process.env.ADMIN_EMAIL || 'hello@bbl.studio').toLowerCase(),
     password_hash: hashPassword(process.env.ADMIN_PASSWORD || 'S@f@1371'),
-    name: process.env.ADMIN_NAME || 'BBL Studio',
+    name: process.env.ADMIN_NAME || 'Business Brand Lab',
     created_at: created,
   });
 

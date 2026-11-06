@@ -12,7 +12,7 @@ const geistMono = Geist_Mono({
   subsets: ['latin'],
 });
 
-const title = 'Website Design in Orange County | BBL Studio';
+const title = 'Website Design in Orange County | Business Brand Lab';
 const description = 'BBL is a boutique website design studio serving Orange County businesses. Distinctive websites designed to build credibility, generate inquiries, and support business growth.';
 
 export const metadata: Metadata = {
@@ -40,7 +40,7 @@ export const metadata: Metadata = {
         url: '/og.png',
         width: 1200,
         height: 630,
-        alt: 'BBL Boutique Brand & Launch Studio in Orange County. Website design, brand, and launch support.',
+        alt: 'Business Brand Lab in Orange County. Website design, brand, and launch support.',
       },
     ],
   },

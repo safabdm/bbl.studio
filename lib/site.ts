@@ -1,5 +1,5 @@
 export const SITE_URL = 'https://www.bbl.studio';
-export const STUDIO_NAME = 'BBL Boutique Brand & Launch Studio';
+export const STUDIO_NAME = 'Business Brand Lab';
 export const STUDIO_SHORT = 'BBL';
 export const STUDIO_LINE = 'Premium Website Design Studio in Orange County';
 export const PRIMARY_DESCRIPTION =
@@ -65,13 +65,13 @@ export type PageSeo = {
 export const PUBLIC_PAGES: PageSeo[] = [
   {
     path: '/',
-    title: 'Website Design in Orange County | BBL Studio',
+    title: 'Website Design in Orange County | Business Brand Lab',
     description: 'BBL is a boutique website design studio serving Orange County businesses. Distinctive websites designed to build credibility, generate inquiries, and support business growth.',
     h1: 'Website design in Orange County.',
   },
   {
     path: '/orange-county-web-design',
-    title: 'Orange County Web Design | BBL Studio',
+    title: 'Orange County Web Design | Business Brand Lab',
     description: 'Orange County web design by BBL. Distinctive landing pages, business websites, and commercial sites planned to launch, convert, and grow.',
     h1: 'Orange County web design.',
   },
@@ -95,7 +95,7 @@ export const PUBLIC_PAGES: PageSeo[] = [
   },
   {
     path: '/work',
-    title: 'Selected Website Design Work | BBL Studio',
+    title: 'Selected Website Design Work | Business Brand Lab',
     description: 'Live BBL website work: Raysan IP, 7 Stud Farm, and IP Law Nerds. Visit each site as it exists today.',
     h1: 'Work you can visit.',
   },
@@ -119,7 +119,7 @@ export const PUBLIC_PAGES: PageSeo[] = [
   },
   {
     path: '/about',
-    title: 'About BBL | Boutique Brand & Launch Studio',
+    title: 'About BBL | Business Brand Lab',
     description: 'BBL is a premium website design studio in Orange County. Learn what the studio offers, who it serves, and how engagements work.',
     h1: 'A studio for websites that need to work.',
   },

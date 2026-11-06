@@ -87,9 +87,9 @@ export function renderMarketingEmail(item: Pick<LeadQueueItem, 'business_name' |
   return {
     subject: `${step ? 'Re: ' : ''}A website idea for ${name}`,
     body: [`Hi ${item.contact_name || `${name} team`},`, '', intro, '',
-      "I'm Safa from BBL Studio, a boutique website design studio in Orange County. We focus on clear site structure, responsive design and a professional business presence. For my first five clients, I'm offering a three-page informational website for $2,000, with mobile layouts and two revision rounds. Hosting, domain and third-party fees are separate; we'd agree on the scope before starting.", '',
+      "I'm Safa from Business Brand Lab, a boutique website design studio in Orange County. We focus on clear site structure, responsive design and a professional business presence. For my first five clients, I'm offering a three-page informational website for $2,000, with mobile layouts and two revision rounds. Hosting, domain and third-party fees are separate; we'd agree on the scope before starting.", '',
       step === 2 ? "If this isn't a priority, no need to reply; I won't follow up again." : 'Would you like me to email a short outline for your business?', '',
-      'Safa', 'Founder, BBL Studio', 'hello@bbl.studio · www.bbl.studio', '', 'This is a business service offer.'].join('\n'),
+      'Safa', 'Founder, Business Brand Lab', 'hello@bbl.studio · www.bbl.studio', '', 'This is a business service offer.'].join('\n'),
   };
 }
 

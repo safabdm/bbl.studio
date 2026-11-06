@@ -1,4 +1,4 @@
-export const STUDIO_NAME = 'BBL Boutique Brand & Launch Studio';
+export const STUDIO_NAME = 'Business Brand Lab';
 export const STUDIO_LINE = 'Premium Website Design Studio in Orange County';
 export const BRAND_STATEMENT = 'We don’t shape bodies. We build businesses.';
 

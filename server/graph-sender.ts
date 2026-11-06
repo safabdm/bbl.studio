@@ -350,7 +350,7 @@ export async function senderSettingsSnapshot(env: GraphSenderEnv = process.env) 
     },
     resend: {
       configured: Boolean(String(env.RESEND_API_KEY || '').trim()),
-      from: String(env.RESEND_FROM || 'BBL Studio <hello@bbl.studio>'),
+      from: String(env.RESEND_FROM || 'Business Brand Lab <hello@bbl.studio>'),
     },
     mail_app_path: false,
     live_send_default: false,

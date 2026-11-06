@@ -212,7 +212,7 @@ describe('resend-send gates', () => {
   it('sendViaResend mocks fetch and never hits network without mock', async () => {
     const result = await sendViaResend(
       { to: 'a@b.com', subject: 'S', text: 'T' },
-      { RESEND_API_KEY: 're_x', RESEND_FROM: 'BBL Studio <hello@bbl.studio>' },
+      { RESEND_API_KEY: 're_x', RESEND_FROM: 'Business Brand Lab <hello@bbl.studio>' },
       (async () => new Response(JSON.stringify({ id: 'abc' }), { status: 200 })) as typeof fetch,
     );
     assert.equal(result.ok, true);

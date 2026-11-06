@@ -129,11 +129,11 @@ describe('indexation safeguards', () => {
   it('uses a not-found document that is not the homepage', () => {
     const notFound = readFileSync(resolve(root, 'public/404.html'), 'utf8');
     const home = readFileSync(resolve(root, 'public/home.html'), 'utf8');
-    assert.match(notFound, /<title>Page not found \| BBL Studio<\/title>/);
+    assert.match(notFound, /<title>Page not found \| Business Brand Lab<\/title>/);
     assert.match(notFound, /noindex, nofollow/);
     assert.doesNotMatch(notFound, /rel="canonical"/);
     assert.match(home, /<link rel="canonical" href="https:\/\/www\.bbl\.studio\/" \/>/);
-    assert.match(home, /<title>Website Design in Orange County \| BBL Studio<\/title>/);
+    assert.match(home, /<title>Website Design in Orange County \| Business Brand Lab<\/title>/);
     assert.doesNotMatch(notFound, /Website Design in Orange County/);
   });
 });

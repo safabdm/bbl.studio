@@ -23,7 +23,7 @@ import type { LeadQueueItem } from './lead-queue.js';
 export const EMAIL_STUDIO_KV = 'outreach:email_studio_drafts';
 
 /** Exact owner signature (before postal + opt-out). */
-export const OWNER_SIGNATURE = ['Safa', 'Founder, BBL Studio', 'hello@bbl.studio · www.bbl.studio'].join(
+export const OWNER_SIGNATURE = ['Safa', 'Founder, Business Brand Lab', 'hello@bbl.studio · www.bbl.studio'].join(
   '\n',
 );
 
@@ -36,7 +36,7 @@ export const EMAIL_STUDIO_TEMPLATE = {
     '',
     'I was looking at {{business_name}} and noticed {{website_observation}}.',
     '',
-    'BBL Studio builds websites for Orange County beauty and wellness brands that make a stronger first impression and make booking feel effortless.',
+    'Business Brand Lab builds websites for Orange County beauty and wellness brands that make a stronger first impression and make booking feel effortless.',
     '',
     `I have a few specific ideas for {{business_name}} — happy to share them in a complimentary ${CONSULT_MINUTES}-minute website review.`,
     '',
@@ -129,7 +129,7 @@ export function draftBlocks(subject: string, body: string, lead: Partial<CrmLead
   if (!body.includes(BOOKING_CTA_URL) && !body.includes('www.bbl.studio/book')) {
     reasons.push('missing_booking_cta');
   }
-  if (!body.includes('Safa') || !body.includes('Founder, BBL Studio')) {
+  if (!body.includes('Safa') || !body.includes('Founder, Business Brand Lab')) {
     reasons.push('missing_owner_signature');
   }
   return [...new Set(reasons)];
@@ -296,7 +296,7 @@ export async function approveStudioDrafts(
 export function signatureAndFooterPresent(body: string): boolean {
   return (
     body.includes('Safa') &&
-    body.includes('Founder, BBL Studio') &&
+    body.includes('Founder, Business Brand Lab') &&
     /hello@bbl\.studio/i.test(body) &&
     /unsubscribe/i.test(body)
   );

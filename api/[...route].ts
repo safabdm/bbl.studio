@@ -254,7 +254,7 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
       const stripe = new Stripe(key);
       const proto = String(req.headers['x-forwarded-proto'] || 'https').split(',')[0].trim();
       const host = String(req.headers['x-forwarded-host'] || req.headers.host || 'www.bbl.studio').split(',')[0].trim();
-      const trustedHost = host === 'www.bbl.studio' || host === 'bbl.studio' || host === 'bbls.studio' || host.endsWith('.vercel.app') || host.endsWith('.chatgpt.site') || host.startsWith('127.0.0.1:') || host.startsWith('localhost:');
+      const trustedHost = host === 'www.bbl.studio' || host === 'bbl.studio' || host === 'bbl.studio' || host.endsWith('.vercel.app') || host.endsWith('.chatgpt.site') || host.startsWith('127.0.0.1:') || host.startsWith('localhost:');
       const origin = trustedHost ? `${proto === 'http' ? 'http' : 'https'}://${host}` : 'https://www.bbl.studio';
       const session = await stripe.checkout.sessions.create({
         mode: 'payment',

@@ -231,7 +231,7 @@ export function complianceFooter(opts: {
   const unsub = buildUnsubscribeUrl(opts.email, opts.leadId, env);
   return [
     '',
-    'BBL Studio',
+    'Business Brand Lab',
     'hello@bbl.studio · www.bbl.studio',
     postal,
     '',

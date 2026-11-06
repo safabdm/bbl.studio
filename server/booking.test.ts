@@ -69,7 +69,7 @@ describe('double booking', () => {
       phone: '9495550100',
       note: 'New website',
     }, mondayMorning, config);
-    assert.equal(first.event.summary, 'BBL Studio consultation — Ada Lovelace');
+    assert.equal(first.event.summary, 'Business Brand Lab consultation — Ada Lovelace');
     const slots = await openSlots(store, mondayMorning, config);
     assert.ok(!slots.some((slot) => slot.start === '2026-09-30T17:00:00.000Z'));
     await assert.rejects(

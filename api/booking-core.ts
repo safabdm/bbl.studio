@@ -254,7 +254,7 @@ export async function bookConsultation(store: CalendarStore, input: BookingInput
     iCalUID: eventUid(start),
     start: slot.start,
     end: slot.end,
-    summary: `BBL Studio consultation — ${fields.name}`,
+    summary: `Business Brand Lab consultation — ${fields.name}`,
     created: now.toISOString(),
     attendeeEmail: fields.email,
     name: fields.name,
@@ -476,7 +476,7 @@ export class GoogleCalendar implements CalendarStore {
       iCalUID: event.iCalUID,
       summary: event.summary,
       description: [
-        'Free BBL Studio consultation.',
+        'Free Business Brand Lab consultation.',
         `Name: ${event.name || ''}`,
         `Email: ${event.attendeeEmail || ''}`,
         event.company ? `Company: ${event.company}` : '',
@@ -540,11 +540,11 @@ export function consultationIcs(slot: Slot, fields: { name: string; email: strin
   const stamp = new Date().toISOString().replace(/[-:]/g, '').replace(/\.\d{3}Z$/, 'Z');
   const start = new Date(slot.start).toISOString().replace(/[-:]/g, '').replace(/\.\d{3}Z$/, 'Z');
   const end = new Date(slot.end).toISOString().replace(/[-:]/g, '').replace(/\.\d{3}Z$/, 'Z');
-  const description = icsEscape(`Free consultation with BBL Studio.${fields.note ? ` ${fields.note}` : ''}`);
+  const description = icsEscape(`Free consultation with Business Brand Lab.${fields.note ? ` ${fields.note}` : ''}`);
   return [
     'BEGIN:VCALENDAR',
     'VERSION:2.0',
-    'PRODID:-//BBL Studio//Consultation//EN',
+    'PRODID:-//Business Brand Lab//Consultation//EN',
     'CALSCALE:GREGORIAN',
     'METHOD:REQUEST',
     `X-WR-TIMEZONE:${timeZone}`,
@@ -553,9 +553,9 @@ export function consultationIcs(slot: Slot, fields: { name: string; email: strin
     `DTSTAMP:${stamp}`,
     `DTSTART:${start}`,
     `DTEND:${end}`,
-    `SUMMARY:${icsEscape(`BBL Studio consultation — ${fields.name}`)}`,
+    `SUMMARY:${icsEscape(`Business Brand Lab consultation — ${fields.name}`)}`,
     `DESCRIPTION:${description}`,
-    'ORGANIZER;CN=BBL Studio:mailto:hello@bbl.studio',
+    'ORGANIZER;CN=Business Brand Lab:mailto:hello@bbl.studio',
     `ATTENDEE;CN=${icsEscape(fields.name)};ROLE=REQ-PARTICIPANT;PARTSTAT=NEEDS-ACTION;RSVP=TRUE:mailto:${fields.email}`,
     'END:VEVENT',
     'END:VCALENDAR',
@@ -571,7 +571,7 @@ export async function sendBookingEmail(opts: {
 }, env: NodeJS.ProcessEnv = process.env) {
   const key = env.RESEND_API_KEY || '';
   if (!key) return false;
-  const from = env.RESEND_FROM || 'BBL Studio <hello@bbl.studio>';
+  const from = env.RESEND_FROM || 'Business Brand Lab <hello@bbl.studio>';
   const payload: Record<string, unknown> = { from, to: [opts.to], subject: opts.subject, text: opts.text };
   if (opts.ics) {
     payload.attachments = [{ filename: 'bbl-consultation.ics', content: Buffer.from(opts.ics).toString('base64') }];
@@ -587,7 +587,7 @@ export async function sendBookingEmail(opts: {
 export function confirmationCopy(slot: Slot, timeZone: string) {
   const when = `${slot.dateLabel} at ${slot.label}`;
   const zone = timezoneLabel(timeZone);
-  return { when, zone, subject: `Your BBL Studio consultation — ${when}` };
+  return { when, zone, subject: `Your Business Brand Lab consultation — ${when}` };
 }
 
 export async function sendConfirmation(slot: Slot, fields: { name: string; email: string; note?: string }, config: BookingConfig, env: NodeJS.ProcessEnv = process.env) {
@@ -595,14 +595,14 @@ export async function sendConfirmation(slot: Slot, fields: { name: string; email
   const text = [
     `Hello ${fields.name},`,
     '',
-    'Your free BBL Studio consultation is booked.',
+    'Your free Business Brand Lab consultation is booked.',
     `${copy.when}`,
     `${copy.zone}`,
     `${config.durationMinutes} minutes`,
     '',
     'A calendar file is attached. Add it to your calendar so you have the appointment.',
     '',
-    'BBL Boutique Brand & Launch Studio',
+    'Business Brand Lab',
     'hello@bbl.studio',
     '(949) 524-2324',
     'https://www.bbl.studio',
@@ -630,15 +630,15 @@ export async function sendDueReminders(store: CalendarStore, now = new Date(), c
     const copy = confirmationCopy(slot, config.timeZone);
     const ok = await sendBookingEmail({
       to: event.attendeeEmail,
-      subject: `Reminder: BBL Studio consultation ${copy.when}`,
+      subject: `Reminder: Business Brand Lab consultation ${copy.when}`,
       text: [
         `Hello ${event.name || 'there'},`,
         '',
-        'This is a reminder for your free BBL Studio consultation.',
+        'This is a reminder for your free Business Brand Lab consultation.',
         `${copy.when}`,
         `${copy.zone}`,
         '',
-        'BBL Boutique Brand & Launch Studio',
+        'Business Brand Lab',
         'hello@bbl.studio',
         '(949) 524-2324',
       ].join('\n'),

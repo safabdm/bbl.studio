@@ -69,7 +69,7 @@ export const HARD_EXCLUDE_EMAILS: readonly string[] = [
 /** Competitor / own domains — never cold-email. */
 export const COMPETITOR_DOMAINS = [
   'bbl.studio',
-  'bbls.studio',
+  'bbl.studio',
   'sapphirex.com',
   'wix.com',
   'squarespace.com',

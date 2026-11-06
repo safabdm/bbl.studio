@@ -65,7 +65,7 @@ export function adminPassword(env: AdminAuthEnv = process.env): string {
 }
 
 export function adminName(env: AdminAuthEnv = process.env): string {
-  return trim(env.ADMIN_NAME) || 'BBL Studio';
+  return trim(env.ADMIN_NAME) || 'Business Brand Lab';
 }
 
 function safeEqual(left: string, right: string) {

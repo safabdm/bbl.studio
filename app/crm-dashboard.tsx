@@ -369,7 +369,7 @@ function SidebarStatus() {
 }
 
 function CrmShell({ children }: { children: ReactNode }) {
-  usePrivateIndexing('BBL Studio CRM');
+  usePrivateIndexing('Business Brand Lab CRM');
   const [overview, setOverview] = useState<OverviewResponse | null>(null);
   const [error, setError] = useState('');
   const load = useCallback(() => {
@@ -386,7 +386,7 @@ function CrmShell({ children }: { children: ReactNode }) {
     <StatusContext.Provider value={{ overview, error, reload: load }}>
       <div className="crm-shell">
         <aside className="crm-side">
-          <Link to="/admin" className="crm-brand" aria-label="BBL Studio CRM home">
+          <Link to="/admin" className="crm-brand" aria-label="Business Brand Lab CRM home">
             <BblWordmark height={22} variant="black" />
           </Link>
           <nav className="crm-side-nav" aria-label="CRM sections">
@@ -1142,7 +1142,7 @@ function CampaignsPage() {
             <>
               <div className="crm-mail">
                 <dl>
-                  <div><dt>From</dt><dd>BBL Studio &lt;hello@bbl.studio&gt;</dd></div>
+                  <div><dt>From</dt><dd>Business Brand Lab &lt;hello@bbl.studio&gt;</dd></div>
                   <div><dt>To</dt><dd>{sample.email} · {sample.business_name}</dd></div>
                   <div><dt>Subject</dt><dd className="crm-mail-subject">{sample.subject}</dd></div>
                 </dl>
