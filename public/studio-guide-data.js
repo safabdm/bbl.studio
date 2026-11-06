@@ -10,6 +10,9 @@ function recommend(key) {
 }
 export function guideReply(question, context = {}) {
   const q = String(question).toLowerCase().trim();
+  if (/book (?:a |an )?(?:call|consultation|consulting|meeting)|schedule|appointment|consultation/.test(q)) {
+    return { text: 'Choose an available time on our consultation calendar. The booking page shows the timezone and confirms your appointment after you complete the form.', action: 'Book a consultation', href: '/booking', choices: ['View pricing', 'Find my fit'] };
+  }
   if (/custom features|e.?commerce|online store|checkout|membership|multilingual|portal|integration|booking system|more than (?:10|ten)|1[1-9]\s*pages|[2-9]\d\s*pages/.test(q)) {
     return { text: 'That needs a custom scope. The studio will review the features, page count, and content before quoting. Tell us the key requirements in a short brief.', service: 'Not sure yet', action: 'Start a brief', choices: ['View pricing', 'Brand identity'] };
   }

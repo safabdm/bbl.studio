@@ -25,3 +25,8 @@ test('unknown questions do not generate unsupported claims', () => {
   assert.equal(guideReply('email a person').action, 'Start a brief');
   assert.match(guideReply('how long?').text, /confirm a realistic schedule/);
 });
+
+test('consultation requests open the calendar without quoting a website package', () => {
+  assert.equal(guideReply('Book a consultation').href, '/booking');
+  assert.match(guideReply('One page with a booking system').text, /custom scope/);
+});

@@ -28,3 +28,14 @@
 .bbl-guide-head-copy{flex:1;min-width:0}
 .bbl-guide-head h2{font-size:15px}
 .bbl-guide-action{width:160px;justify-content:center}
+
+/* Portrait launcher, inspired by the SapphireX chat entry. */
+.bbl-guide-toggle{position:relative;width:60px;height:60px;min-height:60px;padding:2px;border-radius:50%;border:1px solid #e6e1d74d;background:#171717;display:grid;place-items:center}
+.bbl-guide-toggle>img{display:block;width:54px;height:54px;object-fit:cover;border-radius:50%}
+.bbl-guide-toggle-badge{position:absolute;right:-2px;bottom:-2px;display:grid;place-items:center;width:22px;height:22px;border:2px solid #171717;border-radius:50%;background:#e6e1d7;color:#141414}
+.bbl-guide-toggle-badge svg{width:13px;height:13px;color:inherit}
+.bbl-guide-panel{bottom:74px}
+.bbl-guide-booking{padding:0 18px 12px;display:flex;justify-content:flex-start}
+.bbl-guide-booking .bbl-guide-action{white-space:nowrap;font-size:11px;padding-inline:10px}
+.bbl-guide-head{padding:16px 18px}
+@media(max-width:700px){.bbl-guide-toggle{width:56px;height:56px;min-height:56px;padding:2px}.bbl-guide-toggle>img{width:50px;height:50px}.bbl-guide-panel{bottom:70px;max-height:calc(100dvh - 112px)}}
