@@ -114,3 +114,7 @@
 .bbl-guide-action{border-radius:13px}
 .bbl-guide-form input,.bbl-guide-form button{border-radius:10px}
 .bbl-guide-close{border-radius:8px}
+
+/* Black chat entry matches the website background. */
+.bbl-guide-toggle,.bbl-guide-head-icon{background:#0A0A0A;color:#E6E1D7;border:1px solid #E6E1D72b}
+.bbl-guide-toggle:hover{background:#FF5A36;color:#141414;border-color:#FF5A36}
