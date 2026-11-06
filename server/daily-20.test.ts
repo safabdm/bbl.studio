@@ -252,3 +252,26 @@ describe('send window 9–11 PT', () => {
     );
   });
 });
+
+
+describe('verified opportunity selection', () => {
+  it('keeps a researched local service ahead of a full pool without verified needs', async () => {
+    resetMemoryCrmDb();
+    const ordinary = Array.from({length: 22}, (_, i) => fixtureDiscoveredLead({
+      id: `pool${i}`, place_id: `pool${i}`, public_email: `hi@pool${i}.example`,
+      website: `https://pool${i}.example`, business_name: `Salon ${i}`,
+      category: 'beauty salon', score_total: 90,
+    }));
+    const observation = 'Contact page still displays placeholder contact details';
+    const researched = fixtureDiscoveredLead({id:'official_service',place_id:'official_service',
+      business_name:'Local Window Installer',category:'window installation',score_total:0,
+      website:'https://windows.example',public_email:'hello@windows.example',
+      weak_website_signals:[observation],
+      evidence:[{field:'website',signal:'verified_website_need',detail:observation,source:'https://windows.example/contact'}],
+    });
+    const cohort = await buildDaily20Cohort({crmLeads:[], discovered:[...ordinary,researched],
+      history:[],suppressedEmails:new Set(),fixturesOnly:true,now:Date.parse('2026-11-06T18:00:00Z'),qualifyCap:20},memEnv);
+    assert.equal(cohort.qualified.length,20);
+    assert.equal(cohort.qualified[0].email,'hello@windows.example');
+  });
+});

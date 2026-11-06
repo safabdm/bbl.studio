@@ -247,8 +247,14 @@ export async function buildDaily20Cohort(
   for (const item of built.items) consider(item);
   for (const item of built.excluded) consider(item, item.excluded_reason || 'excluded');
 
+  // Concrete official-site opportunities must survive the bounded shortlist,
+  // even when older high-scoring categories have no verified website need.
+  const verifiedNeed = (item: Daily20Candidate) => Number(item.evidence.some(e =>
+    e.signal === 'verified_website_need' && /^https:\/\//.test(e.source) &&
+    e.detail === item.website_observation));
   eligible.sort(
     (a, b) =>
+      verifiedNeed(b) - verifiedNeed(a) ||
       b.niche_priority - a.niche_priority ||
       (b.score_total || 0) - (a.score_total || 0) ||
       a.business_name.localeCompare(b.business_name),
