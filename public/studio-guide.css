@@ -39,3 +39,14 @@
 .bbl-guide-booking .bbl-guide-action{white-space:nowrap;font-size:11px;padding-inline:10px}
 .bbl-guide-head{padding:16px 18px}
 @media(max-width:700px){.bbl-guide-toggle{width:56px;height:56px;min-height:56px;padding:2px}.bbl-guide-toggle>img{width:50px;height:50px}.bbl-guide-panel{bottom:70px;max-height:calc(100dvh - 112px)}}
+
+.bbl-guide-nudge{position:absolute;right:0;bottom:76px;width:310px;max-width:calc(100vw - 32px);border:1px solid #e6e1d72b;border-radius:14px;background:#222;color:#e6e1d7;box-shadow:0 10px 36px #0006}
+.bbl-guide-nudge-open{display:flex;align-items:center;gap:12px;width:100%;border:0;padding:18px 32px 18px 16px;text-align:left;background:transparent;color:inherit;font:inherit;font-size:13px;line-height:1.5;cursor:pointer;border-radius:14px}
+.bbl-guide-nudge-open img{width:44px;height:44px;border-radius:50%;object-fit:cover;flex:none}
+.bbl-guide-nudge-close{position:absolute;top:4px;right:4px;border:0;border-radius:8px;width:28px;height:28px;padding:0;background:transparent;color:inherit;font-size:20px;line-height:1;cursor:pointer}
+@media(max-width:700px){.bbl-guide-nudge{bottom:70px;width:300px}.bbl-guide-nudge-open{font-size:12px;padding-block:16px}}
+@keyframes bbl-guide-welcome-in{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
+@keyframes bbl-guide-portrait-in{from{opacity:0;transform:scale(.94)}to{opacity:1;transform:scale(1)}}
+.bbl-guide-nudge{animation:bbl-guide-welcome-in .45s cubic-bezier(.2,.8,.2,1) both}
+.bbl-guide-toggle{animation:bbl-guide-portrait-in .3s ease-out both}
+@media(prefers-reduced-motion:reduce){.bbl-guide-nudge,.bbl-guide-toggle{animation:none}}

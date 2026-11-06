@@ -2,7 +2,7 @@ import { guideReply } from './studio-guide-data.js';
 
 const root = document.createElement('div');
 root.className = 'bbl-guide-root';
-root.innerHTML = `<button class="bbl-guide-toggle" type="button" aria-label="Open BBL project guide" aria-expanded="false" aria-controls="bbl-guide-panel" aria-haspopup="dialog"><img src="/brand/bbl-guide-avatar-v2.jpg" width="56" height="56" alt=""><span class="bbl-guide-toggle-badge" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M20 11a8 8 0 0 1-8 8H5l-3 3V11a8 8 0 0 1 8-8h2a8 8 0 0 1 8 8Z"/><path d="M7 9h8M7 13h5"/></svg></span></button>
+root.innerHTML = `<aside class="bbl-guide-nudge" aria-label="Chat invitation"><button type="button" class="bbl-guide-nudge-open" aria-label="Chat with Business Brand Lab"><img src="/brand/bbl-guide-avatar-v2.jpg" width="44" height="44" alt=""><span>Hey there, got any questions for us? We're happy to help!</span></button><button type="button" class="bbl-guide-nudge-close" aria-label="Dismiss chat invitation">×</button></aside><button class="bbl-guide-toggle" type="button" aria-label="Open BBL project guide" aria-expanded="false" aria-controls="bbl-guide-panel" aria-haspopup="dialog"><img src="/brand/bbl-guide-avatar-v2.jpg" width="56" height="56" alt=""><span class="bbl-guide-toggle-badge" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M20 11a8 8 0 0 1-8 8H5l-3 3V11a8 8 0 0 1 8-8h2a8 8 0 0 1 8 8Z"/><path d="M7 9h8M7 13h5"/></svg></span></button>
 <section id="bbl-guide-panel" class="bbl-guide-panel" role="dialog" aria-label="BBL project guide" hidden><header class="bbl-guide-head"><img class="bbl-guide-avatar" src="/brand/bbl-guide-avatar-v2.jpg" width="36" height="36" alt=""><div class="bbl-guide-head-copy"><h2>Business Brand Lab</h2><p>Automated project guide</p></div><button class="bbl-guide-close" type="button" aria-label="Close project guide">×</button></header><div class="bbl-guide-thread" role="log" aria-live="polite" aria-label="Conversation"></div><div class="bbl-guide-actions"></div><form class="bbl-guide-form"><label for="bbl-guide-question" class="sr-only">Your question</label><input id="bbl-guide-question" placeholder="What are you building?" autocomplete="off" maxlength="500"><button type="submit" aria-label="Send question" disabled><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="m5 12 14 0m-6-6 6 6-6 6"/></svg></button></form><div class="bbl-guide-booking"><a class="bbl-guide-action" href="/booking">Book a consultation</a></div><p class="bbl-guide-note">Automated service guide. Chats stay in this tab. Final scope is confirmed by the studio.</p></section>`;
 document.body.append(root);
 const toggle = root.querySelector('.bbl-guide-toggle');
@@ -13,8 +13,10 @@ const form = root.querySelector('form');
 const input = root.querySelector('input');
 const send = form.querySelector('button');
 const context = {};
+const nudge = root.querySelector('.bbl-guide-nudge');
 function setOpen(open, returnFocus = true) {
   panel.hidden = !open;
+  if (open) nudge.hidden = true;
   toggle.setAttribute('aria-expanded', String(open));
   if (open) input.focus({ preventScroll: true });
   else if (returnFocus) toggle.focus({ preventScroll: true });
@@ -63,10 +65,13 @@ function ask(question) {
   renderActions(reply);
   input.value = ''; send.disabled = true;
 }
+root.querySelector('.bbl-guide-nudge-open').addEventListener('click', () => setOpen(true));
+root.querySelector('.bbl-guide-nudge-close').addEventListener('click', () => { nudge.hidden = true; });
 toggle.addEventListener('click', () => setOpen(panel.hidden));
 root.querySelector('.bbl-guide-close').addEventListener('click', () => setOpen(false));
 root.addEventListener('keydown', event => { if (event.key === 'Escape' && !panel.hidden) { event.preventDefault(); setOpen(false); } });
 input.addEventListener('input', () => { send.disabled = !input.value.trim(); });
 form.addEventListener('submit', event => { event.preventDefault(); ask(input.value); input.focus({ preventScroll: true }); });
-addMessage('Hi, I’m BBL’s service guide. I can help you choose a website scope, explore branding, or compare starting prices. What do you have in mind?');
+addMessage("Hey there, got any questions for us? We're happy to help!");
+addMessage('I can guide you through BBL’s services, starting prices, and the next step for your project.');
 renderActions({ choices: ['Find my fit', 'View pricing', 'Brand identity'] });
