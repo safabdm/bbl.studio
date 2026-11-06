@@ -350,7 +350,7 @@ export function scoreCandidate(
   let fitScore = 0;
   const payment = paymentCapacitySignals(candidate);
   const blob = `${candidate.category || ''} ${candidate.types.join(' ')}`.toLowerCase();
-  if (/spa|salon|beauty|wellness|boutique|store|lawyer|dentist|real_estate|finance/.test(blob)) {
+  if (/spa|salon|beauty|wellness|boutique|store|lawyer|dentist|real_estate|finance|personal[\s_-]*train|fitness[\s_-]*(coach|trainer|studio)/.test(blob)) {
     fitScore += 8;
     evidence.push({
       field: 'fit',

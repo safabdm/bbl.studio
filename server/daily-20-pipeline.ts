@@ -149,7 +149,7 @@ export function nichePriority(item: Pick<LeadQueueItem, 'category' | 'business_n
   let score = 0;
   if (PRIORITY_NICHE_RE.test(hay)) score += 40;
   if (/\bmed\s*spa|medical\s*spa|aesthetic|dermat/i.test(hay)) score += 20;
-  if (/\bwellness|spa|salon|beauty/i.test(hay)) score += 10;
+  if (/\bwellness|spa|salon|beauty|personal[\s_-]*train|fitness[\s_-]*(coach|trainer|studio)/i.test(hay)) score += 10;
   const loc = String(item.location || '').toLowerCase();
   // OC first
   if (

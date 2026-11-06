@@ -130,6 +130,7 @@ export const DISCOVERY_CATEGORY_QUERIES = [
   'local retail shop',
   'home services',
   'consultant',
+  'personal trainer',
   'beauty salon',
   'hair salon',
   'wellness spa',

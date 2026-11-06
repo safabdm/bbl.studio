@@ -15,7 +15,7 @@ import {
   maxPerRun,
   type PlacesCandidate,
 } from './crm-discovery-places.js';
-import { buildDiscoveredLead, scoreCandidate, type WebsiteEvidence } from './crm-discovery-qualify.js';
+import { buildDiscoveredLead, scoreCandidate, fetchWebsiteEvidence, type WebsiteEvidence } from './crm-discovery-qualify.js';
 import { runDiscoveryCycle } from './crm-discovery-runner.js';
 import {
   countDiscoveredLeads,
@@ -93,6 +93,13 @@ describe('discovery config', () => {
     const q = buildSearchQueries({ cityLimit: 2, categoryLimit: 1 });
     assert.equal(q.length, 2);
     assert.match(q[0]!.textQuery, /Irvine/);
+  });
+  it('includes personal trainers without inferring payment capacity from fitness work',async()=>{
+    const queries=buildSearchQueries({cities:['Irvine, CA'],cityLimit:1,categoryLimit:20});
+    assert.ok(queries.some(q=>q.category==='personal trainer'));
+    const scored=scoreCandidate(sampleCandidate({business_name:'Trainer fixture',category:'Personal trainer',types:['personal_trainer'],rating:null,user_rating_count:0}),await fetchWebsiteEvidence(null));
+    assert.ok(scored.evidence.some(e=>e.signal==='category_fit'));
+    assert.deepEqual(scored.payment_capacity_signals,[]);
   });
   it('rotates city and business coverage within the five plan markets',()=>{
     const markets=['Irvine, CA','Newport Beach, CA','Costa Mesa, CA','Laguna Beach, CA','Tustin, CA'];
