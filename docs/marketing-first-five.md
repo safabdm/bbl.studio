@@ -8,9 +8,9 @@ Hosting, domains, subscriptions and custom booking/payment software are excluded
 
 The existing morning workflow discovers and verifies business contacts. The new
 `marketing-first-five.yml` calls `/api/crm/marketing/tick` during a UTC window
-covering Pacific business hours. The server controls DST, weekdays, the five-
-message daily cap and one message per tick. Both initial emails and follow-ups
-count against the same cap. Two follow-ups maximum, five business days after the
+covering Pacific business hours. The server controls DST, weekdays, five new
+businesses plus five replies or follow-ups per day (ten total), and one message
+per tick. Replies and follow-ups share the second allowance. Two follow-ups maximum, five business days after the
 initial and seven after the first follow-up, only with verified delivery and no
 reply, opt-out or booking. The third email explicitly ends follow-ups.
 

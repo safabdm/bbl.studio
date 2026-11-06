@@ -98,6 +98,37 @@ test('cap includes submitted and unresolved claims',async()=>{
   const first=state.attempts[0]!;state.attempts=Array.from({length:5},(_,i)=>({...first,id:String(i),email:`other${i}@example.com`,business:`Other ${i}`,domain:`other${i}.com`,receipt:'DELIVERED' as const}));
   await dbWriteKv(MARKETING_STATE,state,env);await runMarketingTick(env,h.deps,now+1800000);assert.equal(h.sends(),1);
 });
+test('five reply/follow-up messages do not consume the new-business allowance',async()=>{
+  const h=await harness();await runMarketingTick(env,h.deps,now);
+  const state=await readMarketingState(env),first=state.attempts[0]!;
+  state.attempts.push(...Array.from({length:5},(_,i)=>({...first,id:`reply${i}`,replyTo:`incoming${i}`,email:`reply${i}@example.com`,receipt:'DELIVERED' as const})));
+  await dbWriteKv(MARKETING_STATE,state,env);
+  h.deps.candidates=async()=>[{...h.item,id:'next',email:'new@next-fixture.com',website:'https://next-fixture.com',business_name:'Next fixture'}];
+  assert.equal((await runMarketingTick(env,h.deps,now+60000)).status,'SUBMITTED');
+  assert.equal(h.sends(),2);
+});
+test('five new businesses leave room for a due delivered follow-up',async()=>{
+  const h=await harness();await runMarketingTick(env,h.deps,now-7*86400000);
+  const state=await readMarketingState(env),first=state.attempts[0]!;
+  state.attempts.push(...Array.from({length:5},(_,i)=>({...first,id:`new${i}`,email:`new${i}@example.com`,business:`New ${i}`,domain:`new${i}.com`,claimedAt:new Date(now).toISOString(),receipt:'DELIVERED' as const})));
+  await dbWriteKv(MARKETING_STATE,state,env);h.deps.candidates=async()=>[];
+  assert.equal((await runMarketingTick(env,h.deps,now)).status,'SUBMITTED');
+  assert.equal((await readMarketingState(env)).attempts.at(-1)?.step,1);
+});
+test('ten total claims prevent any eleventh message',async()=>{
+  const h=await harness();await runMarketingTick(env,h.deps,now);
+  const state=await readMarketingState(env),first=state.attempts[0]!;
+  state.attempts=Array.from({length:10},(_,i)=>({...first,id:String(i),email:`other${i}@example.com`,business:`Other ${i}`,domain:`other${i}.com`,replyTo:i>=5?`reply${i}`:undefined,receipt:'DELIVERED' as const}));
+  await dbWriteKv(MARKETING_STATE,state,env);
+  assert.equal((await runMarketingTick(env,h.deps,now+60000)).status,'IDLE');assert.equal(h.sends(),1);
+});
+test('reply/follow-up allowance stops at five even when a delivered follow-up is due',async()=>{
+  const h=await harness();await runMarketingTick(env,h.deps,now-7*86400000);
+  const state=await readMarketingState(env),first=state.attempts[0]!;
+  state.attempts.push(...Array.from({length:5},(_,i)=>({...first,id:`reply${i}`,replyTo:`incoming${i}`,email:`reply${i}@example.com`,claimedAt:new Date(now).toISOString(),receipt:'DELIVERED' as const})));
+  await dbWriteKv(MARKETING_STATE,state,env);h.deps.candidates=async()=>[];
+  assert.equal((await runMarketingTick(env,h.deps,now)).status,'IDLE');assert.equal(h.sends(),1);
+});
 test('dry-run process_one leaves real send queue untouched',async()=>{
   const result=await handleSendControlsAction(true,{action:'process_one',allow_live:false},env);
   assert.equal(result.body.live_email_send,false);assert.deepEqual(await readSendQueue(env),[]);

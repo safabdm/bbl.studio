@@ -1,6 +1,6 @@
 /** One bounded cloud campaign: first five clients, three pages, $2,000.
  * Durable claims precede transmission. Uncertain attempts are never retried.
- * Each tick sends at most one message; initial + two delivered-only follow-ups.
+ * Each tick sends at most one message; five new plus five reply/follow-up messages per day.
  */
 import { planMarketingReply, type MarketingMessage, type MarketingConversation } from './marketing-conversation.js';
 import { createHash, randomUUID } from 'node:crypto';
@@ -26,6 +26,8 @@ export type MarketingEnv = SchedulerEnv & ResendSendEnv & {
 };
 export const MARKETING_STATE = 'marketing:first-five:v1';
 export const MARKETING_LEASE = 'marketing:send';
+export const MARKETING_NEW_DAILY_CAP=5;
+export const MARKETING_SEQUENCE_DAILY_CAP=5;
 type Receipt = 'UNKNOWN' | 'DELIVERED' | 'BOUNCED' | 'COMPLAINED' | 'FAILED';
 export type MarketingAttempt = {
   id: string; leadId: string; email: string; business: string; domain: string;
@@ -225,14 +227,17 @@ export async function runMarketingTick(env: MarketingEnv, deps?: MarketingDeps, 
     if (state.attempts.some(a=>a.receipt==='UNKNOWN' && now-Date.parse(a.claimedAt)>86400000)) return finish('BLOCKED','Delivery remains unverified after 24 hours; review before further sends.');
     const pt = pacificParts(now);
     if (['Sat','Sun'].includes(pt.weekday) || pt.hour < 9 || pt.hour >= 16) return finish('IDLE','Outside weekday 09:00–16:00 Pacific send window.');
-    if (state.attempts.filter(a => pacificParts(Date.parse(a.claimedAt)).dayKey === pt.dayKey).length >= 5) return finish('IDLE','Daily five-message cap reached.');
+    const today=state.attempts.filter(a=>pacificParts(Date.parse(a.claimedAt)).dayKey===pt.dayKey);
+    const newToday=today.filter(a=>!a.replyTo && a.step===0).length;
+    const sequenceToday=today.length-newToday;
+    if (today.length>=MARKETING_NEW_DAILY_CAP+MARKETING_SEQUENCE_DAILY_CAP) return finish('IDLE','Daily ten-message cap reached.');
     const suppressions = new Set((await listDurableSuppressions(env)).map(s => emailKey(s.email)));
     state.conversations ||= [];
     // Respond only to a newer message from the exact contacted address, using complete text.
     // Other addresses on the same business domain stop cold follow-ups but never trigger replies.
     const messages = (inbox.messages || []).filter(m=>!m.automated && !suppressions.has(emailKey(m.email)))
       .sort((a,b)=>Date.parse(b.receivedAt)-Date.parse(a.receivedAt));
-    for (const message of messages) {
+    for (const message of sequenceToday<MARKETING_SEQUENCE_DAILY_CAP?messages:[]) {
       const email=emailKey(message.email);
       const original=state.attempts.find(a=>a.email===email && !a.replyTo && a.status==='SUBMITTED');
       if (!original || !Number.isFinite(Date.parse(message.receivedAt)) || Date.parse(message.receivedAt)<=Date.parse(original.claimedAt) || Date.parse(message.receivedAt)>now) continue;
@@ -259,7 +264,7 @@ export async function runMarketingTick(env: MarketingEnv, deps?: MarketingDeps, 
     const contacted = new Set([...(snapshot?.email_history || []).filter(h => !h.dry_run && (h.status === 'SENT' || h.accepted === 'YES')).map(h=>emailKey(h.email)), ...(snapshot?.leads || []).filter(l=>l.last_contacted_at || l.email_accepted === 'YES' || l.replied === 'YES' || l.booked === 'YES' || l.suppressed || l.unsubscribed).map(l=>emailKey(l.email))]);
     let chosen: Pick<LeadQueueItem,'id'|'business_name'|'email'|'website'|'contact_name'|'website_observation'> | undefined; let step = 0;
     // Follow-ups belong to a delivered sequence, not to the current discovery shortlist.
-    for (const email of new Set(state.attempts.filter(a=>!a.replyTo).map(a=>a.email))) {
+    for (const email of sequenceToday<MARKETING_SEQUENCE_DAILY_CAP?new Set(state.attempts.filter(a=>!a.replyTo).map(a=>a.email)):[]) {
       if (state.stoppedEmails.includes(email) || suppressions.has(email)) continue;
       const prior=state.attempts.filter(a=>a.email===email && !a.replyTo).sort((a,b)=>b.step-a.step)[0]!;
       if (prior.status!=='SUBMITTED' || prior.receipt!=='DELIVERED' || prior.step>=2 || businessDaysBetweenLa(Date.parse(prior.claimedAt),now)<(prior.step===0?5:7)) continue;
@@ -274,11 +279,13 @@ export async function runMarketingTick(env: MarketingEnv, deps?: MarketingDeps, 
       if (!item.contactable || state.stoppedEmails.includes(email) || suppressions.has(email)) continue;
       const prior = state.attempts.filter(a => a.email === email).sort((a,b)=>b.step-a.step);
       if (prior.length) {
+        if (sequenceToday>=MARKETING_SEQUENCE_DAILY_CAP) continue;
         const last = prior[0]!;
         const due = last.step === 0 ? 5 : 7;
         if (last.step >= 2 || last.receipt !== 'DELIVERED' || businessDaysBetweenLa(Date.parse(last.claimedAt),now)<due) continue;
         step = last.step+1;
       } else {
+        if (newToday>=MARKETING_NEW_DAILY_CAP) continue;
         if (contacted.has(email)) continue;
         const site = extractDomain(item.website) || '';
         if (state.attempts.some(a => a.domain && a.domain === site || businessKey(a.business) === businessKey(item.business_name))) continue;

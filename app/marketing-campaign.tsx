@@ -25,7 +25,7 @@ export function MarketingCampaignPage() {
     finally {setBusy(false);}
   }
   return <section className="crm-page marketing-campaign">
-    <header><h1>First five clients</h1><p>Three-page website · $2,000 · Up to five messages per business day</p></header>
+    <header><h1>First five clients</h1><p>Three-page website · $2,000 · Per business day: up to 5 new businesses + 5 replies or follow-ups (10 emails total)</p></header>
     {error && <p role="alert">{error}</p>}
     {!state ? <button onClick={()=>void load()}>Refresh campaign</button> : <>
       <p><strong>{state.clients.length}/5 confirmed clients</strong> · {state.paused?'Paused':'Not paused'}</p>
