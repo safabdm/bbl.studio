@@ -15,12 +15,19 @@ const send = form.querySelector('button');
 const context = {};
 const footer = document.querySelector('footer');
 if (footer) {
-  const footerObserver = new IntersectionObserver(entries => {
-    const footerVisible = entries.some(entry => entry.isIntersecting);
-    if (footerVisible && root.contains(document.activeElement)) document.activeElement.blur();
-    root.hidden = footerVisible;
-  }, { threshold: 0 });
-  footerObserver.observe(footer);
+  let footerFrame = 0;
+  const updateFooterClearance = () => {
+    footerFrame = 0;
+    const visibleHeight = Math.max(0, window.innerHeight - footer.getBoundingClientRect().top);
+    root.style.setProperty('--guide-footer-clearance', `${visibleHeight > 0 ? visibleHeight + 16 : 0}px`);
+  };
+  const scheduleFooterClearance = () => {
+    if (!footerFrame) footerFrame = requestAnimationFrame(updateFooterClearance);
+  };
+  window.addEventListener('scroll', scheduleFooterClearance, { passive: true });
+  window.addEventListener('resize', scheduleFooterClearance);
+  new ResizeObserver(scheduleFooterClearance).observe(footer);
+  updateFooterClearance();
 }
 const nudge = root.querySelector('.bbl-guide-nudge');
 let invitationDismissed = false;
