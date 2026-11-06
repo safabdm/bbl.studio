@@ -116,34 +116,24 @@ export const DISCOVERY_SCORE_WEIGHTS = {
   contactability: 10,
 } as const;
 
-/** Orange County first, then LA / SD expansion. */
+/** Primary Orange County markets in the owner-supplied 2026 business plan. */
 export const DISCOVERY_PRIORITY_CITIES = [
   'Irvine, CA',
   'Newport Beach, CA',
   'Costa Mesa, CA',
-  'Huntington Beach, CA',
   'Laguna Beach, CA',
-  'Anaheim, CA',
-  'Orange, CA',
-  'Santa Ana, CA',
-  'Fullerton, CA',
   'Tustin, CA',
-  'Los Angeles, CA',
-  'Santa Monica, CA',
-  'Pasadena, CA',
-  'San Diego, CA',
-  'La Jolla, CA',
 ] as const;
 
 export const DISCOVERY_CATEGORY_QUERIES = [
-  'med spa',
-  'medical spa',
+  'professional services',
+  'local retail shop',
+  'home services',
+  'consultant',
   'beauty salon',
   'hair salon',
   'wellness spa',
   'boutique',
-  'luxury boutique',
-  'professional services',
 ] as const;
 
 /** Minimum total score to mark as qualified for owner review. */

@@ -94,6 +94,13 @@ describe('discovery config', () => {
     assert.equal(q.length, 2);
     assert.match(q[0]!.textQuery, /Irvine/);
   });
+  it('rotates city and business coverage within the five plan markets',()=>{
+    const markets=['Irvine, CA','Newport Beach, CA','Costa Mesa, CA','Laguna Beach, CA','Tustin, CA'];
+    const queries=Array.from({length:40},(_,rotation)=>buildSearchQueries({cityLimit:1,categoryLimit:1,rotation})[0]!);
+    assert.deepEqual([...new Set(queries.map(x=>x.city))].sort(),[...markets].sort());
+    assert.ok(new Set(queries.map(x=>x.category)).size>=5);
+    assert.ok(queries.some(x=>x.category==='professional services'));
+  });
 });
 
 describe('evidence scoring', () => {

@@ -64,9 +64,13 @@ export function buildSearchQueries(opts: {
   categories?: readonly string[];
   cityLimit?: number;
   categoryLimit?: number;
+  rotation?: number;
 } = {}): Array<{ city: string; category: string; textQuery: string }> {
-  const cities = (opts.cities || DISCOVERY_PRIORITY_CITIES).slice(0, opts.cityLimit ?? 3);
-  const categories = (opts.categories || DISCOVERY_CATEGORY_QUERIES).slice(0, opts.categoryLimit ?? 2);
+  const rotate=(values:readonly string[],offset:number)=>{const n=((offset%values.length)+values.length)%values.length;return [...values.slice(n),...values.slice(0,n)];};
+  const cityPool=opts.cities || DISCOVERY_PRIORITY_CITIES;
+  const rotation=Math.trunc(opts.rotation || 0);
+  const cities = rotate(cityPool,rotation).slice(0, opts.cityLimit ?? 3);
+  const categories = rotate(opts.categories || DISCOVERY_CATEGORY_QUERIES,Math.floor(rotation/Math.max(1,cityPool.length))).slice(0, opts.categoryLimit ?? 2);
   const out: Array<{ city: string; category: string; textQuery: string }> = [];
   for (const city of cities) {
     for (const category of categories) {

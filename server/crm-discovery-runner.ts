@@ -223,7 +223,8 @@ export async function runDiscoveryCycle(opts: RunDiscoveryOpts): Promise<Discove
   const cityLimit = opts.city_limit ?? parseLimit(env.DISCOVERY_CITY_LIMIT, 2);
   const categoryLimit = opts.category_limit ?? parseLimit(env.DISCOVERY_CATEGORY_LIMIT, 2);
   const cap = opts.max_results ?? maxPerRun(env);
-  const queries = buildSearchQueries({ cityLimit, categoryLimit });
+  const rotation=Number.parseInt(createHash('sha256').update(idempotency_key).digest('hex').slice(0,8),16);
+  const queries = buildSearchQueries({ cityLimit, categoryLimit, rotation });
   const seenPlace = new Set<string>();
   let discovered = 0;
   let upserted = 0;
