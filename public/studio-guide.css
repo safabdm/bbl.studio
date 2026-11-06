@@ -50,3 +50,9 @@
 .bbl-guide-nudge{animation:bbl-guide-welcome-in .45s cubic-bezier(.2,.8,.2,1) both}
 .bbl-guide-toggle{animation:bbl-guide-portrait-in .3s ease-out both}
 @media(prefers-reduced-motion:reduce){.bbl-guide-nudge,.bbl-guide-toggle{animation:none}}
+
+.bbl-guide-toggle-badge{background:var(--guide-orange);color:#141414}
+.bbl-guide-toggle:hover{border-color:var(--guide-orange);box-shadow:0 8px 28px #ff5a3633}
+.bbl-guide-action,.bbl-guide-chip,.bbl-guide-form button{transition:background-color .18s ease,border-color .18s ease,color .18s ease}
+.bbl-guide-action:hover,.bbl-guide-chip:hover,.bbl-guide-form button:not(:disabled):hover{background:var(--guide-orange);border-color:var(--guide-orange);color:#141414}
+@media(prefers-reduced-motion:reduce){.bbl-guide-action,.bbl-guide-chip,.bbl-guide-form button{transition:none}}
