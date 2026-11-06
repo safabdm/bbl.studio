@@ -125,3 +125,5 @@
 
 /* Final launcher: logo orange with a black chat glyph. */
 .bbl-guide-toggle,.bbl-guide-toggle:hover{background:#FF5A36;color:#141414;border-color:#FF5A36}
+
+.bbl-guide-root[hidden]{display:none!important}

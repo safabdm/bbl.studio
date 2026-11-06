@@ -13,6 +13,15 @@ const form = root.querySelector('form');
 const input = root.querySelector('input');
 const send = form.querySelector('button');
 const context = {};
+const footer = document.querySelector('footer');
+if (footer) {
+  const footerObserver = new IntersectionObserver(entries => {
+    const footerVisible = entries.some(entry => entry.isIntersecting);
+    if (footerVisible && root.contains(document.activeElement)) document.activeElement.blur();
+    root.hidden = footerVisible;
+  }, { threshold: 0 });
+  footerObserver.observe(footer);
+}
 const nudge = root.querySelector('.bbl-guide-nudge');
 let invitationDismissed = false;
 const hero = document.querySelector('.hero');
