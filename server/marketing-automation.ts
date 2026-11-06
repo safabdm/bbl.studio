@@ -190,6 +190,18 @@ export async function checkMarketingIntegrations(env: MarketingEnv) {
   };
 }
 
+/** Read-only provider evidence: cannot claim, send, or modify campaign state. */
+export async function checkMarketingReceipts(env: MarketingEnv, deps?: Pick<MarketingDeps,'providerReady'|'receipt'>) {
+  const io = deps || liveDeps(env);
+  if (!await io.providerReady()) throw new Error('Verified BBL provider access required.');
+  const state = await readMarketingState(env);
+  const receipts = [];
+  for (const attempt of state.attempts.filter(a=>a.status==='SUBMITTED')) {
+    receipts.push({id:attempt.id,email:attempt.email,providerId:attempt.providerId,receipt:await io.receipt(attempt)});
+  }
+  return {checkedAt:new Date().toISOString(),receipts,transmitted:0};
+}
+
 export async function runMarketingTick(env: MarketingEnv, deps?: MarketingDeps, now = Date.now()) {
   const blockers = marketingConfigBlockers(env);
   if (blockers.length) return { ok: false, status: 'BLOCKED', blockers, transmitted: 0 };

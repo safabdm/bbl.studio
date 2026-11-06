@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { hasVerifiedMarketingNeed } from './marketing-automation.js';
+import { checkMarketingReceipts, hasVerifiedMarketingNeed } from './marketing-automation.js';
 import { beforeEach, test } from 'node:test';
 import { resetMemoryCrmDb, dbWriteKv } from './crm-db.js';
 import { fixtureDiscoveredLead, buildLeadQueue } from './lead-queue.js';
@@ -188,4 +188,15 @@ test('explicit completed acceptance creates one handoff and reserves one place',
   h.deps.inbox=async()=>({ok:true,replies:[h.item.email],optouts:[],messages:[{id:'in2',email:h.item.email,subject:'Re',text,receivedAt:new Date(now+1000).toISOString(),automated:false}]});
   await runMarketingTick(env,h.deps,now+1800000);await runMarketingTick(env,h.deps,now+3600000);
   const state=await readMarketingState(env);assert.equal(state.clients.length,1);assert.equal(state.conversations?.[0]?.status,'READY');assert.equal(h.sends(),2);
+});
+
+test('receipt inspection is read-only and never runs sender or candidate selection', async()=>{
+  const h=await harness();
+  await runMarketingTick(env,h.deps,now);
+  const before=JSON.stringify(await readMarketingState(env));
+  const result=await checkMarketingReceipts(env,{providerReady:async()=>true,receipt:async()=> 'DELIVERED'});
+  assert.equal(result.transmitted,0);
+  assert.equal(result.receipts.length,1);
+  assert.equal(result.receipts[0].receipt,'DELIVERED');
+  assert.equal(JSON.stringify(await readMarketingState(env)),before);
 });
