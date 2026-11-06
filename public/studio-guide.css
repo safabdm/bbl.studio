@@ -118,3 +118,7 @@
 /* Black chat entry matches the website background. */
 .bbl-guide-toggle,.bbl-guide-head-icon{background:#0A0A0A;color:#E6E1D7;border:1px solid #E6E1D72b}
 .bbl-guide-toggle:hover{background:#FF5A36;color:#141414;border-color:#FF5A36}
+
+/* Portrait appears in the welcome card and open-chat header only. */
+.bbl-guide-nudge-open{gap:12px}
+.bbl-guide-nudge-open img{width:44px;height:44px;object-fit:cover;border-radius:50%;flex:none}
