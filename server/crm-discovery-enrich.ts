@@ -40,6 +40,13 @@ export async function enrichNeedsEmailLeads(
   let notFound = 0;
   const skippedGuess = 0;
   const updated: string[] = [];
+  // Four public-site reads at a time; bounded by limit<=40. Preserve deterministic writes.
+  const websites = new Map<string, Awaited<ReturnType<typeof fetchWebsiteEvidence>>>();
+  for (let start = 0; start < leads.length; start += 4) {
+    const batch = leads.slice(start, start + 4);
+    const evidence = await Promise.all(batch.map(lead => fetchWebsiteEvidence(lead.website, { fetchImpl: opts.fetchImpl })));
+    batch.forEach((lead, i) => websites.set(lead.id, evidence[i]!));
+  }
 
   for (const lead of leads) {
     if (!lead.website) {
@@ -48,7 +55,7 @@ export async function enrichNeedsEmailLeads(
       continue;
     }
     attempted += 1;
-    const web = await fetchWebsiteEvidence(lead.website, { fetchImpl: opts.fetchImpl });
+    const web = websites.get(lead.id)!;
     const email = web.mailto_emails[0] || web.visible_emails[0] || null;
     if (!email) {
       notFound += 1;

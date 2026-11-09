@@ -1,0 +1,19 @@
+{
+  "id": "bbl-booking-friction-v1",
+  "idea": "Make the next step obvious",
+  "width": 1080,
+  "height": 1920,
+  "fps": 30,
+  "duration": 18,
+  "caption": "A beautiful website still needs a clear next step. Make booking easy to find, keep the path focused, and help people understand what happens next. BBL Studio — web design, UX/UI and brand experiences. Explore bbl.studio.",
+  "hashtags": ["#BBLStudio", "#UXDesign", "#WebDesign", "#BrandExperience"],
+  "scenes": [
+    {"start": 0, "end": 4, "lines": ["ONE TAP", "TOO FAR?"], "subtitle": "Make your booking path easier to follow.", "motion": "Damped pendulum swings across an open ring; type rises with cubic easing."},
+    {"start": 4, "end": 8.5, "lines": ["FRICTION", "ADDS UP."], "subtitle": "Find the service. Find the button. Start again.", "motion": "Three offset interface cards stack and drift away from the pointer."},
+    {"start": 8.5, "end": 14, "lines": ["MAKE THE", "NEXT STEP", "OBVIOUS."], "subtitle": "Clear service. Clear action. A focused booking path.", "motion": "Cards align into a single booking action with a spring-settled cursor."},
+    {"start": 14, "end": 18, "lines": ["BBL", "STUDIO"], "subtitle": "Design that moves business forward.", "motion": "Pendulum settles; brand lockup and bbl.studio resolve."}
+  ],
+  "claims": "General design guidance only. No client case study, measured uplift, testimonial or business result is claimed.",
+  "status": "draft",
+  "approvalRequired": true
+}

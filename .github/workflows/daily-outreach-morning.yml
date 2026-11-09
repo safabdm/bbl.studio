@@ -49,7 +49,7 @@ jobs:
           fi
           URL="${BASE}?source=github-actions"
           echo "Calling $URL (secret redacted)"
-          HTTP_CODE=$(curl -sS -o /tmp/outreach-cron.json -w "%{http_code}" \
+          HTTP_CODE=$(curl -sS --max-time 290 --retry 2 --retry-delay 3 -o /tmp/outreach-cron.json -w "%{http_code}" \
             -H "Authorization: Bearer ${CRON_SECRET}" \
             -H "Accept: application/json" \
             "$URL")

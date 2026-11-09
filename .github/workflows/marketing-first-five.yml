@@ -12,14 +12,14 @@ concurrency:
 jobs:
   tick:
     runs-on: ubuntu-latest
-    timeout-minutes: 3
+    timeout-minutes: 8
     steps:
-      - name: Execute one bounded marketing tick
+      - name: Run draft-only growth and authorized provider checks
         env:
           CRON_SECRET: ${{ secrets.CRON_SECRET }}
         run: |
           set -euo pipefail
           test -n "${CRON_SECRET:-}" || { echo 'Missing CRON_SECRET'; exit 1; }
-          curl --fail-with-body --max-time 75 --retry 0 \
+          curl --fail-with-body --max-time 290 --retry 0 \
             -H "Authorization: Bearer ${CRON_SECRET}" \
-            https://www.bbl.studio/api/crm/marketing/tick
+            https://www.bbl.studio/api/crm/growth/tick

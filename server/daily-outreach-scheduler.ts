@@ -3,7 +3,7 @@
  * Never auto-sends prospects. Owner must approve in Daily Review.
  * Mail.app cannot run when Mac is asleep — Graph/Resend only for post-approval send.
  */
-import { dbReadKv, dbWriteKv, type CrmDbEnv } from './crm-db.js';
+import { acquireCrmLease, releaseCrmLease, dbReadKv, dbWriteKv, type CrmDbEnv } from './crm-db.js';
 import { authorizeCron } from './crm-discovery-api.js';
 import { runDiscoveryCycle, type DiscoveryRunnerEnv } from './crm-discovery-runner.js';
 import { enrichNeedsEmailLeads } from './crm-discovery-enrich.js';
@@ -532,7 +532,7 @@ export async function runSchedulerJob(
       let drafts_blocked = 0;
       const draft_ids: string[] = [];
       for (const q of cohort.qualified) {
-        const draft = await upsertStudioDraftFromLead(q, { regenerate: true }, env);
+        const draft = await upsertStudioDraftFromLead(q, {}, env);
         if (draft.blocked_reasons.length || !draft.observation_verified) drafts_blocked += 1;
         else {
           drafts_ready += 1;
@@ -798,6 +798,10 @@ export async function dispatchOutreachCron(
     };
   }
 
+  const leaseKey = `outreach:morning:${day_key}`;
+  const lease = await acquireCrmLease(leaseKey, env, 300);
+  if (!lease) return { status: 200, body: { ok:true, skipped:true, reason:'pipeline_busy', day_key, auto_send:false, live_email_send:false } };
+  try {
   const weekdayDue = opts.forceJobs?.length ? opts.forceJobs : morningPipelineJobs();
   const results: SchedulerJobResult[] = [];
   for (const job of weekdayDue) {
@@ -809,6 +813,7 @@ export async function dispatchOutreachCron(
         seedProofFixtures: opts.seedProofFixtures,
       }),
     );
+    if (results.at(-1)?.status === 'failed') break;
   }
 
   let state = await readSchedulerState(env);
@@ -857,6 +862,7 @@ export async function dispatchOutreachCron(
         : 'No outreach jobs due.',
     },
   };
+  } finally { await releaseCrmLease(leaseKey, lease, env); }
 }
 
 export async function getSchedulerDashboard(env: SchedulerEnv = process.env, nowMs = Date.now()) {

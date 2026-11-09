@@ -1,5 +1,7 @@
 # dependencies
 /node_modules
+/.pnpm-store/
+*.tsbuildinfo
 /.pnpm-home
 /crm-sync-payload.dry-run.json
 /.pnp

@@ -250,7 +250,10 @@ export async function runDiscoveryCycle(opts: RunDiscoveryOpts): Promise<Discove
         if (result.fail_closed) break;
         continue;
       }
-      for (const candidate of result.candidates) {
+      // Places returns at most five candidates here. Fetch their public evidence in
+      // parallel so the cloud function fits a bounded execution window; writes stay sequential.
+      const websites = await Promise.all(result.candidates.map(candidate => fetchWebsiteEvidence(candidate.website, { fetchImpl: opts.fetchImpl })));
+      for (const [candidateIndex, candidate] of result.candidates.entries()) {
         if (discovered >= cap) break;
         if (seenPlace.has(candidate.place_id)) {
           skippedDupes += 1;
@@ -262,7 +265,7 @@ export async function runDiscoveryCycle(opts: RunDiscoveryOpts): Promise<Discove
         if (prior) {
           skippedDupes += 1;
           // Still refresh verification lightly without counting as new discovery
-          const web = await fetchWebsiteEvidence(candidate.website, { fetchImpl: opts.fetchImpl });
+          const web = websites[candidateIndex]!;
           const refreshed = buildDiscoveredLead(candidate, web);
           await upsertDiscoveredLead({ ...refreshed, id: prior.id, created_at: prior.created_at }, env);
           upserted += 1;
@@ -270,7 +273,7 @@ export async function runDiscoveryCycle(opts: RunDiscoveryOpts): Promise<Discove
           continue;
         }
 
-        const web = await fetchWebsiteEvidence(candidate.website, { fetchImpl: opts.fetchImpl });
+        const web = websites[candidateIndex]!;
         const lead = buildDiscoveredLead(candidate, web);
         await upsertDiscoveredLead(lead, env);
         discovered += 1;

@@ -58,7 +58,7 @@ function crmHeaders(req: IncomingMessage) {
   };
 }
 
-export const config = { maxDuration: 60 };
+export const config = { maxDuration: 300 };
 
 const PROJECT_PACKAGES = {
   pkg_landing: { name: 'Simple Landing Page', depositCents: 60000 },
@@ -148,6 +148,30 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
           : req.headers.authorization,
       });
       return send(res, result.status, result.body);
+    }
+    if (matches(path, '/api/crm/growth/tick') && method === 'GET') {
+      const secret = process.env.CRON_SECRET || '';
+      if (!secret || req.headers.authorization !== `Bearer ${secret}`) return send(res,401,{ok:false,message:'Unauthorized.'});
+      const { runGrowthTick } = await import('../server/growth.js');
+      const result = await runGrowthTick(process.env);
+      return send(res,result.ok ? 200 : 503,result);
+    }
+    if (path.startsWith('/api/admin/crm/growth')) {
+      if (!admin) return send(res,401,{ok:false,message:'Sign in required.'});
+      if (method === 'POST' && req.headers.origin !== new URL(process.env.APP_ORIGIN || 'https://www.bbl.studio').origin) return send(res,403,{ok:false,message:'Use the growth dashboard.'});
+      const { growthDashboard, saveSalesRecord } = await import('../server/growth.js');
+      if (matches(path, '/api/admin/crm/growth') && method === 'GET') return send(res,200,{ok:true,...await growthDashboard(process.env)});
+      if (matches(path, '/api/admin/crm/growth/sales') && method === 'POST') {
+        try { return send(res,200,{ok:true,record:await saveSalesRecord(await readJsonUnknown(req) as never,process.env)}); }
+        catch { return send(res,400,{ok:false,message:'Valid lead, stage, verified requirements and evidence required; retry if busy.'}); }
+      }
+      if (matches(path, '/api/admin/crm/growth/social') && method === 'POST') {
+        const { saveSocialPost } = await import('../server/growth-social.js');
+        const body = await readJsonUnknown(req) as {post:import('../server/growth-social.js').SocialPost; approval?:{qa:string;digest:string}};
+        try { return send(res,200,{ok:true,post:await saveSocialPost(body.post,process.env,body.approval ? {...body.approval,reviewer:'authenticated-owner'} : undefined)}); }
+        catch (error) { return send(res,400,{ok:false,message:error instanceof Error ? error.message : 'Invalid social post.'}); }
+      }
+      return send(res,404,{ok:false,message:'Not found.'});
     }
     if (matches(path, '/api/admin/crm/marketing') && (method === 'GET' || method === 'POST')) {
       if (!admin) return send(res,401,{ok:false,message:'Sign in required.'});
