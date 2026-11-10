@@ -35,6 +35,16 @@ const services: Partial<GrowthServices> = {
 };
 beforeEach(() => resetMemoryCrmDb(env));
 
+void test('Google failures retry after an hour and incomplete Google evidence is never logged verified', async () => {
+  let checked=0;
+  const failed={at:new Date(now-2*3600000).toISOString(),technical:[],search:{status:'verified' as const,rows:[]},traffic:{status:'unavailable' as const}};
+  const result=await runGrowthTick({...env,GROWTH_MONITOR_ENABLED:'true'},noNetwork,now,{
+    ...services,readMonitor:async()=>failed,monitor:async()=>{checked++;return {...failed,at:new Date(now).toISOString()};},
+  });
+  assert.equal(checked,1);
+  assert.ok(result.logs?.some(l=>l.agent==='seo_geo' && l.status==='partial'));
+});
+
 void test('readiness distinguishes missing permissions from connected providers without leaking secrets', () => {
   const result = growthReadiness(
     {
