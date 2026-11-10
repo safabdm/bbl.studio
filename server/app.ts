@@ -237,6 +237,11 @@ app.get('/api/admin/crm/growth', async c => {
   const {growthDashboard} = await import('./growth.js');
   return c.json({ok:true,...await growthDashboard(process.env)});
 });
+app.get('/api/admin/crm/growth/readiness', async c => {
+  if (!requireAdmin(c)) return c.json({ok:false,message:'Sign in required.'},401);
+  const {growthReadiness}=await import('./growth-readiness.js');
+  return c.json({ok:true,...growthReadiness(process.env)});
+});
 app.post('/api/admin/crm/growth/:action', async c => {
   if (!requireAdmin(c)) return c.json({ok:false,message:'Sign in required.'},401);
   if (c.req.header('origin') !== new URL(process.env.APP_ORIGIN || c.req.url).origin) return c.json({ok:false,message:'Use the growth dashboard.'},403);

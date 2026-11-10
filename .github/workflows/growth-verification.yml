@@ -18,7 +18,8 @@ jobs:
           node-version: 22
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-      - run: pnpm exec tsc --noEmit --project tsconfig.growth.json
+      - run: pnpm typecheck:agents
+      - run: pnpm lint:growth
       - run: pnpm exec tsx --test server/*.test.ts api/*.test.ts
       - run: pnpm proof:daily-20-scheduler
       - run: pnpm exec vite build --config vite.vercel.config.ts

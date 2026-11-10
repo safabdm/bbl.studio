@@ -1,3 +1,4 @@
+import type { JsonHttpStatus } from '../api/http-types.js';
 /**
  * Mac-independent Daily Outreach scheduler — GitHub Actions (primary) + Vercel Hobby backup + Neon.
  * Never auto-sends prospects. Owner must approve in Daily Review.
@@ -754,7 +755,7 @@ export async function dispatchOutreachCron(
     bypassPtWindow?: boolean;
   } = {},
 ): Promise<{
-  status: number;
+  status: JsonHttpStatus;
   body: Record<string, unknown>;
 }> {
   const auth = authorizeCron(headers, env);

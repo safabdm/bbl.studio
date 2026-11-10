@@ -125,6 +125,10 @@ export function salesAssistant(message: MarketingMessage, requirements = '') {
 
 export async function saveSalesRecord(input: SalesRecord, env: GrowthEnv) {
   if (
+    !input ||
+    typeof input !== 'object' ||
+    typeof input.email !== 'string' ||
+    input.email.length > 254 ||
     !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(input.email) ||
     ![
       'qualified',
@@ -134,7 +138,8 @@ export async function saveSalesRecord(input: SalesRecord, env: GrowthEnv) {
       'won',
       'lost',
     ].includes(input.stage) ||
-    !input.evidence?.trim() ||
+    typeof input.evidence !== 'string' ||
+    !input.evidence.trim() ||
     input.evidence.length > 10000 ||
     typeof input.requirements !== 'string' ||
     input.requirements.length > 10000
@@ -305,29 +310,60 @@ export async function growthDashboard(env: GrowthEnv, now = Date.now()) {
 }
 
 /** Bounded, Mac-independent worker. No prospect sender is reachable from this worker. */
+export type GrowthServices = {
+  marketing: typeof runMarketingTick;
+  reviews: typeof prepareSalesReviews;
+  readMonitor: typeof readGrowthMonitor;
+  monitor: typeof runGrowthMonitor;
+  social: typeof publishNextSocial;
+};
 export async function runGrowthTick(
   env: GrowthEnv,
   io: typeof fetch = fetch,
   now = Date.now(),
+  overrides: Partial<GrowthServices> = {},
 ) {
   const lease = await acquireCrmLease('growth:tick', env, 300);
   if (!lease) return { ok: true, status: 'busy', transmitted: 0 };
   try {
     const logs = await dbReadKv<GrowthLog[]>(LOG_KEY, [], env);
-    const append = (agent: string, status: string, message: string) =>
-      logs.unshift({ at: new Date(now).toISOString(), agent, status, message });
-    const marketing = await runMarketingTick(env, undefined, now);
-    append(
-      'sales_and_replies',
-      marketing.status,
-      'message' in marketing
-        ? marketing.message
-        : 'blockers' in marketing
-          ? marketing.blockers?.join(', ') || 'Check configuration'
-          : 'Check configuration',
-    );
+    const current: GrowthLog[] = [];
+    const services: GrowthServices = {
+      marketing: runMarketingTick,
+      reviews: prepareSalesReviews,
+      readMonitor: readGrowthMonitor,
+      monitor: runGrowthMonitor,
+      social: publishNextSocial,
+      ...overrides,
+    };
+    const append = (agent: string, status: string, message: string) => {
+      const entry = { at: new Date(now).toISOString(), agent, status, message };
+      current.push(entry);
+      logs.unshift(entry);
+    };
+    let marketingStatus = 'failed';
+    let socialPublications = 0;
     try {
-      const reviews = await prepareSalesReviews(env);
+      const marketing = await services.marketing(env, undefined, now);
+      marketingStatus = marketing.status;
+      append(
+        'sales_and_replies',
+        marketing.status,
+        'message' in marketing
+          ? marketing.message
+          : 'blockers' in marketing
+            ? marketing.blockers?.join(', ') || 'Check configuration'
+            : 'Check configuration',
+      );
+    } catch {
+      append(
+        'sales_and_replies',
+        'failed',
+        'Marketing checks failed; no prospect sender is reachable.',
+      );
+    }
+    try {
+      const reviews = await services.reviews(env);
       append(
         'sales_review',
         'drafts_only',
@@ -341,10 +377,10 @@ export async function runGrowthTick(
       );
     }
     if (env.GROWTH_MONITOR_ENABLED === 'true') {
-      const prior = await readGrowthMonitor(env);
-      if (!prior || now - Date.parse(prior.at) >= 23 * 3600000) {
-        try {
-          const monitor = await runGrowthMonitor(env, io, now);
+      try {
+        const prior = await services.readMonitor(env);
+        if (!prior || now - Date.parse(prior.at) >= 23 * 3600000) {
+          const monitor = await services.monitor(env, io, now);
           append(
             'seo_geo',
             monitor.search.status === 'verified' &&
@@ -353,17 +389,18 @@ export async function runGrowthTick(
               : 'partial',
             'Technical audit and available Google data stored.',
           );
-        } catch {
-          append(
-            'seo_geo',
-            'failed',
-            'Monitor failed; inspect provider permissions and service logs.',
-          );
         }
+      } catch {
+        append(
+          'seo_geo',
+          'failed',
+          'Monitor failed; inspect provider permissions and service logs.',
+        );
       }
     }
     try {
-      const social = await publishNextSocial(env, io, now);
+      const social = await services.social(env, io, now);
+      socialPublications = social.published;
       append(
         'social',
         social.status,
@@ -377,17 +414,25 @@ export async function runGrowthTick(
       );
     }
     await dbWriteKv(LOG_KEY, logs.slice(0, 200), env);
+    const ok = !current.some((l) =>
+      [
+        'BLOCKED',
+        'failed',
+        'uncertain',
+        'partial',
+        'credentials_missing',
+        'poll_retry',
+        'reconciliation_required',
+      ].includes(l.status),
+    );
     return {
-      ok:
-        marketing.status !== 'BLOCKED' &&
-        !logs.some(
-          (l) =>
-            l.at === new Date(now).toISOString() &&
-            ['failed', 'uncertain'].includes(l.status),
-        ),
-      status: marketing.status,
+      ok,
+      status: ok ? 'COMPLETED' : 'BLOCKED',
+      marketing_status: marketingStatus,
       transmitted: 0,
-      logs: logs.slice(0, 3),
+      prospect_emails_transmitted: 0,
+      social_publications: socialPublications,
+      logs: current,
     };
   } finally {
     await releaseCrmLease('growth:tick', lease, env);

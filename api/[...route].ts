@@ -160,6 +160,10 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
       if (!admin) return send(res,401,{ok:false,message:'Sign in required.'});
       if (method === 'POST' && req.headers.origin !== new URL(process.env.APP_ORIGIN || 'https://www.bbl.studio').origin) return send(res,403,{ok:false,message:'Use the growth dashboard.'});
       const { growthDashboard, saveSalesRecord } = await import('../server/growth.js');
+      if (matches(path, '/api/admin/crm/growth/readiness') && method === 'GET') {
+        const {growthReadiness}=await import('../server/growth-readiness.js');
+        return send(res,200,{ok:true,...growthReadiness(process.env)});
+      }
       if (matches(path, '/api/admin/crm/growth') && method === 'GET') return send(res,200,{ok:true,...await growthDashboard(process.env)});
       if (matches(path, '/api/admin/crm/growth/sales') && method === 'POST') {
         try { return send(res,200,{ok:true,record:await saveSalesRecord(await readJsonUnknown(req) as never,process.env)}); }

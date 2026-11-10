@@ -10,12 +10,13 @@ test('guide starting prices agree with the studio offer source', () => {
   }
 });
 test('page ranges select the matching inquiry option', () => {
-  assert.equal(guideReply('One page').service, 'Simple Landing Page');
-  assert.equal(guideReply('2–5 pages').service, 'Business Website');
-  assert.equal(guideReply('6–10 pages').service, 'Commercial Website');
+  for (const [question, expected] of [['One page','Simple Landing Page'], ['2–5 pages','Business Website'], ['6–10 pages','Commercial Website']]) {
+    const reply=guideReply(question); assert.ok('service' in reply); assert.equal(reply.service,expected);
+  }
 });
 test('custom functionality takes precedence over a simple page count', () => {
   const reply = guideReply('One page with an online store and checkout');
+  assert.ok('service' in reply);
   assert.equal(reply.service, 'Not sure yet');
   assert.match(reply.text, /custom scope/);
 });
@@ -27,6 +28,8 @@ test('unknown questions do not generate unsupported claims', () => {
 });
 
 test('consultation requests open the calendar without quoting a website package', () => {
-  assert.equal(guideReply('Book a consultation').href, '/booking');
+  const reply=guideReply('Book a consultation');
+  assert.ok('href' in reply);
+  assert.equal(reply.href, '/booking');
   assert.match(guideReply('One page with a booking system').text, /custom scope/);
 });

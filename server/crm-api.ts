@@ -1,3 +1,4 @@
+import type { JsonHttpStatus } from '../api/http-types.js';
 /**
  * Shared CRM HTTP handlers used by Hono (local) and Vercel [...route].
  */
@@ -27,7 +28,7 @@ import { maySendLive, safetySnapshot, selectedCount } from './crm-safety.js';
 import { importFreelanceJobs } from './freelance-score.js';
 import { evaluateCopyPolicy } from './outreach-policy.js';
 
-export type CrmJsonResult = { status: number; body: Record<string, unknown> };
+export type CrmJsonResult = { status: JsonHttpStatus; body: Record<string, unknown> };
 
 function adminOk(isAdmin: boolean): CrmJsonResult | null {
   if (isAdmin) return null;
@@ -374,7 +375,7 @@ export function handleCrmSelectionMeta(
 export async function handleCrmSyncIngest(
   headers: { authorization?: string | null; 'x-bbl-crm-sync-key'?: string | null; 'x-bbl-crm-key'?: string | null },
   body: unknown,
-  opts: { rawBytes?: number; env?: NodeJS.ProcessEnv } = {},
+  opts: { rawBytes?: number; env?: Partial<NodeJS.ProcessEnv> } = {},
 ): Promise<CrmJsonResult> {
   const env = opts.env || process.env;
   const auth = authorizeCrmSync(headers, env);

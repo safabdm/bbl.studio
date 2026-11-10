@@ -23,6 +23,9 @@ import type { SchedulerEnv } from './daily-outreach-scheduler.js';
 export type MarketingEnv = SchedulerEnv & ResendSendEnv & {
   MARKETING_AUTOMATION_ENABLED?: string;
   RESEND_READ_API_KEY?: string;
+  GOOGLE_CALENDAR_ID?: string;
+  GOOGLE_REFRESH_TOKEN?: string;
+  GOOGLE_PRIVATE_KEY?: string;
 };
 export const MARKETING_STATE = 'marketing:first-five:v1';
 export const MARKETING_LEASE = 'marketing:send';

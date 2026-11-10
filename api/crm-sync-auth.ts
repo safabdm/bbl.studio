@@ -1,3 +1,4 @@
+import type { JsonHttpStatus } from './http-types.js';
 /**
  * Fail-closed CRM sync auth for Vercel serverless.
  * Lives under `api/` with no `server/` imports so catch-all boot cannot
@@ -30,7 +31,7 @@ export function crmSyncSecret(env: CrmSyncAuthEnv = process.env): string {
 export function authorizeCrmSync(
   headers: CrmSyncAuthHeaders,
   env: CrmSyncAuthEnv = process.env,
-): { ok: true } | { ok: false; status: number; message: string } {
+): { ok: true } | { ok: false; status: JsonHttpStatus; message: string } {
   const secret = crmSyncSecret(env);
   if (!secret) {
     return {

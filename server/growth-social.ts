@@ -142,8 +142,16 @@ export async function saveSocialPost(
   approval?: { reviewer: string; qa: string; digest: string },
 ) {
   if (
+    !input ||
+    typeof input !== 'object' ||
+    typeof input.id !== 'string' ||
+    !/^[A-Za-z0-9_-]{1,120}$/.test(input.id)
+  )
+    throw new Error('A stable social queue ID is required.');
+  if (
     !['instagram', 'linkedin'].includes(input.network) ||
-    !input.caption?.trim() ||
+    typeof input.caption !== 'string' ||
+    !input.caption.trim() ||
     input.caption.length > 2200 ||
     !Number.isFinite(Date.parse(input.scheduledAt))
   )
@@ -251,11 +259,11 @@ export async function publishNextSocial(
   io: typeof fetch = fetch,
   now = Date.now(),
 ) {
-  if (
-    env.SOCIAL_PUBLISH_ENABLED !== 'true' ||
-    !Number.isFinite(Date.parse(env.SOCIAL_QUEUE_RECONCILED_AT || ''))
-  )
+  if (env.SOCIAL_PUBLISH_ENABLED !== 'true')
     return { status: 'disabled', published: 0 };
+  const reconciled = Date.parse(env.SOCIAL_QUEUE_RECONCILED_AT || '');
+  if (!Number.isFinite(reconciled) || reconciled > now)
+    return { status: 'reconciliation_required', published: 0 };
   const lease = await acquireCrmLease(SOCIAL_QUEUE, env);
   if (!lease) return { status: 'busy', published: 0 };
   try {

@@ -10,7 +10,7 @@ import { buildUnsubscribeUrl } from './outreach-policy.js';
 import { verifyUnsubscribeToken } from './unsubscribe.js';
 import { GRAPH_TOKEN_KV, saveGraphTokens, resolveAccessToken, importGraphReplies } from './graph-sender.js';
 
-const env: MarketingEnv & NodeJS.ProcessEnv = { CRM_DATABASE_MEMORY:'1', CRM_DATABASE_URL:'memory://marketing-tests', MARKETING_AUTOMATION_ENABLED:'true',
+const env: MarketingEnv = { CRM_DATABASE_MEMORY:'1', CRM_DATABASE_URL:'memory://marketing-tests', MARKETING_AUTOMATION_ENABLED:'true',
   MICROSOFT_GRAPH_CLIENT_ID:'mock',MICROSOFT_GRAPH_CLIENT_SECRET:'mock',MICROSOFT_GRAPH_TENANT_ID:'mock',GOOGLE_CALENDAR_ID:'mock',GOOGLE_REFRESH_TOKEN:'mock',EMAIL_DRY_RUN:'false', RESEND_API_KEY:'mock-only', RESEND_FROM:'Business Brand Lab <hello@bbl.studio>',
   UNSUBSCRIBE_SECRET:'test',SESSION_SECRET:'test',CRON_SECRET:'test',BUSINESS_POSTAL_ADDRESS:'120 Newport Center Drive, Newport Beach, CA 92660' };
 const now=Date.parse('2026-11-04T18:00:00Z'); // Wednesday 10am PST

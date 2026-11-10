@@ -6,6 +6,9 @@
  * Usage: pnpm exec tsx scripts/daily-20-scheduler-proof.ts
  */
 import { mkdirSync, writeFileSync } from 'node:fs';
+import http from 'node:http';
+import https from 'node:https';
+import { syncBuiltinESMExports } from 'node:module';
 import { join } from 'node:path';
 import { resetMemoryCrmDb } from '../server/crm-db.ts';
 import { resetMemoryDiscovery } from '../server/crm-discovery-store.ts';
@@ -50,6 +53,10 @@ async function main() {
     networkAttempts += 1;
     throw new Error('Global network disabled for synthetic no-send proof.');
   };
+  const denySocket = () => { networkAttempts += 1; throw new Error('HTTP sockets disabled for synthetic no-send proof.'); };
+  http.request = denySocket;
+  https.request = denySocket;
+  syncBuiltinESMExports();
   resetMemoryCrmDb(proofEnv);
   resetMemoryDiscovery(proofEnv);
 

@@ -24,7 +24,9 @@ const whsec = `whsec_${Buffer.from('test-resend-webhook-secret').toString('base6
 
 function env(extra: Record<string, string> = {}) {
   return {
+    NODE_ENV: 'test' as const,
     CRM_SYNC_SECRET: secret,
+    CRM_DATABASE_URL: undefined as string | undefined,
     CRM_SYNC_STORE_PATH: storePath,
     CRM_SYNC_STALE_HOURS: '48',
     EMAIL_OUTREACH_ENABLED: 'false',
