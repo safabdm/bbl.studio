@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto';
+import { growthOpportunities } from './growth-opportunities.js';
 import {
   acquireCrmLease,
   releaseCrmLease,
@@ -241,6 +242,7 @@ export async function growthDashboard(env: GrowthEnv, now = Date.now()) {
     : Infinity;
   return {
     checkedAt: new Date(now).toISOString(),
+    opportunities: growthOpportunities(get('monitor'), now),
     timezone: 'America/Los_Angeles',
     pacific: pacificParts(now),
     approvalOnly: true,
@@ -390,11 +392,15 @@ export async function runGrowthTick(
     if (env.GROWTH_MONITOR_ENABLED === 'true') {
       try {
         const prior = await services.readMonitor(env);
-        if (!prior || now - Date.parse(prior.at) >= 23 * 3600000) {
+        const observedAt = Date.parse(prior?.at || '');
+        const retryAfter = prior?.search.status === 'verified' && prior?.traffic.status === 'verified'
+          ? 23 * 3600000 : 3600000;
+        if (!prior || !Number.isFinite(observedAt) || observedAt > now || now - observedAt >= retryAfter) {
           const monitor = await services.monitor(env, io, now);
           append(
             'seo_geo',
             monitor.search.status === 'verified' &&
+              monitor.traffic.status === 'verified' &&
               monitor.technical.every((t) => t.status === 200)
               ? 'verified'
               : 'partial',

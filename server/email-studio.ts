@@ -36,11 +36,11 @@ export const EMAIL_STUDIO_TEMPLATE = {
     '',
     'I was looking at {{business_name}} and noticed {{website_observation}}.',
     '',
-    'Business Brand Lab builds websites for Orange County beauty and wellness brands that make a stronger first impression and make booking feel effortless.',
+    'Business Brand Lab is an Orange County studio working on website design, UX/UI and branding. We help businesses make their offer and next step clearer online.',
     '',
-    `I have a few specific ideas for {{business_name}} — happy to share them in a complimentary ${CONSULT_MINUTES}-minute website review.`,
+    'Would a short improvement outline for {{business_name}} be useful? Reply and I can prepare one for your review.',
     '',
-    'Book a time here:',
+    `If you prefer a conversation, choose a complimentary ${CONSULT_MINUTES}-minute website review here:`,
     BOOKING_CTA_URL,
     '',
     OWNER_SIGNATURE,
@@ -144,7 +144,7 @@ export function renderStudioDraft(
   const gate = observationGate(crm);
   const templateSubject = opts.subject ?? EMAIL_STUDIO_TEMPLATE.subject;
   const templateBody = opts.body ?? EMAIL_STUDIO_TEMPLATE.body;
-  let subject = personalizeLead(templateSubject, crm, env);
+  const subject = personalizeLead(templateSubject, crm, env);
   let body = personalizeLead(templateBody, crm, env);
   body = appendComplianceIfNeeded(body, crm, env);
 
