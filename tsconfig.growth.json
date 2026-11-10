@@ -1,0 +1,9 @@
+{
+  "extends": "./tsconfig.marketing.json",
+  "files": [
+    "api/[...route].ts",
+    "server/growth.ts",
+    "server/growth-monitor.ts",
+    "server/growth-social.ts"
+  ]
+}

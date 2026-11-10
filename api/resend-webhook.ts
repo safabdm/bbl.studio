@@ -1,3 +1,4 @@
+import type { JsonHttpStatus } from './http-types.js';
 /**
  * Public Resend webhook ingress for Vercel.
  * Verifies Svix signatures, enforces idempotency, applies delivery/bounce/
@@ -39,7 +40,7 @@ export type ResendWebhookEnv = {
 
 export type WebhookProcessResult = {
   ok: boolean;
-  status: number;
+  status: JsonHttpStatus;
   duplicate?: boolean;
   forwarded?: boolean;
   stored?: boolean;

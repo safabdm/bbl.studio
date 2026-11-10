@@ -188,6 +188,13 @@ export async function buildDaily20Cohort(
   const day = laDayKey(now);
   const weekday = isWeekdayLa(now);
   const qualifyCap = opts.qualifyCap ?? DAILY_20_QUALIFY_CAP;
+  const [existingDrafts, priorCohort] = await Promise.all([
+    listStudioDrafts(env), readDaily20Cohort(env),
+  ]);
+  // Keep today's review stable, but do not present yesterday's unsent backlog as
+  // newly qualified prospects. Existing drafts remain available for owner review.
+  const alreadyPrepared = new Set(existingDrafts.map(d => d.email.trim().toLowerCase()));
+  const reviewingToday = new Set(priorCohort?.day_key === day ? priorCohort.qualified.map(q => q.email.trim().toLowerCase()) : []);
 
   const built = await buildLeadQueue(
     {
@@ -209,6 +216,7 @@ export async function buildDaily20Cohort(
     let reason = alreadyExcluded || item.excluded_reason;
 
     if (!reason && !email) reason = 'missing_public_email';
+    if (!reason && alreadyPrepared.has(email) && !reviewingToday.has(email)) reason = 'already_prepared_for_owner_review';
     if (!reason) {
       const hard = hardExcludeReason(email);
       if (hard) reason = hard;

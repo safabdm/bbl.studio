@@ -74,7 +74,7 @@ function clampInt(value: string | undefined, min: number, max: number, fallback:
   return Math.min(max, Math.max(min, parsed));
 }
 
-export function bookingConfig(env: NodeJS.ProcessEnv = process.env): BookingConfig {
+export function bookingConfig(env: Partial<NodeJS.ProcessEnv> = process.env): BookingConfig {
   const weekdays = String(env.BOOKING_WEEKDAYS || '1,2,3,4,5')
     .split(',')
     .map((part) => Number(part.trim()))
@@ -329,19 +329,19 @@ type GoogleEvent = {
   extendedProperties?: { private?: Record<string, string> };
 };
 
-function calendarConfigured(env: NodeJS.ProcessEnv = process.env) {
+function calendarConfigured(env: Partial<NodeJS.ProcessEnv> = process.env) {
   const hasOauth = Boolean(env.GOOGLE_REFRESH_TOKEN && env.GOOGLE_CLIENT_ID && env.GOOGLE_CLIENT_SECRET);
   const hasService = Boolean(env.GOOGLE_CLIENT_EMAIL && env.GOOGLE_PRIVATE_KEY);
   return Boolean(env.GOOGLE_CALENDAR_ID && (hasOauth || hasService));
 }
 
-function usesOauth(env: NodeJS.ProcessEnv = process.env) {
+function usesOauth(env: Partial<NodeJS.ProcessEnv> = process.env) {
   return Boolean(env.GOOGLE_REFRESH_TOKEN && env.GOOGLE_CLIENT_ID && env.GOOGLE_CLIENT_SECRET);
 }
 
 let tokenCache: { token: string; exp: number } | null = null;
 
-async function googleAccessToken(env: NodeJS.ProcessEnv = process.env) {
+async function googleAccessToken(env: Partial<NodeJS.ProcessEnv> = process.env) {
   if (tokenCache && tokenCache.exp > Date.now() + 60_000) return tokenCache.token;
   if (usesOauth(env)) {
     const body = new URLSearchParams({
@@ -415,7 +415,7 @@ export class GoogleCalendar implements CalendarStore {
   private calendarId: string;
   private timeZone: string;
 
-  constructor(private env: NodeJS.ProcessEnv = process.env) {
+  constructor(private env: Partial<NodeJS.ProcessEnv> = process.env) {
     this.canInvite = usesOauth(env);
     this.calendarId = env.GOOGLE_CALENDAR_ID || 'primary';
     this.timeZone = bookingConfig(env).timeZone;
@@ -526,7 +526,7 @@ export class GoogleCalendar implements CalendarStore {
 
 const sharedMemory = new MemoryCalendar();
 
-export function getCalendar(env: NodeJS.ProcessEnv = process.env): CalendarStore | null {
+export function getCalendar(env: Partial<NodeJS.ProcessEnv> = process.env): CalendarStore | null {
   if (env.BOOKING_STORE === 'memory' && !env.VERCEL) return sharedMemory;
   if (!calendarConfigured(env)) return null;
   return new GoogleCalendar(env);
@@ -568,7 +568,7 @@ export async function sendBookingEmail(opts: {
   subject: string;
   text: string;
   ics?: string;
-}, env: NodeJS.ProcessEnv = process.env) {
+}, env: Partial<NodeJS.ProcessEnv> = process.env) {
   const key = env.RESEND_API_KEY || '';
   if (!key) return false;
   const from = env.RESEND_FROM || 'Business Brand Lab <hello@bbl.studio>';
@@ -590,7 +590,7 @@ export function confirmationCopy(slot: Slot, timeZone: string) {
   return { when, zone, subject: `Your Business Brand Lab consultation — ${when}` };
 }
 
-export async function sendConfirmation(slot: Slot, fields: { name: string; email: string; note?: string }, config: BookingConfig, env: NodeJS.ProcessEnv = process.env) {
+export async function sendConfirmation(slot: Slot, fields: { name: string; email: string; note?: string }, config: BookingConfig, env: Partial<NodeJS.ProcessEnv> = process.env) {
   const copy = confirmationCopy(slot, config.timeZone);
   const text = [
     `Hello ${fields.name},`,
@@ -616,7 +616,7 @@ export async function sendConfirmation(slot: Slot, fields: { name: string; email
   return sent;
 }
 
-export async function sendDueReminders(store: CalendarStore, now = new Date(), config = bookingConfig(), env: NodeJS.ProcessEnv = process.env) {
+export async function sendDueReminders(store: CalendarStore, now = new Date(), config = bookingConfig(), env: Partial<NodeJS.ProcessEnv> = process.env) {
   const from = new Date(now.getTime() + 20 * 60 * 60 * 1000);
   const to = new Date(now.getTime() + 44 * 60 * 60 * 1000);
   const due = await store.upcomingReminders(from, to);

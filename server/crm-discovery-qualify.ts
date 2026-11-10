@@ -4,6 +4,7 @@
  * Never invents businesses, emails, or activity.
  */
 import { createHash } from 'node:crypto';
+import { fetchPublicWebsite } from './public-website-fetch.js';
 import type { PlacesCandidate } from './crm-discovery-places.js';
 import type {
   DiscoveredLead,
@@ -113,7 +114,7 @@ export async function fetchWebsiteEvidence(
   if (!/^https?:\/\//i.test(url)) url = `https://${url}`;
   empty.has_https = url.startsWith('https://');
 
-  const fetchImpl = opts.fetchImpl || fetch;
+  const fetchImpl = opts.fetchImpl || fetchPublicWebsite;
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), opts.timeoutMs ?? 8000);
   try {

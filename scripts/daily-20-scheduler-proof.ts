@@ -6,6 +6,9 @@
  * Usage: pnpm exec tsx scripts/daily-20-scheduler-proof.ts
  */
 import { mkdirSync, writeFileSync } from 'node:fs';
+import http from 'node:http';
+import https from 'node:https';
+import { syncBuiltinESMExports } from 'node:module';
 import { join } from 'node:path';
 import { resetMemoryCrmDb } from '../server/crm-db.ts';
 import { resetMemoryDiscovery } from '../server/crm-discovery-store.ts';
@@ -22,8 +25,8 @@ import {
 import { listStudioDrafts } from '../server/email-studio.ts';
 import { pacificParts } from '../server/pacific-time.ts';
 
-const STORE_DOCS = '/cursor/stores/self/docs';
-const STORE_MEDIA = '/cursor/stores/self/media';
+const STORE_DOCS = join(process.cwd(), 'outputs/growth-proof');
+const STORE_MEDIA = join(process.cwd(), 'outputs/growth-proof');
 
 const proofEnv = {
   CRM_DATABASE_MEMORY: '1',
@@ -43,6 +46,17 @@ const proofEnv = {
 };
 
 async function main() {
+  // Prove isolation even if a dependency accidentally omits the injected transport.
+  // No provider credentials are inherited by proofEnv, and all global HTTP is denied.
+  let networkAttempts = 0;
+  globalThis.fetch = async () => {
+    networkAttempts += 1;
+    throw new Error('Global network disabled for synthetic no-send proof.');
+  };
+  const denySocket = () => { networkAttempts += 1; throw new Error('HTTP sockets disabled for synthetic no-send proof.'); };
+  http.request = denySocket;
+  https.request = denySocket;
+  syncBuiltinESMExports();
   resetMemoryCrmDb(proofEnv);
   resetMemoryDiscovery(proofEnv);
 
@@ -151,6 +165,7 @@ async function main() {
       execution_log_head: dash.execution_log.slice(0, 6),
     },
     assertions: {
+      no_global_network_attempts: networkAttempts === 0,
       pipeline_ok: pipeline.body.ok === true,
       qualified_at_most_20: (cohort?.qualified.length ?? 0) <= 20,
       qualified_at_least_1: (cohort?.qualified.length ?? 0) >= 1,

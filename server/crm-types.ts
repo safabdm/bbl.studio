@@ -181,7 +181,7 @@ export type CrmSyncIngestResult =
         suppressions: number;
       };
     }
-  | { ok: false; status: number; message: string };
+  | { ok: false; status: 400 | 401 | 503; message: string };
 
 /** Data provenance for admin CRM reads. */
 export type CrmDataSource =

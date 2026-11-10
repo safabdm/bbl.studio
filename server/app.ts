@@ -232,6 +232,39 @@ app.use('/api/*', async (c, next) => {
 
 app.get('/api/health', (c) => c.json({ ok: true, stripeMode: stripeMode() }));
 
+app.get('/api/admin/crm/growth', async c => {
+  if (!requireAdmin(c)) return c.json({ok:false,message:'Sign in required.'},401);
+  const {growthDashboard} = await import('./growth.js');
+  return c.json({ok:true,...await growthDashboard(process.env)});
+});
+app.get('/api/admin/crm/growth/readiness', async c => {
+  if (!requireAdmin(c)) return c.json({ok:false,message:'Sign in required.'},401);
+  const {growthReadiness}=await import('./growth-readiness.js');
+  return c.json({ok:true,...growthReadiness(process.env)});
+});
+app.post('/api/admin/crm/growth/:action', async c => {
+  if (!requireAdmin(c)) return c.json({ok:false,message:'Sign in required.'},401);
+  if (c.req.header('origin') !== new URL(process.env.APP_ORIGIN || c.req.url).origin) return c.json({ok:false,message:'Use the growth dashboard.'},403);
+  try {
+    if(c.req.param('action') === 'sales') {
+      const {saveSalesRecord} = await import('./growth.js');
+      return c.json({ok:true,record:await saveSalesRecord(await c.req.json(),process.env)});
+    }
+    if(c.req.param('action') === 'social') {
+      const {saveSocialPost} = await import('./growth-social.js');
+      const body=await c.req.json();
+      return c.json({ok:true,post:await saveSocialPost(body.post,process.env,body.approval?{...body.approval,reviewer:'authenticated-owner'}:undefined)});
+    }
+    return c.json({ok:false,message:'Not found.'},404);
+  } catch {return c.json({ok:false,message:'Invalid growth update or queue busy.'},400);}
+});
+app.get('/api/crm/growth/tick', async c => {
+  if (!process.env.CRON_SECRET || c.req.header('authorization') !== `Bearer ${process.env.CRON_SECRET}`) return c.json({ok:false},401);
+  const {runGrowthTick} = await import('./growth.js');
+  const result=await runGrowthTick(process.env);
+  return c.json(result,result.ok?200:503);
+});
+
 app.get('/api/unsubscribe', async (c) => {
   const result = await processUnsubscribeDurable({
     email: c.req.query('email'),

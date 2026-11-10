@@ -1,3 +1,4 @@
+import type { JsonHttpStatus } from '../api/http-types.js';
 /**
  * HTTP handlers for discovery automation (admin + cron).
  * Live email send is never enabled from these endpoints.
@@ -23,7 +24,7 @@ function adminOk(isAdmin: boolean): CrmJsonResult | null {
 export function authorizeCron(
   headers: { authorization?: string | null },
   env: DiscoveryRunnerEnv = process.env,
-): { ok: true } | { ok: false; status: number; message: string } {
+): { ok: true } | { ok: false; status: JsonHttpStatus; message: string } {
   const secret = String(env.CRON_SECRET || '').trim();
   if (!secret) {
     return { ok: false, status: 401, message: 'CRON_SECRET is not configured.' };

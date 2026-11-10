@@ -164,7 +164,7 @@ export async function processUnsubscribeDurable(
     lead_id?: string | number | null;
     token?: string | null;
   },
-  env: NodeJS.ProcessEnv = process.env,
+  env: Partial<NodeJS.ProcessEnv> = process.env,
 ): Promise<UnsubscribeResult> {
   if (!unsubscribeSecret()) {
     return { ok: false, error: 'misconfigured', message: 'Unsubscribe is not configured.' };

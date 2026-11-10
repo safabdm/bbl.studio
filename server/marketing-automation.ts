@@ -1,6 +1,6 @@
 /** One bounded cloud campaign: first five clients, three pages, $2,000.
  * Durable claims precede transmission. Uncertain attempts are never retried.
- * Each tick sends at most one message; five new plus five reply/follow-up messages per day.
+ * Ticks only prepare drafts. External messages use the existing owner-approved send workflow.
  */
 import { planMarketingReply, type MarketingMessage, type MarketingConversation } from './marketing-conversation.js';
 import { createHash, randomUUID } from 'node:crypto';
@@ -23,6 +23,9 @@ import type { SchedulerEnv } from './daily-outreach-scheduler.js';
 export type MarketingEnv = SchedulerEnv & ResendSendEnv & {
   MARKETING_AUTOMATION_ENABLED?: string;
   RESEND_READ_API_KEY?: string;
+  GOOGLE_CALENDAR_ID?: string;
+  GOOGLE_REFRESH_TOKEN?: string;
+  GOOGLE_PRIVATE_KEY?: string;
 };
 export const MARKETING_STATE = 'marketing:first-five:v1';
 export const MARKETING_LEASE = 'marketing:send';
@@ -32,11 +35,13 @@ type Receipt = 'UNKNOWN' | 'DELIVERED' | 'BOUNCED' | 'COMPLAINED' | 'FAILED';
 export type MarketingAttempt = {
   id: string; leadId: string; email: string; business: string; domain: string;
   replyTo?: string; step: number; claimedAt: string; subject: string; body: string;
-  status: 'CLAIMED' | 'SUBMITTED' | 'UNCERTAIN';
+  status: 'DRAFT' | 'CLAIMED' | 'SUBMITTED' | 'UNCERTAIN';
   providerId: string | null; receipt: Receipt; checkedAt: string | null;
   website?: string | null; observation?: string | null;
 };
 export type MarketingState = {
+  drafts?: MarketingAttempt[];
+  inbound?: MarketingMessage[];
   conversations?: MarketingConversation[];
   paused: boolean;
   attempts: MarketingAttempt[]; stoppedEmails: string[];
@@ -67,7 +72,6 @@ const enabled = (value?: string) => value === 'true';
 export function marketingConfigBlockers(env: MarketingEnv): string[] {
   return [
     !enabled(env.MARKETING_AUTOMATION_ENABLED) && 'MARKETING_AUTOMATION_ENABLED',
-    env.EMAIL_DRY_RUN !== 'false' && 'EMAIL_DRY_RUN_must_be_false',
     !(env.CRM_DATABASE_URL || env.DATABASE_URL) && env.CRM_DATABASE_MEMORY !== '1' && 'DATABASE_URL',
     !env.RESEND_API_KEY && 'RESEND_API_KEY', !env.UNSUBSCRIBE_SECRET && 'UNSUBSCRIBE_SECRET',
     !env.BUSINESS_POSTAL_ADDRESS && 'BUSINESS_POSTAL_ADDRESS',
@@ -127,7 +131,7 @@ function liveDeps(env: MarketingEnv): MarketingDeps {
       const result = await importGraphReplies({ known_emails: emails }, env);
       if (!result.ok) return { ok: false, replies: [], optouts: [] };
       return { ok: true, replies: result.marked_replied, messages: result.messages,
-        optouts: result.items.filter(i => /\b(unsubscribe|remove me|stop emailing|no thanks|not interested)\b/i.test(`${i.subject} ${i.snippet}`)).map(i => i.from_email) };
+        optouts: [...new Set([...result.items.filter(i => /\b(unsubscribe|remove me|stop emailing|no thanks|not interested)\b/i.test(`${i.subject} ${i.snippet}`)).map(i => i.from_email), ...result.messages.filter(m => /\b(unsubscribe|remove me|stop emailing|no thanks|not interested)\b/i.test(m.text)).map(m => m.email)])] };
     },
     async bookings() {
       const calendar = getCalendar(env as NodeJS.ProcessEnv);
@@ -205,9 +209,16 @@ export async function checkMarketingReceipts(env: MarketingEnv, deps?: Pick<Mark
 export async function runMarketingTick(env: MarketingEnv, deps?: MarketingDeps, now = Date.now()) {
   const blockers = marketingConfigBlockers(env);
   if (blockers.length) return { ok: false, status: 'BLOCKED', blockers, transmitted: 0 };
-  const lease = await acquireCrmLease(MARKETING_LEASE, env);
+  const lease = await acquireCrmLease(MARKETING_LEASE, env, 300);
   if (!lease) return { ok: true, status: 'BUSY', transmitted: 0 };
   let state: MarketingState | undefined;
+  const prepare = async (attempt: MarketingAttempt) => {
+    if (!state) throw new Error('Campaign state unavailable');
+    state.drafts ||= [];
+    const duplicate = state.drafts.some(d => d.email === attempt.email && d.step === attempt.step && d.replyTo === attempt.replyTo);
+    if (!duplicate) state.drafts.push({...attempt, status:'DRAFT'});
+    return finish('AWAITING_APPROVAL', 'Personalized draft saved for authenticated owner review. No message transmitted.');
+  };
   const finish = async (status: string, message: string, transmitted = 0) => {
     if (state) { state.lastRun = { at: new Date(now).toISOString(), status, message }; await dbWriteKv(MARKETING_STATE,state,env); }
     return { ok: status !== 'BLOCKED', status, message, transmitted };
@@ -217,10 +228,12 @@ export async function runMarketingTick(env: MarketingEnv, deps?: MarketingDeps, 
     const io = deps || liveDeps(env);
     // Delivery and replies are checked even after reaching capacity or outside send hours.
     const candidates = await io.candidates();
-    const emails = new Set([...candidates.map(c => emailKey(c.email)), ...state.attempts.map(a => a.email)]);
+    const crmSnapshot = await readSnapshot(env);
+    const emails = new Set([...candidates.map(c => emailKey(c.email)), ...state.attempts.map(a => a.email), ...(crmSnapshot?.email_history || []).filter(h => !h.dry_run && h.accepted === 'YES').map(h => emailKey(h.email)), ...(crmSnapshot?.leads || []).map(l => emailKey(l.email))].filter(Boolean));
     const inbox = await io.inbox(emails);
     const [bookings, providerReady] = await Promise.all([io.bookings(), io.providerReady()]);
     if (!inbox.ok || !providerReady) return finish('BLOCKED','A fresh complete inbox scan, verified BBL sender and delivery read access are required.');
+    state.inbound = [...new Map([...(state.inbound || []), ...(inbox.messages || [])].map(m => [m.id, m])).values()].sort((a,b) => Date.parse(b.receivedAt) - Date.parse(a.receivedAt)).slice(0,200);
     for (const email of inbox.optouts) await recordDurableSuppression(email,0,'reply_optout',env);
     state.stoppedEmails = [...new Set([...state.stoppedEmails,...inbox.replies,...bookings].map(emailKey))];
     for (const attempt of state.attempts.filter(a => a.status === 'SUBMITTED')) {
@@ -262,14 +275,10 @@ export async function runMarketingTick(env: MarketingEnv, deps?: MarketingDeps, 
       if (!plan) continue;
       if (plan.ready) {
         conversation.status='READY';conversation.evidence=plan.evidence;conversation.receivedAt=message.receivedAt;
-        if (!state.clients.some(c=>c.email===email)) state.clients.push({email,evidence:plan.evidence!,confirmedAt:new Date(now).toISOString()});
+        // An interested or accepting reply is an owner handoff, never a paid client.
       }
       const attempt:MarketingAttempt={...original,id:randomUUID(),replyTo:message.id,step:0,claimedAt:new Date(now).toISOString(),subject:`Re: ${original.subject.replace(/^Re: /i,'')}`,body:plan.body+complianceFooter({email,leadId:original.leadId,env}),status:'CLAIMED',providerId:null,receipt:'UNKNOWN',checkedAt:null};
-      state.attempts.push(attempt);
-      await dbWriteKv(MARKETING_STATE,state,env);
-      const sent=await io.send(attempt);
-      attempt.status=sent.ok && sent.id?'SUBMITTED':'UNCERTAIN';attempt.providerId=sent.id || null;
-      return finish(sent.ok && sent.id?'SUBMITTED':'BLOCKED',plan.ready?'Client explicitly accepted the package and supplied a start brief; owner handoff ready.':'Routine scope reply submitted; waiting for client details and explicit acceptance.',sent.ok && sent.id?1:0);
+      return prepare(attempt);
     }
     const snapshot = await readSnapshot(env);
     if (!deps && !legacyHistoryReady(snapshot?.last_synced_at,await readLegacyBaseline(env),now)) return finish('BLOCKED','Import fresh legacy history or complete the verified old-sender retirement before live marketing.');
@@ -286,7 +295,7 @@ export async function runMarketingTick(env: MarketingEnv, deps?: MarketingDeps, 
       chosen={id:initial.leadId,business_name:initial.business,email,website:initial.website || (initial.domain?`https://${initial.domain}`:null),contact_name:null,website_observation:observation};
       step=prior.step+1;break;
     }
-    for (const item of chosen ? [] : candidates) {
+    for (const item of chosen ? [] : candidates.filter(c => !(state!.drafts || []).some(d => d.email === emailKey(c.email) && !d.replyTo && d.step === 0))) {
       const email = emailKey(item.email);
       if (!item.contactable || state.stoppedEmails.includes(email) || suppressions.has(email)) continue;
       const prior = state.attempts.filter(a => a.email === email).sort((a,b)=>b.step-a.step);
@@ -310,12 +319,7 @@ export async function runMarketingTick(env: MarketingEnv, deps?: MarketingDeps, 
     const attempt: MarketingAttempt = { id: randomUUID(), leadId: chosen.id, email: emailKey(chosen.email), business: chosen.business_name,
       domain: extractDomain(chosen.website) || '', website:chosen.website,observation:chosen.website_observation,step, claimedAt: new Date(now).toISOString(), ...copy,
       body: copy.body+complianceFooter({ email: chosen.email,leadId:chosen.id,env }), status:'CLAIMED',providerId:null,receipt:'UNKNOWN',checkedAt:null };
-    state.attempts.push(attempt);
-    await dbWriteKv(MARKETING_STATE,state,env); // durable claim BEFORE provider call
-    const sent = await io.send(attempt);
-    if (sent.ok && sent.id) { attempt.status='SUBMITTED'; attempt.providerId=sent.id; }
-    else attempt.status='UNCERTAIN';
-    return finish(sent.ok && sent.id ? 'SUBMITTED' : 'BLOCKED',sent.ok && sent.id ? 'Provider accepted one message; delivery is UNKNOWN until verified.' : 'Provider outcome uncertain; held for review.',sent.ok && sent.id ? 1 : 0);
+    return prepare(attempt);
   } catch {
     return finish('BLOCKED','A required provider, inbox, calendar or persistence check failed. Inspect service logs; no automatic retry of claimed messages.');
   } finally { await releaseCrmLease(MARKETING_LEASE,lease,env); }

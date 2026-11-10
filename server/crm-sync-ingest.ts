@@ -1,3 +1,4 @@
+import type { JsonHttpStatus } from '../api/http-types.js';
 /**
  * Authenticated CRM sync ingest (Mac → website only).
  * Bearer / shared-secret auth. Never sends email. Read-only on Mac DB side.
@@ -45,7 +46,7 @@ export function crmSyncSecret(env: CrmSyncStoreEnv = process.env): string {
 export function authorizeCrmSync(
   headers: { authorization?: string | null; 'x-bbl-crm-sync-key'?: string | null; 'x-bbl-crm-key'?: string | null },
   env: CrmSyncStoreEnv = process.env,
-): { ok: true } | { ok: false; status: number; message: string } {
+): { ok: true } | { ok: false; status: JsonHttpStatus; message: string } {
   const secret = crmSyncSecret(env);
   if (!secret) {
     return {
