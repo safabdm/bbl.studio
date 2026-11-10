@@ -15,6 +15,7 @@
     { "source": "/api/:path*", "destination": "/api/[...route]" },
     { "source": "/", "destination": "/home.html" },
     { "source": "/booking", "destination": "/book.html" },
+    { "source": "/privacy", "destination": "/privacy.html" },
     { "source": "/admin", "destination": "/app.html" },
     { "source": "/admin/:path*", "destination": "/app.html" },
     { "source": "/client", "destination": "/app.html" },
