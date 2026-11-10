@@ -344,6 +344,40 @@ void test('uncertain provider POST is held and never automatically repeated', as
   assert.equal(writes, 1);
   await assert.rejects(saveSocialPost(post(), env), /immutable/);
 });
+void test('Unified Login publishes through Facebook Graph while preserving approval and send-once gates', async () => {
+  await approve(post());
+  let mutations = 0;
+  const unified = { ...live, INSTAGRAM_LOGIN_MODE: 'unified' };
+  const io: typeof fetch = async (url, init) => {
+    const target =
+      typeof url === 'string' ? url : url instanceof URL ? url.href : url.url;
+    if (target.startsWith('https://media.bbl.studio/')) {
+      assert.equal(new Headers(init?.headers).has('Authorization'), false);
+      return mediaResponse();
+    }
+    assert.equal(new URL(target).origin, 'https://graph.facebook.com');
+    assert.ok(target.startsWith('https://graph.facebook.com/v27.0/'));
+    assert.equal(init?.redirect, 'error');
+    if (init?.method === 'POST') {
+      mutations++;
+      return Response.json({
+        id: target.endsWith('media_publish') ? 'receipt' : 'container',
+      });
+    }
+    return Response.json(
+      target.includes('fields=username')
+        ? { username: 'businessbrandlab' }
+        : { status_code: 'FINISHED' },
+    );
+  };
+  assert.equal(
+    (await publishNextSocial(unified, io, now)).status,
+    'processing',
+  );
+  assert.equal((await publishNextSocial(unified, io, now)).published, 1);
+  assert.equal((await publishNextSocial(unified, io, now)).published, 0);
+  assert.equal(mutations, 2);
+});
 void test('approval hash tampering fails closed', async () => {
   const p = await approve(post());
   p.caption = 'Tampered';

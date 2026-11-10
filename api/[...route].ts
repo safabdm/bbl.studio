@@ -164,6 +164,11 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
         const {growthReadiness}=await import('../server/growth-readiness.js');
         return send(res,200,{ok:true,...growthReadiness(process.env)});
       }
+      if (matches(path, '/api/admin/crm/growth/instagram/preflight') && method === 'GET') {
+        const { preflightInstagramPublishing } = await import('../server/instagram-publishing.js');
+        const check = await preflightInstagramPublishing(process.env);
+        return send(res, check.status === 'verified' ? 200 : 503, {ok:check.status === 'verified',...check});
+      }
       if (matches(path, '/api/admin/crm/growth') && method === 'GET') return send(res,200,{ok:true,...await growthDashboard(process.env)});
       if (matches(path, '/api/admin/crm/growth/sales') && method === 'POST') {
         try { return send(res,200,{ok:true,record:await saveSalesRecord(await readJsonUnknown(req) as never,process.env)}); }

@@ -1,5 +1,9 @@
 import { createHash } from 'node:crypto';
 import {
+  instagramPublishingApi,
+  type InstagramPublishingEnv,
+} from './instagram-publishing.js';
+import {
   acquireCrmLease,
   releaseCrmLease,
   dbReadKv,
@@ -7,17 +11,15 @@ import {
   type CrmDbEnv,
 } from './crm-db.js';
 
-export type SocialEnv = CrmDbEnv & {
-  SOCIAL_PUBLISH_ENABLED?: string;
-  SOCIAL_QUEUE_RECONCILED_AT?: string;
-  INSTAGRAM_ACCESS_TOKEN?: string;
-  INSTAGRAM_ACCOUNT_ID?: string;
-  META_GRAPH_VERSION?: string;
-  LINKEDIN_ACCESS_TOKEN?: string;
-  LINKEDIN_AUTHOR_URN?: string;
-  LINKEDIN_VERSION?: string;
-  SOCIAL_MEDIA_HOSTS?: string;
-};
+export type SocialEnv = CrmDbEnv &
+  InstagramPublishingEnv & {
+    SOCIAL_PUBLISH_ENABLED?: string;
+    SOCIAL_QUEUE_RECONCILED_AT?: string;
+    LINKEDIN_ACCESS_TOKEN?: string;
+    LINKEDIN_AUTHOR_URN?: string;
+    LINKEDIN_VERSION?: string;
+    SOCIAL_MEDIA_HOSTS?: string;
+  };
 export type SocialPost = {
   id: string;
   network: 'instagram' | 'linkedin';
@@ -285,7 +287,8 @@ export async function publishNextSocial(
       throw new Error(
         'LinkedIn destination differs from the owner-approved account.',
       );
-    const meta = `https://graph.instagram.com/${env.META_GRAPH_VERSION || 'v24.0'}`;
+    const meta =
+      post.network === 'instagram' ? instagramPublishingApi(env) : '';
     const token =
       post.network === 'instagram'
         ? env.INSTAGRAM_ACCESS_TOKEN
@@ -306,6 +309,7 @@ export async function publishNextSocial(
       return io(url, {
         ...init,
         headers: combined,
+        redirect: 'error',
         signal: AbortSignal.timeout(10000),
       });
     };

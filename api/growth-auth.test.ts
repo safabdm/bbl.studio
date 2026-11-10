@@ -7,6 +7,7 @@ import handler from './[...route].js';
 for (const [url, method] of [
   ['/api/admin/crm/growth', 'GET'],
   ['/api/admin/crm/growth/readiness', 'GET'],
+  ['/api/admin/crm/growth/instagram/preflight', 'GET'],
   ['/api/admin/crm/growth/sales', 'POST'],
   ['/api/admin/crm/growth/social', 'POST'],
   ['/api/crm/growth/tick', 'GET'],
