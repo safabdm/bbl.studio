@@ -31,11 +31,17 @@ import {
 } from './growth-monitor.js';
 import { pacificParts } from './pacific-time.js';
 import {
+  readInstagramSnapshot,
+  runInstagramRead,
+  type InstagramReadEnv,
+} from './instagram-read.js';
+import {
   planMarketingReply,
   type MarketingMessage,
 } from './marketing-conversation.js';
 
 export type GrowthEnv = MarketingEnv &
+  InstagramReadEnv &
   SocialEnv &
   MonitorEnv & { GROWTH_MONITOR_ENABLED?: string };
 export type SalesRecord = {
@@ -198,6 +204,7 @@ export async function growthDashboard(env: GrowthEnv, now = Date.now()) {
     runs: () => dbReadKv<SchedulerJobResult[]>(SCHEDULER_RUNS_KV, [], env),
     social: () => readSocialQueue(env),
     monitor: () => readGrowthMonitor(env),
+    instagramRead: () => readInstagramSnapshot(env),
     sales: () => dbReadKv<SalesRecord[]>(SALES_KEY, [], env),
     salesReviews: () => dbReadKv<SalesReview[]>(SALES_REVIEW_KEY, [], env),
     logs: () => dbReadKv<GrowthLog[]>(LOG_KEY, [], env),
@@ -316,6 +323,8 @@ export type GrowthServices = {
   readMonitor: typeof readGrowthMonitor;
   monitor: typeof runGrowthMonitor;
   social: typeof publishNextSocial;
+  instagramRead: typeof runInstagramRead;
+  readInstagram: typeof readInstagramSnapshot;
 };
 export async function runGrowthTick(
   env: GrowthEnv,
@@ -334,6 +343,8 @@ export async function runGrowthTick(
       readMonitor: readGrowthMonitor,
       monitor: runGrowthMonitor,
       social: publishNextSocial,
+      instagramRead: runInstagramRead,
+      readInstagram: readInstagramSnapshot,
       ...overrides,
     };
     const append = (agent: string, status: string, message: string) => {
@@ -395,6 +406,33 @@ export async function runGrowthTick(
           'seo_geo',
           'failed',
           'Monitor failed; inspect provider permissions and service logs.',
+        );
+      }
+    }
+    if (env.INSTAGRAM_READ_ENABLED === 'true') {
+      try {
+        const prior = await services.readInstagram(env);
+        if (
+          !prior ||
+          prior.status !== 'verified' ||
+          !Number.isFinite(Date.parse(prior.at)) ||
+          Date.parse(prior.at) > now ||
+          now - Date.parse(prior.at) >= 3600000
+        ) {
+          const snapshot = await services.instagramRead(env, io, now);
+          append(
+            'instagram_read',
+            snapshot.status === 'verified' ? 'verified' : 'failed',
+            snapshot.status === 'verified'
+              ? 'Verified profile and bounded media sample stored; GET only.'
+              : 'Instagram read unavailable; check credentials and account identity.',
+          );
+        }
+      } catch {
+        append(
+          'instagram_read',
+          'failed',
+          'Instagram read failed; publishing credentials are not used.',
         );
       }
     }

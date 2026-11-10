@@ -176,3 +176,28 @@ void test('future queue reconciliation and malformed queue records cannot author
   );
   assert.deepEqual(await readSocialQueue(env), []);
 });
+
+void test('Unified Login read stage stores real-shaped evidence independently of publishing and reports failures', async () => {
+  const result = await runGrowthTick(
+    { ...env, INSTAGRAM_READ_ENABLED: 'true' },
+    noNetwork,
+    now,
+    {
+      ...services,
+      readInstagram: async () => null,
+      instagramRead: async () => ({
+        at: new Date(now).toISOString(),
+        status: 'unavailable',
+        reason: 'credentials_missing',
+      }),
+    },
+  );
+  assert.equal(result.status, 'BLOCKED');
+  assert.equal(result.social_publications, 0);
+  const logs = await dbReadKv<GrowthLog[]>(LOG_KEY, [], env);
+  assert.ok(
+    logs.some(
+      (log) => log.agent === 'instagram_read' && log.status === 'failed',
+    ),
+  );
+});

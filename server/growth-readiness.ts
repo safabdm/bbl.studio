@@ -11,6 +11,17 @@ export function growthReadiness(env: GrowthEnv, now = Date.now()) {
     checkedAt: new Date(now).toISOString(),
     timezone: 'America/Los_Angeles',
     configurationOnly: true,
+    instagramRead: {
+      enabled: env.INSTAGRAM_READ_ENABLED === 'true',
+      missingConfiguration: missing([
+        'INSTAGRAM_READ_ACCESS_TOKEN',
+        'INSTAGRAM_READ_ACCOUNT_ID',
+      ]),
+      api: 'https://graph.facebook.com/v27.0',
+      requiredIdentity: 'businessbrandlab',
+      providerAuthorizationVerified: false,
+      operations: 'GET profile and bounded media sample only',
+    },
     providerAuthorizationVerified: false,
     externalActionsRequireOwnerApproval: true,
     outreach: getOutreachReadinessSnapshot(env),
