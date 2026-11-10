@@ -50,6 +50,7 @@ export function growthReadiness(env: GrowthEnv, now = Date.now()) {
           'SOCIAL_MEDIA_HOSTS',
         ]),
         requiredIdentity: 'businessbrandlab',
+        loginMode: env.INSTAGRAM_LOGIN_MODE || 'instagram',
         providerAuthorizationVerified: false,
       },
       linkedin: {
