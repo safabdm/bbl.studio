@@ -20,3 +20,7 @@ data
 *.zip
 *.docx
 *.pdf
+
+# Tests remain in Git/CI; never package them as serverless endpoints.
+api/**/*.test.ts
+api/*.test.ts
