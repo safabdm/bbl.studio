@@ -82,3 +82,9 @@ void test('actual receipt persistence appears in both CRM history and campaign m
  const state=await readMarketingState(env);assert.equal(state.attempts.length,1);assert.equal(state.attempts[0].providerId,'verified-provider-id');assert.equal(state.attempts[0].receipt,'UNKNOWN');assert.equal(state.attempts[0].body,'Exact transmitted body with footer');
  assert.equal((await readSnapshot(env))!.email_history.length,1);
 });
+void test('sender display name may vary, but another address or extra recipient cannot send',async()=>{
+ const m=mockIO();
+ await assert.rejects(runApprovedOutreachBatch({messages:copies(),confirm_send:true},{...ready(),RESEND_FROM:'Other <hello@sapphirex.co>'},m.io),/hello@bbl/);
+ await assert.rejects(runApprovedOutreachBatch({messages:copies(),confirm_send:true},{...ready(),RESEND_FROM:'hello@bbl.studio, someone@example.com'},m.io),/hello@bbl/);
+ const r=await runApprovedOutreachBatch({messages:copies(),confirm_send:true},{...ready(),RESEND_FROM:'BBL Studio <hello@bbl.studio>'},m.io);assert.equal(r.transmitted,5);
+});

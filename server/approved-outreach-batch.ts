@@ -92,7 +92,7 @@ export async function runApprovedOutreachBatch(input: { messages?: unknown; conf
     if (!input.confirm_send) return {ok:true, transmitted:0, enabled, batch};
     if (!enabled) throw new Error('This exact manifest is not enabled for production sending.');
     if (env.EMAIL_OUTREACH_ENABLED === 'true' || env.MANUAL_SEND_LIVE_ENABLED === 'true') throw new Error('Other live send paths must remain off for this bounded batch.');
-    if (!/^Business Brand Lab <hello@bbl\.studio>$|^hello@bbl\.studio$/i.test(String(env.RESEND_FROM || '').trim())) throw new Error('Verified hello@bbl.studio sender required.');
+    if (!/^(?:hello@bbl\.studio|[A-Za-z0-9 ._-]{1,80} <hello@bbl\.studio>)$/i.test(String(env.RESEND_FROM || '').trim())) throw new Error('Verified hello@bbl.studio sender required.');
     if (!env.BUSINESS_POSTAL_ADDRESS?.trim() || !env.UNSUBSCRIBE_SECRET || !env.RESEND_API_KEY) throw new Error('Sender, postal address and signed unsubscribe configuration required.');
     const pending = batch.entries.filter(e => e.status === 'PREPARED');
     if (batch.entries.some(e => ['CLAIMED','UNCERTAIN','FAILED'].includes(e.status))) return {ok:false, transmitted:0, blocked:'reconciliation_required', batch};
