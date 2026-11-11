@@ -1,6 +1,6 @@
 {
   "framework": "vite",
-  "ignoreCommand": "test \"$VERCEL_GIT_COMMIT_REF\" = \"codex/autonomous-growth-agency\" || test \"$VERCEL_GIT_COMMIT_REF\" = \"codex/lead-contact-quality\"",
+  "ignoreCommand": "test \"$VERCEL_GIT_COMMIT_REF\" = \"codex/autonomous-growth-agency\" || test \"$VERCEL_GIT_COMMIT_REF\" = \"codex/lead-contact-quality\" || test \"$VERCEL_GIT_COMMIT_REF\" = \"codex/approved-five-outreach\"",
   "functions": { "api/**/*.ts": { "maxDuration": 300 } },
   "buildCommand": "pnpm exec vite build --config vite.vercel.config.ts && cp out/index.html out/app.html && cp out/home.html out/index.html && rm -f out/studio.html",
   "outputDirectory": "out",

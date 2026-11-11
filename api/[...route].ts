@@ -417,6 +417,14 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
       let body: Record<string, unknown>;
       try { body=JSON.parse(raw); } catch { return send(res,400,{ok:false,message:'Invalid history file.'}); }
       if (!body || Array.isArray(body) || typeof body !== 'object') return send(res,400,{ok:false,message:'Invalid history file.'});
+      if (body.kind === 'owner-approved-outreach') {
+        const {runApprovedOutreachBatch}=await import('../server/approved-outreach-batch.js');
+        try {
+          const result=await runApprovedOutreachBatch({messages:body.messages,confirm_send:body.confirm_send===true},process.env);
+          const reason=result.blocked==='integration_preflight' ? Object.entries(result.checks || {}).filter(([,value])=>value===false).map(([name])=>name).join(', ') : result.blocked;
+          return send(res,result.ok?200:409,{...result,message:reason ? `Approved batch blocked: ${reason}. No automatic retries.` : `Owner-approved batch: ${result.transmitted} accepted this request. Acceptance is not delivery.`});
+        } catch (error) { return send(res,409,{ok:false,message:error instanceof Error?error.message:'Approved batch blocked. No automatic retries.'}); }
+      }
       if (body.kind === 'retire-legacy-source') {
         const {readSnapshot}=await import('../server/crm-sync-store.js');
         const {retireLegacySource}=await import('../server/marketing-legacy-baseline.js');
