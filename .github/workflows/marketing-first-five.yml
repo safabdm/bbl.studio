@@ -9,6 +9,14 @@ on:
         type: boolean
         description: 'Execute only the exact owner-configured Production manifest'
         default: false
+      monitor_approved_batch:
+        type: boolean
+        description: 'Refresh delivery/replies for the configured batch; never send or publish'
+        default: false
+      report_certificate:
+        type: string
+        description: 'Public encryption certificate for the private reply report'
+        default: ''
 permissions:
   contents: read
 concurrency:
@@ -16,7 +24,7 @@ concurrency:
   cancel-in-progress: false
 jobs:
   tick:
-    if: github.event_name != 'workflow_dispatch' || inputs.execute_approved_batch != true
+    if: github.event_name != 'workflow_dispatch' || (inputs.execute_approved_batch != true && inputs.monitor_approved_batch != true)
     runs-on: ubuntu-latest
     timeout-minutes: 8
     steps:
@@ -30,7 +38,7 @@ jobs:
             -H "Authorization: Bearer ${CRON_SECRET}" \
             https://www.bbl.studio/api/crm/growth/tick
   approved-batch:
-    if: github.event_name == 'workflow_dispatch' && inputs.execute_approved_batch == true
+    if: github.event_name == 'workflow_dispatch' && inputs.execute_approved_batch == true && inputs.monitor_approved_batch != true
     runs-on: ubuntu-latest
     timeout-minutes: 8
     steps:
@@ -64,3 +72,44 @@ jobs:
           sys.exit(0 if data.get('ok') and len(entries)==5 and all(e['status']=='ACCEPTED' and e.get('crm_recorded') for e in entries) else 1)
           PY
           test "$HTTP_CODE" = 200
+  monitor-approved-batch:
+    if: github.event_name == 'workflow_dispatch' && inputs.monitor_approved_batch == true && inputs.execute_approved_batch != true
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - name: Refresh receipts and prepare approval-only replies
+        env:
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+          REPORT_CERTIFICATE: ${{ inputs.report_certificate }}
+        run: |
+          set -euo pipefail
+          test -n "${CRON_SECRET:-}" && test -n "${REPORT_CERTIFICATE:-}"
+          export BBL_REPORT_FILE=$(mktemp)
+          export BBL_CERT_FILE=$(mktemp)
+          trap 'rm -f "$BBL_REPORT_FILE" "$BBL_CERT_FILE"' EXIT
+          chmod 600 "$BBL_REPORT_FILE" "$BBL_CERT_FILE"
+          printf '%s' "$REPORT_CERTIFICATE" > "$BBL_CERT_FILE"
+          openssl x509 -in "$BBL_CERT_FILE" -noout
+          HTTP_CODE=$(curl -sS --max-time 290 --retry 0 -o "$BBL_REPORT_FILE" -w "%{http_code}" \
+            -H "Authorization: Bearer ${CRON_SECRET}" -H 'Content-Type: application/json' \
+            --data '{}' https://www.bbl.studio/api/crm/approved-outreach/monitor)
+          mkdir -p private-bbl-monitor
+          openssl cms -encrypt -binary -aes-256-cbc -in "$BBL_REPORT_FILE" \
+            -out private-bbl-monitor/report.cms -outform DER -recip "$BBL_CERT_FILE" \
+            -keyopt rsa_padding_mode:oaep -keyopt rsa_oaep_md:sha256
+          echo "HTTP $HTTP_CODE"
+          python3 - <<'PY'
+          import json,os,hashlib,sys
+          with open(os.environ['BBL_REPORT_FILE']) as f: report=json.load(f)
+          assert report.get('transmitted')==0 and report.get('published')==0, 'Unexpected monitoring side effect'
+          print(json.dumps({'ok':report.get('ok'),'checked_at':report.get('checked_at'),'crm_recorded':report.get('crm_recorded'),'reply_scan_complete':report.get('reply_scan_complete'),'receipts':[{'recipient_sha256':hashlib.sha256(r['email'].encode()).hexdigest(),'provider_id':r['provider_id'],'receipt':r['receipt'],'error':r.get('error')} for r in report.get('receipts',[])],'matched_human_replies':sum(not m['automated'] and m['thread_matched'] for m in report.get('replies',[])) if report.get('reply_scan_complete') else None,'drafts_awaiting_approval':len(report.get('drafts',[])),'transmitted':0,'published':0},indent=2))
+          sys.exit(0 if report.get('ok') and report.get('crm_recorded') else 1)
+          PY
+          test "$HTTP_CODE" = 200
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: private-approved-five-monitor
+          path: private-bbl-monitor/report.cms
+          if-no-files-found: ignore
+          retention-days: 1

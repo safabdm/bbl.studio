@@ -264,7 +264,7 @@ export async function growthDashboard(env: GrowthEnv, now = Date.now()) {
           ? new Set([
               ...(snapshot?.inbox || []).map((i) => i.from_email.toLowerCase()),
               ...(marketing?.inbound || [])
-                .filter((m) => !m.automated)
+                .filter((m) => !m.automated && m.threadMatched !== false)
                 .map((m) => m.email.toLowerCase()),
             ]).size
           : null,

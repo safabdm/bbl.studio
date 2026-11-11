@@ -213,6 +213,13 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
         return send(res,result.ok?200:409,result);
       } catch (error) { return send(res,409,{ok:false,message:error instanceof Error?error.message:'Approved batch blocked. Never retry an uncertain outcome automatically.'}); }
     }
+    if (matches(path, '/api/crm/approved-outreach/monitor') && method === 'POST') {
+      const secret=process.env.CRON_SECRET || '';
+      if (!secret || req.headers.authorization!==`Bearer ${secret}`) return send(res,401,{ok:false,message:'Unauthorized.'});
+      const {monitorApprovedOutreach}=await import('../server/approved-outreach-monitor.js');
+      try {const report=await monitorApprovedOutreach(process.env);return send(res,report.ok?200:502,report);}
+      catch(error){return send(res,502,{ok:false,transmitted:0,published:0,message:error instanceof Error?error.message:'Approved batch monitoring failed.'});}
+    }
     if (matches(path, '/api/crm/marketing/tick') && method === 'GET') {
       const secret = process.env.CRON_SECRET || '';
       if (!secret || req.headers.authorization !== `Bearer ${secret}`) return send(res,401,{ok:false,message:'Unauthorized.'});

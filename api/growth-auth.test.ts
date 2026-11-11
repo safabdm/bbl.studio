@@ -8,6 +8,7 @@ for (const [url, method] of [
   ['/api/admin/crm/growth', 'GET'],
   ['/api/admin/crm/history-import', 'POST'],
   ['/api/crm/approved-outreach/send', 'POST'],
+  ['/api/crm/approved-outreach/monitor', 'POST'],
   ['/api/admin/crm/growth/readiness', 'GET'],
   ['/api/admin/crm/growth/instagram/preflight', 'GET'],
   ['/api/admin/crm/growth/sales', 'POST'],
