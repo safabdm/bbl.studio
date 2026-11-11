@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto';
+import { isPublicContactEmail } from './public-contact-email.js';
 import type { DiscoveredLead } from './crm-discovery-types.js';
 
 /** Owner-attested official-source research, never a substitute for provider history checks. */
@@ -10,7 +11,7 @@ export function parseVerifiedOpportunities(raw: unknown, now=Date.now()): Discov
     const website=new URL(x.website), source=new URL(x.source_url);
     if ([website,source].some(u=>u.protocol!=='https:' || u.username || u.password)
       || website.hostname.replace(/^www\./,'')!==source.hostname.replace(/^www\./,'')) throw new Error('Use the official HTTPS website and its contact source.');
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(x.email || '') || !x.business_name?.trim() || !x.observation?.trim()) throw new Error('Verified contact and observation required.');
+    if (!isPublicContactEmail(x.email || '') || !x.business_name?.trim() || !x.observation?.trim()) throw new Error('Verified contact and observation required.');
     const at=Date.parse(x.verified_at);
     if (!Number.isFinite(at) || at>now || now-at>3600000) throw new Error('Official-source research must be verified within one hour.');
     const id='official_'+createHash('sha256').update(source.href).digest('hex').slice(0,16);

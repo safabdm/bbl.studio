@@ -4,6 +4,7 @@
  * contacted in last 30d. Persist queue actions + audit in Neon crm_kv.
  */
 import { randomUUID } from 'node:crypto';
+import { isPublicContactEmail } from './public-contact-email.js';
 import { dbReadKv, dbWriteKv, type CrmDbEnv } from './crm-db.js';
 import { listDiscoveredLeads } from './crm-discovery-store.js';
 import type { DiscoveredLead } from './crm-discovery-types.js';
@@ -191,7 +192,7 @@ function crmToPartial(lead: CrmLead): Omit<LeadQueueItem, 'queue_status' | 'reje
     outreach_status: normalizeOutreachStatus(
       lead.email_outreach_status || (lead.replied === 'YES' ? 'replied' : lead.bounced === 'YES' ? 'bounced' : lead.delivered === 'YES' ? 'delivered' : lead.email_accepted === 'YES' ? 'submitted' : 'unknown'),
     ),
-    contactable: Boolean(email && lead.contactable !== false && lead.email_status !== 'NOT CONTACTABLE'),
+    contactable: Boolean(isPublicContactEmail(email) && lead.contactable !== false && lead.email_status !== 'NOT CONTACTABLE'),
     excluded_reason: null,
     last_contacted_at: lead.last_contacted_at || null,
   };
@@ -227,7 +228,7 @@ function discoveryToPartial(
     crm_lead_id: null,
     discovery_id: lead.id,
     outreach_status: 'unknown',
-    contactable: Boolean(email),
+    contactable: isPublicContactEmail(email),
     excluded_reason: null,
     last_contacted_at: null,
   };

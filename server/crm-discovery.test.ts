@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { isPublicContactEmail } from './public-contact-email.js';
 import { afterEach, describe, it } from 'node:test';
 import { resetCrmDbClient, resetMemoryCrmDb } from './crm-db.js';
 import {
@@ -262,5 +263,24 @@ describe('discovery API auth', () => {
     );
     assert.equal(withSecret.status, 200);
     assert.equal((withSecret.body.run as { fail_closed?: boolean }).fail_closed, true);
+  });
+});
+
+describe('public contact extraction regression', () => {
+  it('rejects asset filenames while retaining real business domains', () => {
+    for (const value of ['appstore@2x.webp', 'logo@2x.avif', 'icon@2x.png', 'bad..name@business.com', 'info@example.com']) {
+      assert.equal(isPublicContactEmail(value), false, value);
+    }
+    for (const value of ['hello@bbl.studio', 'owner+website@business.design', 'name@gmail.com']) {
+      assert.equal(isPublicContactEmail(value), true, value);
+    }
+  });
+  it('ignores malformed mailto without discarding other website evidence', async () => {
+    const evidence = await fetchWebsiteEvidence('https://business.example', {
+      fetchImpl: async () => new Response('<title>Business</title><a href="mailto:%ZZ">Bad</a><a href="mailto:hello%40business.studio">Email</a><img src="appstore@2x.webp">'),
+    });
+    assert.equal(evidence.error, null);
+    assert.deepEqual(evidence.mailto_emails, ['hello@business.studio']);
+    assert.deepEqual(evidence.visible_emails, []);
   });
 });
