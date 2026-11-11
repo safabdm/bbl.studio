@@ -4,6 +4,7 @@
  * Never invents businesses, emails, or activity.
  */
 import { createHash } from 'node:crypto';
+import { isPublicContactEmail } from './public-contact-email.js';
 import { fetchPublicWebsite } from './public-website-fetch.js';
 import type { PlacesCandidate } from './crm-discovery-places.js';
 import type {
@@ -43,7 +44,6 @@ const TEMPLATE_HINTS =
   /wix\.com|squarespace\.com|godaddy\.com\/websites|weebly\.com|jimdo\.com|wordpress\.com\/\$|created with|free website|coming soon|under construction|lorem ipsum/i;
 const OUTDATED_HINTS = /copyright\s*(©)?\s*(20(0|1)\d)|best viewed in internet explorer|flash player/i;
 const EMAIL_RE = /[a-z0-9._%+\-]+@[a-z0-9.\-]+\.[a-z]{2,}/gi;
-const BLOCKED_EMAIL_HOSTS = /example\.com|domain\.com|email\.com|sentry\.io|wixpress\.com|googleapis\.com|schema\.org/i;
 
 function clamp(n: number, max: number) {
   return Math.max(0, Math.min(max, Math.round(n)));
@@ -54,8 +54,7 @@ function extractEmails(html: string): string[] {
   const unique = new Set<string>();
   for (const raw of found) {
     const email = raw.toLowerCase();
-    if (BLOCKED_EMAIL_HOSTS.test(email)) continue;
-    if (email.endsWith('.png') || email.endsWith('.jpg') || email.endsWith('.svg')) continue;
+    if (!isPublicContactEmail(email)) continue;
     unique.add(email);
   }
   return [...unique].slice(0, 5);
@@ -66,11 +65,13 @@ function extractMailto(html: string): string[] {
   const re = /mailto:([^"'?\s>]+)/gi;
   let m: RegExpExecArray | null;
   while ((m = re.exec(html))) {
-    const email = decodeURIComponent(m[1] || '')
+    let decoded: string;
+    try { decoded = decodeURIComponent(m[1] || ''); } catch { continue; }
+    const email = decoded
       .split('?')[0]
       .trim()
       .toLowerCase();
-    if (email.includes('@') && !BLOCKED_EMAIL_HOSTS.test(email)) out.add(email);
+    if (isPublicContactEmail(email)) out.add(email);
   }
   return [...out];
 }

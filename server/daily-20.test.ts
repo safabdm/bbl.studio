@@ -46,6 +46,15 @@ beforeEach(() => {
 });
 
 describe('daily-20 exclusions', () => {
+  it('excludes previously persisted asset filenames from daily drafts', async () => {
+    const cohort = await buildDaily20Cohort({
+      crmLeads: [fixtureCrmLead({ email: 'appstore@2x.webp', website_observation: 'Contact page reviewed' })],
+      discovered: [], history: [], suppressedEmails: new Set(), fixturesOnly: true,
+      now: Date.parse('2026-11-10T18:00:00Z'), qualifyCap: 20,
+    }, memEnv);
+    assert.equal(cohort.qualified.length, 0);
+    assert.ok(cohort.rejected_pool.some(row => row.reason === 'invalid_public_email'));
+  });
   it('hard-blocks Batch 1 six and competitors', () => {
     assert.equal(BATCH_1_BLOCKLIST_EMAILS.length, 6);
     assert.equal(isBatch1Email('laguna@spadelrio.com'), true);

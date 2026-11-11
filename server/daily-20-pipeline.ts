@@ -4,6 +4,7 @@
  * Never invents website_observation or prices. Never auto-sends.
  */
 import { randomUUID } from 'node:crypto';
+import { isPublicContactEmail } from './public-contact-email.js';
 import { dbReadKv, dbWriteKv, type CrmDbEnv } from './crm-db.js';
 import {
   buildLeadQueue,
@@ -216,6 +217,7 @@ export async function buildDaily20Cohort(
     let reason = alreadyExcluded || item.excluded_reason;
 
     if (!reason && !email) reason = 'missing_public_email';
+    if (!reason && !isPublicContactEmail(email)) reason = 'invalid_public_email';
     if (!reason && alreadyPrepared.has(email) && !reviewingToday.has(email)) reason = 'already_prepared_for_owner_review';
     if (!reason) {
       const hard = hardExcludeReason(email);
