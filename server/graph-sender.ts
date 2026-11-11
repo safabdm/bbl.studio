@@ -276,10 +276,11 @@ export async function importGraphReplies(
   opts: {
     known_emails?: Set<string>;
     known_conversation_ids?: Set<string>;
+    known_provider_ids?: Set<string>;
   } = {},
   env: GraphSenderEnv = process.env,
   fetchImpl: typeof fetch = fetch,
-): Promise<{ ok: true; items: CrmInboxItem[]; messages: Array<{id:string;email:string;subject:string;text:string;receivedAt:string;automated:boolean}>; marked_replied: string[] } | { ok: false; message: string }> {
+): Promise<{ ok: true; items: CrmInboxItem[]; messages: Array<{id:string;email:string;subject:string;text:string;receivedAt:string;automated:boolean;inReplyTo?:string}>; marked_replied: string[] } | { ok: false; message: string }> {
   const access = await resolveAccessToken(env, fetchImpl);
   if (!access.ok) return { ok: false, message: access.message };
 
@@ -298,7 +299,7 @@ export async function importGraphReplies(
     if (next) return { ok: false, message: 'Outlook scan incomplete; hold sending until pagination completes.' };
     const items: CrmInboxItem[] = [];
     const marked: string[] = [];
-    const fullMessages: Array<{id:string;email:string;subject:string;text:string;receivedAt:string;automated:boolean}> = [];
+    const fullMessages: Array<{id:string;email:string;subject:string;text:string;receivedAt:string;automated:boolean;inReplyTo?:string}> = [];
 
     for (const msg of messages) {
       const from = String(msg.from?.emailAddress?.address || '')
@@ -310,14 +311,15 @@ export async function importGraphReplies(
       const conv = msg.conversationId || '';
       const matchEmail = from && opts.known_emails?.has(from);
       const matchConv = conv && opts.known_conversation_ids?.has(conv);
+      const matchProvider=Boolean(inReplyTo && [...(opts.known_provider_ids || [])].some(id=>inReplyTo.includes(id)));
       const fromDomain = from.split('@')[1] || '';
       const consumer = /^(gmail|googlemail|yahoo|hotmail|outlook|live|aol|icloud|me|protonmail|proton)\./i.test(fromDomain);
       const sameBusinessEmails = !consumer && fromDomain
         ? [...(opts.known_emails || [])].filter(email => email.split('@')[1] === fromDomain)
         : [];
-      if (!matchEmail && !matchConv && !sameBusinessEmails.length) continue;
+      if (!matchEmail && !matchConv && !matchProvider && !sameBusinessEmails.length) continue;
 
-      if (msg.body?.contentType?.toLowerCase() === "text" && msg.body.content && msg.receivedDateTime) fullMessages.push({id:msg.id,email:from,subject:msg.subject || "",text:msg.body.content,receivedAt:msg.receivedDateTime,automated:(msg.internetMessageHeaders || []).some(h=> /^(auto-submitted|x-autoreply|x-autorespond)$/i.test(h.name) && h.value.toLowerCase() !== "no") || /automatic reply|out of office|delivery status notification/i.test(msg.subject || "")});
+      if (msg.body?.contentType?.toLowerCase() === "text" && msg.body.content && msg.receivedDateTime) fullMessages.push({id:msg.id,email:from,subject:msg.subject || "",text:msg.body.content,receivedAt:msg.receivedDateTime,inReplyTo,automated:(msg.internetMessageHeaders || []).some(h=> /^(auto-submitted|x-autoreply|x-autorespond)$/i.test(h.name) && h.value.toLowerCase() !== "no") || /automatic reply|out of office|delivery status notification/i.test(msg.subject || "")});
       items.push({
         id: `graph_${msg.id}`,
         from_email: from,

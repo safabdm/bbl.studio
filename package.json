@@ -27,7 +27,7 @@
     "typecheck:marketing": "tsc --noEmit --project tsconfig.marketing.json",
     "test:marketing": "node --import tsx --test server/marketing-automation.test.ts",
     "typecheck:agents": "tsc --noEmit --project tsconfig.agents.json",
-    "lint:growth": "oxlint server/instagram-publishing.ts server/instagram-publishing.test.ts server/instagram-read.ts server/instagram-read.test.ts server/growth.ts server/growth-monitor.ts server/growth-social.ts server/growth-readiness.ts server/growth.test.ts server/growth-worker.test.ts server/public-website-fetch.ts server/public-website-fetch.test.ts api/http-types.ts api/growth-auth.test.ts types/server-env.d.ts server/approved-outreach-batch.ts server/approved-outreach-batch.test.ts api/approved-outreach-auth.test.ts"
+    "lint:growth": "oxlint server/instagram-publishing.ts server/instagram-publishing.test.ts server/instagram-read.ts server/instagram-read.test.ts server/growth.ts server/growth-monitor.ts server/growth-social.ts server/growth-readiness.ts server/growth.test.ts server/growth-worker.test.ts server/public-website-fetch.ts server/public-website-fetch.test.ts api/http-types.ts api/growth-auth.test.ts types/server-env.d.ts server/approved-outreach-batch.ts server/approved-outreach-batch.test.ts api/approved-outreach-auth.test.ts server/approved-outreach-monitor.ts server/approved-outreach-monitor.test.ts"
   },
   "dependencies": {
     "@base-ui/react": "1.7.0",

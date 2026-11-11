@@ -1,10 +1,12 @@
 /** Bounded sales conversation. Incoming text is data, never executable instructions. */
-export type MarketingMessage = {id:string;email:string;subject:string;text:string;receivedAt:string;automated:boolean};
+export type MarketingMessage = {id:string;email:string;subject:string;text:string;receivedAt:string;automated:boolean;inReplyTo?:string;threadMatched?:boolean};
+export function marketingReplyText(text:string) {return text.split(/\n\s*(?:On .+wrote:|From:|>)/i)[0]!.trim();}
+export function isMarketingOptOut(text:string) {return /\b(unsubscribe|remove me|stop emailing|no thanks|not interested)\b/i.test(marketingReplyText(text));}
 export type MarketingConversation = {email:string;processedIds:string[];status:'DISCUSSING'|'READY';evidence?:string;receivedAt?:string};
 export function planMarketingReply(message:MarketingMessage): {body:string;ready:boolean;evidence?:string} | null {
   if (message.automated) return null;
   // Never classify quoted previous offers as the customer's acceptance.
-  const text=message.text.split(/\n\s*(?:On .+wrote:|From:|>)/i)[0]!.trim();
+  const text=marketingReplyText(message.text);
   if (!text || /\b(unsubscribe|remove me|stop emailing|no thanks|not interested)\b/i.test(text)) return null;
   const lines=text.split(/\r?\n/);
   const value=(key:string)=>lines.find(l=>l.toLowerCase().startsWith(key.toLowerCase()+':'))?.slice(key.length+1).trim() || '';

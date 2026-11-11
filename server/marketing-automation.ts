@@ -2,7 +2,7 @@
  * Durable claims precede transmission. Uncertain attempts are never retried.
  * Ticks only prepare drafts. External messages use the existing owner-approved send workflow.
  */
-import { planMarketingReply, type MarketingMessage, type MarketingConversation } from './marketing-conversation.js';
+import { planMarketingReply, isMarketingOptOut, type MarketingMessage, type MarketingConversation } from './marketing-conversation.js';
 import { createHash, randomUUID } from 'node:crypto';
 import { acquireCrmLease, releaseCrmLease, dbReadKv, dbWriteKv } from './crm-db.js';
 import { listDiscoveredLeads } from './crm-discovery-store.js';
@@ -99,7 +99,7 @@ export function renderMarketingEmail(item: Pick<LeadQueueItem, 'business_name' |
 
 export type MarketingDeps = {
   candidates(): Promise<LeadQueueItem[]>;
-  inbox(emails: Set<string>): Promise<{ ok: boolean; replies: string[]; optouts: string[]; messages?: MarketingMessage[] }>;
+  inbox(emails: Set<string>, providerIds?: Set<string>): Promise<{ ok: boolean; replies: string[]; optouts: string[]; messages?: MarketingMessage[] }>;
   bookings(): Promise<string[]>;
   providerReady(): Promise<boolean>;
   receipt(attempt: MarketingAttempt): Promise<Receipt>;
@@ -127,11 +127,11 @@ function liveDeps(env: MarketingEnv): MarketingDeps {
         Date.now() - Date.parse(d.last_verified_at) >= 0 && Date.now() - Date.parse(d.last_verified_at) < 7 * 86400000 &&
         d.evidence.some(e => /^https:\/\//.test(e.source))));
     },
-    async inbox(emails) {
-      const result = await importGraphReplies({ known_emails: emails }, env);
+    async inbox(emails, providerIds) {
+      const result = await importGraphReplies({ known_emails: emails, known_provider_ids:providerIds }, env);
       if (!result.ok) return { ok: false, replies: [], optouts: [] };
       return { ok: true, replies: result.marked_replied, messages: result.messages,
-        optouts: [...new Set([...result.items.filter(i => /\b(unsubscribe|remove me|stop emailing|no thanks|not interested)\b/i.test(`${i.subject} ${i.snippet}`)).map(i => i.from_email), ...result.messages.filter(m => /\b(unsubscribe|remove me|stop emailing|no thanks|not interested)\b/i.test(m.text)).map(m => m.email)])] };
+        optouts: [...new Set(result.messages.filter(m=>!m.automated && isMarketingOptOut(m.text)).map(m=>m.email))] };
     },
     async bookings() {
       const calendar = getCalendar(env as NodeJS.ProcessEnv);
@@ -169,6 +169,12 @@ function liveDeps(env: MarketingEnv): MarketingDeps {
         idempotencyKey: createHash('sha256').update(attempt.id).digest('hex') }, env);
     },
   };
+}
+
+/** Monitoring callers receive no send or candidate-discovery capability. */
+export function marketingReadServices(env: MarketingEnv): Pick<MarketingDeps,'providerReady'|'inbox'|'receipt'> {
+  const io=liveDeps(env);
+  return {providerReady:()=>io.providerReady(),inbox:(emails,ids)=>io.inbox(emails,ids),receipt:attempt=>io.receipt(attempt)};
 }
 
 /** Owner-only setup probe. Never calls candidates, receipt or send. */

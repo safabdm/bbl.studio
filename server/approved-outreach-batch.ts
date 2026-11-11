@@ -25,6 +25,14 @@ export type BatchDeps = {
 const batchKey = (digest: string) => `outreach:approved-batch:${digest}`;
 const recipientKey = (email: string) => `outreach:approved-recipient:${createHash('sha256').update(email).digest('hex')}`;
 
+export async function readConfiguredApprovedBatch(env: ApprovedBatchEnv) {
+  const digest=env.OWNER_APPROVED_OUTREACH_SHA256 || '';
+  if (!/^[a-f0-9]{64}$/.test(digest)) throw new Error('No owner-approved manifest configured.');
+  const batch=await dbReadKv<Batch|null>(batchKey(digest),null,env);
+  if (!batch || batch.digest!==digest || batch.entries.length!==5) throw new Error('Verified five-message batch not found.');
+  return batch;
+}
+
 export function parseApprovedCopies(value: unknown): ApprovedCopy[] {
   if (!Array.isArray(value) || value.length < 1 || value.length > 5) throw new Error('Approve between one and five exact messages.');
   const copies = value.map(raw => {
