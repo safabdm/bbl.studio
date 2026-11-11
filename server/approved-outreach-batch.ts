@@ -14,7 +14,7 @@ import { readSendControls, shouldAutoPause } from './send-controls.js';
 export type ApprovedBatchEnv = MarketingEnv & { OWNER_APPROVED_OUTREACH_SHA256?: string };
 export type ApprovedCopy = { lead_id: string; email: string; subject: string; body: string };
 type Entry = ApprovedCopy & { status: 'PREPARED' | 'CLAIMED' | 'ACCEPTED' | 'FAILED' | 'UNCERTAIN'; provider_id?: string; at?: string; error?: string; crm_recorded?: boolean; sent_text?: string };
-type Batch = { digest: string; from: 'hello@bbl.studio'; approved_at: string; approved_by: 'authenticated-owner'; entries: Entry[] };
+type Batch = { digest: string; from: 'hello@bbl.studio'; authorization_recorded_at: string; authorization_source: 'owner-configured-production-manifest'; entries: Entry[] };
 export type BatchChecks = { provider_and_bbl_identity: boolean; full_inbox_read: boolean; booking_calendar_read: boolean; history_ready: boolean; suppressions_read: boolean; send_health_ready: boolean };
 export type BatchDeps = {
   checks(): Promise<BatchChecks>;
@@ -69,7 +69,8 @@ function liveDeps(env: ApprovedBatchEnv): BatchDeps {
   };
 }
 
-/** Caller must authenticate the owner and enforce same-origin before invoking. */
+/** Caller requires owner session + same-origin, or the existing server credential.
+ * Sending also requires the exact owner-configured Production manifest hash. */
 export async function runApprovedOutreachBatch(input: { messages?: unknown; confirm_send?: boolean }, env: ApprovedBatchEnv, injected?: BatchDeps) {
   const copies = parseApprovedCopies(input.messages);
   const digest = approvedBatchDigest(copies);
@@ -80,7 +81,7 @@ export async function runApprovedOutreachBatch(input: { messages?: unknown; conf
   try {
     let batch = await dbReadKv<Batch | null>(batchKey(digest), null, env);
     if (!batch) {
-      batch = {digest, from:'hello@bbl.studio', approved_at:new Date().toISOString(), approved_by:'authenticated-owner', entries:copies.map(c => ({...c, status:'PREPARED'}))};
+      batch = {digest, from:'hello@bbl.studio', authorization_recorded_at:new Date().toISOString(), authorization_source:'owner-configured-production-manifest', entries:copies.map(c => ({...c, status:'PREPARED'}))};
       await dbWriteKv(batchKey(digest), batch, env);
     }
     // Reconcile a confirmed provider ID after a CRM-write interruption, never retransmit it.
