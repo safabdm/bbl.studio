@@ -203,6 +203,16 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
       const blockers = marketingConfigBlockers(process.env);
       return send(res,200,{ ok: blockers.length === 0, blockers, offer: { pages:3, price_usd:2000, first_clients:5 }, live_checked:false });
     }
+    if (matches(path, '/api/crm/approved-outreach/send') && method === 'POST') {
+      const secret=process.env.CRON_SECRET || '';
+      if (!secret || req.headers.authorization!==`Bearer ${secret}`) return send(res,401,{ok:false,message:'Unauthorized.'});
+      const {runApprovedOutreachBatch}=await import('../server/approved-outreach-batch.js');
+      try {
+        const body=await readJsonUnknown(req) as {messages?:unknown;confirm_send?:boolean};
+        const result=await runApprovedOutreachBatch({messages:body.messages,confirm_send:body.confirm_send===true},process.env);
+        return send(res,result.ok?200:409,result);
+      } catch (error) { return send(res,409,{ok:false,message:error instanceof Error?error.message:'Approved batch blocked. Never retry an uncertain outcome automatically.'}); }
+    }
     if (matches(path, '/api/crm/marketing/tick') && method === 'GET') {
       const secret = process.env.CRON_SECRET || '';
       if (!secret || req.headers.authorization !== `Bearer ${secret}`) return send(res,401,{ok:false,message:'Unauthorized.'});

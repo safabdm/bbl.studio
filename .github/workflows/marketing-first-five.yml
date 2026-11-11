@@ -4,6 +4,11 @@ on:
     # Covers Pacific business hours across DST; server is the authority on hours/cap.
     - cron: '17,47 0,16-23 * * *'
   workflow_dispatch:
+    inputs:
+      execute_approved_batch:
+        type: boolean
+        description: 'Execute only the exact owner-configured Production manifest'
+        default: false
 permissions:
   contents: read
 concurrency:
@@ -11,6 +16,7 @@ concurrency:
   cancel-in-progress: false
 jobs:
   tick:
+    if: github.event_name != 'workflow_dispatch' || inputs.execute_approved_batch != true
     runs-on: ubuntu-latest
     timeout-minutes: 8
     steps:
@@ -23,3 +29,38 @@ jobs:
           curl --fail-with-body --max-time 290 --retry 0 \
             -H "Authorization: Bearer ${CRON_SECRET}" \
             https://www.bbl.studio/api/crm/growth/tick
+  approved-batch:
+    if: github.event_name == 'workflow_dispatch' && inputs.execute_approved_batch == true
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - name: Execute exact owner-approved messages once
+        env:
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+          APPROVED_OUTREACH_BATCH_JSON: ${{ secrets.APPROVED_OUTREACH_BATCH_JSON }}
+        run: |
+          set -euo pipefail
+          test -n "${CRON_SECRET:-}" || { echo 'Missing server credential'; exit 1; }
+          export BBL_REQUEST_FILE=$(mktemp)
+          export BBL_RESPONSE_FILE=$(mktemp)
+          trap 'rm -f "$BBL_REQUEST_FILE" "$BBL_RESPONSE_FILE"' EXIT
+          chmod 600 "$BBL_REQUEST_FILE" "$BBL_RESPONSE_FILE"
+          python3 - <<'PY'
+          import json,os
+          data=json.loads(os.environ['APPROVED_OUTREACH_BATCH_JSON'])
+          assert data.get('confirm_send') is True and len(data.get('messages',[]))==5, 'Exact five-message payload required'
+          with open(os.environ['BBL_REQUEST_FILE'],'w') as f: json.dump(data,f)
+          PY
+          HTTP_CODE=$(curl -sS --max-time 290 --retry 0 -o "$BBL_RESPONSE_FILE" -w "%{http_code}" \
+            -H "Authorization: Bearer ${CRON_SECRET}" -H 'Content-Type: application/json' \
+            --data-binary "@$BBL_REQUEST_FILE" https://www.bbl.studio/api/crm/approved-outreach/send)
+          echo "HTTP $HTTP_CODE"
+          python3 - <<'PY'
+          import json,os,hashlib,sys
+          with open(os.environ['BBL_RESPONSE_FILE']) as f: data=json.load(f)
+          entries=data.get('batch',{}).get('entries',[])
+          summary={'ok':data.get('ok'), 'accepted_this_request':data.get('transmitted',0), 'accepted_total':sum(e['status']=='ACCEPTED' for e in entries), 'blocked':data.get('blocked'), 'checks':data.get('checks'), 'message':data.get('message'), 'digest':data.get('batch',{}).get('digest'), 'receipts':[{'recipient_sha256':hashlib.sha256(e['email'].encode()).hexdigest(),'status':e['status'],'provider_id':e.get('provider_id'),'crm_recorded':e.get('crm_recorded',False),'error':e.get('error')} for e in entries]}
+          print(json.dumps(summary,indent=2))
+          sys.exit(0 if data.get('ok') and len(entries)==5 and all(e['status']=='ACCEPTED' and e.get('crm_recorded') for e in entries) else 1)
+          PY
+          test "$HTTP_CODE" = 200
