@@ -4,7 +4,7 @@ import {dbWriteKv,resetMemoryCrmDb} from './crm-db.js';
 import {approvedBatchDigest,recordApprovedAccepted,type ApprovedBatchEnv} from './approved-outreach-batch.js';
 import {monitorApprovedOutreach} from './approved-outreach-monitor.js';
 import {readMarketingState,type MarketingDeps} from './marketing-automation.js';
-import {readSnapshot} from './crm-sync-store.js';
+import {readSnapshot,writeSnapshot} from './crm-sync-store.js';
 import {isEmailDurablySuppressed} from './crm-suppressions.js';
 const copies=Array.from({length:5},(_,i)=>({lead_id:`lead${i}`,email:`owner${i}@example.org`,subject:`Website idea ${i}`,body:'Approved offer'}));
 const digest=approvedBatchDigest(copies);
@@ -35,3 +35,23 @@ void test('unrelated messages are candidates, not verified thread replies; prior
  await seed();const io=reads();io.inbox=async()=>({ok:true,replies:[],optouts:[],messages:[{...message,subject:'Another topic'},{...message,id:'old',receivedAt:'2026-11-01T00:00:00Z'}]});const r=await monitorApprovedOutreach(env,io);assert.equal(r.replies.length,1);assert.equal(r.replies[0].thread_matched,false);assert.notEqual((await readSnapshot(env))!.email_history.find(h=>h.email===message.email)!.replied,'YES');
 });
 void test('mailbox identity mismatch fails closed',async()=>{await seed();const io=reads();io.providerReady=async()=>false;await assert.rejects(monitorApprovedOutreach(env,io),/identity/);assert.ok((await readSnapshot(env))!.email_history.every(h=>h.delivered==='UNKNOWN'));});
+void test('older campaigns and CRM-only accepted contacts are monitored without calendar access',async()=>{
+ await seed();
+ const older={lead_id:'older',email:'prior@example.net',subject:'Earlier approved project',body:'Approved earlier copy'};
+ await recordApprovedAccepted(older,'prior-provider','2026-11-10T10:00:00Z',older.body,env);
+ const snap=(await readSnapshot(env))!;
+ snap.email_history.push({email:'legacy@example.net',business_name:'Legacy business',subject:'Legacy approved project',provider_message_id:'legacy-provider',sent_at:'2026-11-09T10:00:00Z',accepted:'YES',delivered:'UNKNOWN',bounced:'UNKNOWN',replied:'UNKNOWN',dry_run:false});
+ snap.email_history.push({email:'workflowmd@example.net',business_name:'WorkflowMD',subject:'Excluded',provider_message_id:'excluded-provider',sent_at:'2026-11-09T10:00:00Z',accepted:'YES',delivered:'UNKNOWN',bounced:'UNKNOWN',replied:'UNKNOWN',dry_run:false});
+ await writeSnapshot(snap,env);
+ const io=reads();io.inbox=async(emails,ids)=>{
+  assert.ok(emails.has(older.email));assert.ok(emails.has('legacy@example.net'));assert.ok(ids?.has('prior-provider'));assert.ok(!emails.has('workflowmd@example.net'));
+  return {ok:true,replies:[older.email],optouts:[],messages:[{...message,email:older.email,subject:`Re: ${older.subject}`,inReplyTo:'prior-provider'}]};
+ };
+ const r=await monitorApprovedOutreach(env,io);
+ assert.equal(r.scope,'all_contacted');assert.equal(r.receipts.length,7);assert.equal(r.reply_scan_complete,true);
+ assert.equal(r.drafts.length,1);assert.match(r.drafts[0].body,/Sara/);assert.doesNotMatch(r.drafts[0].body,/\$2,000|Founder|Safa/);assert.equal(r.drafts[0].approved,false);assert.equal(r.transmitted,0);
+});
+void test('incomplete accepted history is reported rather than claiming complete coverage',async()=>{
+ await seed();const snap=(await readSnapshot(env))!;snap.email_history.push({email:'missing@example.net',accepted:'YES',delivered:'UNKNOWN',bounced:'UNKNOWN',replied:'UNKNOWN',dry_run:false});await writeSnapshot(snap,env);
+ const r=await monitorApprovedOutreach(env,reads());assert.equal(r.ok,false);assert.equal(r.reply_scan_complete,false);assert.ok(r.errors.includes('contact_history_incomplete'));
+});
